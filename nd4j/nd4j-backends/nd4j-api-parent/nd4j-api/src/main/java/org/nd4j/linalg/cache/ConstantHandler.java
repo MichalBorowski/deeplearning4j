@@ -1,6 +1,23 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.linalg.cache;
 
 import org.nd4j.linalg.api.buffer.DataBuffer;
+import org.nd4j.linalg.api.buffer.DataType;
 
 /**
  * This interface describes
@@ -44,7 +61,9 @@ public interface ConstantHandler {
      * @param array
      * @return
      */
-    DataBuffer getConstantBuffer(int[] array);
+    DataBuffer getConstantBuffer(boolean[] array, DataType dataType);
+
+    DataBuffer getConstantBuffer(int[] array, DataType dataType);
 
     /**
      * This method returns DataBuffer with
@@ -57,19 +76,7 @@ public interface ConstantHandler {
      * @param array
      * @return
      */
-    DataBuffer getConstantBuffer(long[] array);
-
-    /**
-     * This method returns DataBuffer
-     * with constant equal to input array.
-     *
-     * PLEASE NOTE: This method assumes that you'll
-     * never ever change values within result DataBuffer
-     *
-     * @param array
-     * @return
-     */
-    DataBuffer getConstantBuffer(float[] array);
+    DataBuffer getConstantBuffer(long[] array, DataType dataType);
 
     /**
      * This method returns DataBuffer with contant equal to input array.
@@ -79,7 +86,17 @@ public interface ConstantHandler {
      * @param array
      * @return
      */
-    DataBuffer getConstantBuffer(double[] array);
+    DataBuffer getConstantBuffer(double[] array, DataType dataType);
+
+    /**
+     * This method returns DataBuffer with contant equal to input array.
+     *
+     * PLEASE NOTE: This method assumes that you'll never ever change values within result DataBuffer
+     *
+     * @param array
+     * @return
+     */
+    DataBuffer getConstantBuffer(float[] array, DataType dataType);
 
     /**
      * This method removes all cached constants

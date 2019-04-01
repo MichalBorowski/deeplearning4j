@@ -1,13 +1,22 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.evaluation;
 
 import org.apache.commons.io.FileUtils;
-import org.deeplearning4j.eval.EvaluationCalibration;
-import org.deeplearning4j.eval.ROC;
-import org.deeplearning4j.eval.ROCMultiClass;
-import org.deeplearning4j.eval.curves.Histogram;
-import org.deeplearning4j.eval.curves.PrecisionRecallCurve;
-import org.deeplearning4j.eval.curves.ReliabilityDiagram;
-import org.deeplearning4j.eval.curves.RocCurve;
 import org.deeplearning4j.ui.api.Component;
 import org.deeplearning4j.ui.api.LengthUnit;
 import org.deeplearning4j.ui.components.chart.ChartHistogram;
@@ -20,10 +29,18 @@ import org.deeplearning4j.ui.components.table.style.StyleTable;
 import org.deeplearning4j.ui.components.text.ComponentText;
 import org.deeplearning4j.ui.components.text.style.StyleText;
 import org.deeplearning4j.ui.standalone.StaticPageUtil;
+import org.nd4j.evaluation.classification.EvaluationCalibration;
+import org.nd4j.evaluation.classification.ROC;
+import org.nd4j.evaluation.classification.ROCMultiClass;
+import org.nd4j.evaluation.curves.Histogram;
+import org.nd4j.evaluation.curves.PrecisionRecallCurve;
+import org.nd4j.evaluation.curves.ReliabilityDiagram;
+import org.nd4j.evaluation.curves.RocCurve;
 
 import java.awt.*;
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -115,7 +132,7 @@ public class EvaluationTools {
      */
     public static void exportRocChartsToHtmlFile(ROCMultiClass roc, File file) throws Exception {
         String rocAsHtml = rocChartToHtml(roc);
-        FileUtils.writeStringToFile(file, rocAsHtml);
+        FileUtils.writeStringToFile(file, rocAsHtml, StandardCharsets.UTF_8);
     }
 
     /**

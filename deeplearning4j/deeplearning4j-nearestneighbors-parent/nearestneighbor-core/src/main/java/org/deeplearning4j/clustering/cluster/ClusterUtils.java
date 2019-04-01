@@ -1,25 +1,24 @@
-/*-
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
  *
- *  * Copyright 2015 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
  *
- */
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.deeplearning4j.clustering.cluster;
 
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.ArrayUtils;
 import org.deeplearning4j.clustering.info.ClusterInfo;
 import org.deeplearning4j.clustering.info.ClusterSetInfo;
@@ -28,6 +27,8 @@ import org.deeplearning4j.clustering.strategy.OptimisationStrategy;
 import org.deeplearning4j.clustering.util.MathUtils;
 import org.deeplearning4j.clustering.util.MultiThreadUtils;
 import org.nd4j.linalg.api.ndarray.INDArray;
+import org.nd4j.linalg.api.ops.Op;
+import org.nd4j.linalg.api.ops.impl.reduce3.*;
 import org.nd4j.linalg.factory.Nd4j;
 
 import java.util.*;
@@ -38,8 +39,8 @@ import java.util.concurrent.ExecutorService;
  * Basic cluster utilities
  */
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
+@Slf4j
 public class ClusterUtils {
-
 
     /** Classify the set of points base on cluster centers. This also adds each point to the ClusterSet */
     public static ClusterSetInfo classifyPoints(final ClusterSet clusterSet, List<Point> points,
@@ -56,8 +57,8 @@ public class ClusterUtils {
                             clusterSetInfo.getPointLocationChange().incrementAndGet();
                         clusterSetInfo.getClusterInfo(result.getCluster().getId()).getPointDistancesFromCenter()
                                         .put(point.getId(), result.getDistanceFromCenter());
-                    } catch (Exception e) {
-                        e.printStackTrace();
+                    } catch (Throwable t) {
+                        log.warn("Error classifying point", t);
                     }
                 }
             });
@@ -82,9 +83,8 @@ public class ClusterUtils {
                         final ClusterInfo clusterInfo = clusterSetInfo.getClusterInfo(cluster.getId());
                         refreshClusterCenter(cluster, clusterInfo);
                         deriveClusterInfoDistanceStatistics(clusterInfo);
-                    } catch (Exception e) {
-
-                        e.printStackTrace();
+                    } catch (Throwable t) {
+                        log.warn("Error refreshing cluster centers", t);
                     }
                 }
             });
@@ -146,10 +146,14 @@ public class ClusterUtils {
             final int i2 = i;
             tasks.add(new Runnable() {
                 public void run() {
-                    Point point = points.get(i2);
-                    double dist = clusterSet.isInverse() ? newCluster.getDistanceToCenter(point)
-                                    : Math.pow(newCluster.getDistanceToCenter(point), 2);
-                    dxs.putScalar(i2, clusterSet.isInverse() ? dist : dist);
+                    try {
+                        Point point = points.get(i2);
+                        double dist = clusterSet.isInverse() ? newCluster.getDistanceToCenter(point)
+                                : Math.pow(newCluster.getDistanceToCenter(point), 2);
+                        dxs.putScalar(i2, clusterSet.isInverse() ? dist : dist);
+                    } catch (Throwable t) {
+                        log.warn("Error computing squared distance from nearest cluster", t);
+                    }
                 }
             });
 
@@ -190,8 +194,12 @@ public class ClusterUtils {
             final Cluster cluster = clusterSet.getClusters().get(i);
             tasks.add(new Runnable() {
                 public void run() {
-                    info.getClustersInfos().put(cluster.getId(),
-                                    computeClusterInfos(cluster, clusterSet.getDistanceFunction()));
+                    try {
+                        info.getClustersInfos().put(cluster.getId(),
+                                computeClusterInfos(cluster, clusterSet.getDistanceFunction()));
+                    } catch (Throwable t) {
+                        log.warn("Error computing cluster set info", t);
+                    }
                 }
             });
         }
@@ -209,7 +217,7 @@ public class ClusterUtils {
                         for (int k = clusterIdx + 1, l = clusterSet.getClusterCount(); k < l; k++) {
                             Cluster toCluster = clusterSet.getClusters().get(k);
                             double distance = Nd4j.getExecutioner()
-                                            .execAndReturn(Nd4j.getOpFactory().createAccum(
+                                            .execAndReturn(ClusterUtils.createDistanceFunctionOp(
                                                             clusterSet.getDistanceFunction(),
                                                             fromCluster.getCenter().getArray(),
                                                             toCluster.getCenter().getArray()))
@@ -217,9 +225,8 @@ public class ClusterUtils {
                             info.getDistancesBetweenClustersCenters().put(fromCluster.getId(), toCluster.getId(),
                                             distance);
                         }
-                    } catch (Exception e) {
-
-                        e.printStackTrace();
+                    } catch (Throwable t) {
+                        log.warn("Error computing distances", t);
                     }
                 }
             });
@@ -244,7 +251,7 @@ public class ClusterUtils {
             //shouldn't need to inverse here. other parts of
             //the code should interpret the "distance" or score here
             double distance = Nd4j.getExecutioner()
-                            .execAndReturn(Nd4j.getOpFactory().createAccum(distanceFunction,
+                            .execAndReturn(ClusterUtils.createDistanceFunctionOp(distanceFunction,
                                             cluster.getCenter().getArray(), point.getArray()))
                             .getFinalResult().doubleValue();
             info.getPointDistancesFromCenter().put(point.getId(), distance);
@@ -441,9 +448,8 @@ public class ClusterUtils {
                         String pointId = fartherPoints.get(random.nextInt(rank));
                         Point point = cluster.removePoint(pointId);
                         clusterSet.addNewClusterWithCenter(point);
-                    } catch (Exception e) {
-
-                        e.printStackTrace();
+                    } catch (Throwable t) {
+                        log.warn("Error splitting clusters", t);
                     }
                 }
             });
@@ -465,12 +471,35 @@ public class ClusterUtils {
         for (final Cluster cluster : clusters) {
             tasks.add(new Runnable() {
                 public void run() {
-                    Point point = cluster.getPoints().remove(random.nextInt(cluster.getPoints().size()));
-                    clusterSet.addNewClusterWithCenter(point);
+                    try {
+                        Point point = cluster.getPoints().remove(random.nextInt(cluster.getPoints().size()));
+                        clusterSet.addNewClusterWithCenter(point);
+                    } catch (Throwable t) {
+                        log.warn("Error Splitting clusters (2)", t);
+                    }
                 }
             });
         }
 
         MultiThreadUtils.parallelTasks(tasks, executorService);
+    }
+
+    public static BaseReduce3Op createDistanceFunctionOp(String distanceFunction, INDArray x, INDArray y){
+        switch (distanceFunction){
+            case "cosinedistance":
+                return new CosineDistance(x,y);
+            case CosineSimilarity.OP_NAME:
+                return new CosineSimilarity(x,y);
+            case "dot":
+                return new Dot(x,y);
+            case EuclideanDistance.OP_NAME:
+                return new EuclideanDistance(x,y);
+            case "jaccarddistance":
+                return new JaccardDistance(x,y);
+            case ManhattanDistance.OP_NAME:
+                return new ManhattanDistance(x,y);
+            default:
+                throw new IllegalStateException("Unknown distance function: " + distanceFunction);
+        }
     }
 }

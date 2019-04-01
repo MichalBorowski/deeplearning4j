@@ -3,69 +3,65 @@
     "abstract"
   ],
   "indices": [
-    {
-      "page": "models/index.md",
-      "module_index": "models"
-    },
-    {
-      "page": "layers/index.md",
-      "module_index": "layers"
-    }
   ],
   "pages": [
     {
-      "page": "models/model-import.md",
+      "page": "model-import.md",
       "class": [
         "KerasModelImport.java"
       ]
     },
     {
-      "page": "models/sequential.md",
+      "page": "model-sequential.md",
       "class": [
         "KerasSequentialModel.java"
       ]
     },
     {
-      "page": "models/model.md",
+      "page": "model-functional.md",
       "class": [
         "KerasModel.java"
       ]
     },
     {
-      "page": "layers/core.md",
-      "module": "layers/core"
+      "page": "layers-core.md",
+      "module": ["layers/core"]
     },
     {
-      "page": "layers/convolutional.md",
-      "module": "layers/convolutional"
+      "page": "layers-convolutional.md",
+      "module": ["layers/convolutional"]
     },
     {
-      "page": "layers/pooling.md",
-      "module": "layers/pooling"
+      "page": "layers-pooling.md",
+      "module": ["layers/pooling"]
     },
     {
-      "page": "layers/recurrent.md",
-      "module": "layers/recurrent"
+      "page": "layers-local.md",
+      "module": ["layers/local"]
     },
     {
-      "page": "layers/embeddings.md",
-      "module": "layers/embeddings"
+      "page": "layers-recurrent.md",
+      "module": ["layers/recurrent"]
     },
     {
-      "page": "layers/normalization.md",
-      "module": "layers/normalization"
+      "page": "layers-embeddings.md",
+      "module": ["layers/embeddings"]
     },
     {
-      "page": "layers/advanced-activations.md",
-      "module": "layers/advanced/activations"
+      "page": "layers-normalization.md",
+      "module": ["layers/normalization"]
     },
     {
-      "page": "layers/noise.md",
-      "module": "layers/noise"
+      "page": "layers-advanced-activations.md",
+      "module": ["layers/advanced/activations"]
     },
     {
-      "page": "layers/wrappers.md",
-      "module": "layers/wrappers"
+      "page": "layers-noise.md",
+      "module": ["layers/noise"]
+    },
+    {
+      "page": "layers-wrappers.md",
+      "module": ["layers/wrappers"]
     }
   ]
 }

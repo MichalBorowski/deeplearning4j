@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.nn.modelimport.keras.layers.embeddings;
 
 import lombok.Data;
@@ -7,7 +23,6 @@ import org.deeplearning4j.nn.api.layers.LayerConstraint;
 import org.deeplearning4j.nn.conf.InputPreProcessor;
 import org.deeplearning4j.nn.conf.distribution.Distribution;
 import org.deeplearning4j.nn.conf.inputs.InputType;
-import org.deeplearning4j.nn.conf.layers.EmbeddingLayer;
 import org.deeplearning4j.nn.conf.layers.EmbeddingSequenceLayer;
 import org.deeplearning4j.nn.modelimport.keras.KerasLayer;
 import org.deeplearning4j.nn.modelimport.keras.exceptions.InvalidKerasConfigurationException;
@@ -26,7 +41,6 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.deeplearning4j.nn.modelimport.keras.utils.KerasInitilizationUtils.getWeightInitFromConfig;
-import static org.deeplearning4j.nn.modelimport.keras.utils.KerasLayerUtils.getHasBiasFromConfig;
 import static org.deeplearning4j.nn.modelimport.keras.utils.KerasLayerUtils.getNOutFromConfig;
 
 /**
@@ -40,7 +54,7 @@ import static org.deeplearning4j.nn.modelimport.keras.utils.KerasLayerUtils.getN
 public class KerasEmbedding extends KerasLayer {
 
     private final int NUM_TRAINABLE_PARAMS = 1;
-    private boolean hasZeroMasking;
+    private boolean zeroMasking;
     private int inputDim;
     private int inputLength;
     private boolean inferInputLength;
@@ -84,8 +98,8 @@ public class KerasEmbedding extends KerasLayer {
         if (this.inferInputLength)
             this.inputLength = 1; // set dummy value, so shape inference works
 
-        this.hasZeroMasking = KerasLayerUtils.getZeroMaskingFromConfig(layerConfig, conf);
-        if (hasZeroMasking)
+        this.zeroMasking = KerasLayerUtils.getZeroMaskingFromConfig(layerConfig, conf);
+        if (zeroMasking)
             log.warn("Masking in keras and DL4J work differently. We do not completely support mask_zero flag " +
                     "on Embedding layers. Zero Masking for the Embedding layer only works with unidirectional LSTM for now."
                     + " If you want to have this behaviour for your imported model " +
@@ -107,13 +121,11 @@ public class KerasEmbedding extends KerasLayer {
                 .inferInputLength(inferInputLength)
                 .nOut(getNOutFromConfig(layerConfig, conf))
                 .dropOut(this.dropout).activation(Activation.IDENTITY)
-                .weightInit(weightInit)
+                .weightInit(weightInit.getWeightInitFunction(distribution))
                 .biasInit(0.0)
                 .l1(this.weightL1Regularization)
                 .l2(this.weightL2Regularization)
                 .hasBias(false);
-        if (distribution != null)
-            builder.dist(distribution);
         if (embeddingConstraint != null)
             builder.constrainWeights(embeddingConstraint);
         this.layer = builder.build();
@@ -163,11 +175,18 @@ public class KerasEmbedding extends KerasLayer {
     @Override
     public void setWeights(Map<String, INDArray> weights) throws InvalidKerasConfigurationException {
         this.weights = new HashMap<>();
+        // TODO: "embeddings" is incorrectly read as "s" for some applications
+        if (weights.containsKey("s")) {
+            INDArray kernel = weights.get("s");
+            weights.remove("s");
+            weights.put(conf.getLAYER_FIELD_EMBEDDING_WEIGHTS(), kernel);
+        }
+
         if (!weights.containsKey(conf.getLAYER_FIELD_EMBEDDING_WEIGHTS()))
             throw new InvalidKerasConfigurationException(
                     "Parameter " + conf.getLAYER_FIELD_EMBEDDING_WEIGHTS() + " does not exist in weights");
         INDArray kernel = weights.get(conf.getLAYER_FIELD_EMBEDDING_WEIGHTS());
-        if (this.hasZeroMasking) {
+        if (this.zeroMasking) {
             kernel.putRow(0, Nd4j.zeros(kernel.columns()));
         }
         this.weights.put(DefaultParamInitializer.WEIGHT_KEY, kernel);
@@ -183,7 +202,7 @@ public class KerasEmbedding extends KerasLayer {
 
     /**
      * Get Keras input length from Keras layer configuration. In Keras input_length, if present, denotes
-     * the number of indices to embed per mini-batch, i.e. input will be of of shape (mb, input_length)
+     * the number of indices to embed per mini-batch, i.e. input will be of shape (mb, input_length)
      * and (mb, 1) else.
      *
      * @param layerConfig dictionary containing Keras layer configuration

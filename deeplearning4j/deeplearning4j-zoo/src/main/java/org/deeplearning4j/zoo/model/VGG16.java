@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.zoo.model;
 
 import lombok.AllArgsConstructor;
@@ -11,6 +27,7 @@ import org.deeplearning4j.nn.conf.NeuralNetConfiguration;
 import org.deeplearning4j.nn.conf.WorkspaceMode;
 import org.deeplearning4j.nn.conf.inputs.InputType;
 import org.deeplearning4j.nn.conf.layers.ConvolutionLayer;
+import org.deeplearning4j.nn.conf.layers.DenseLayer;
 import org.deeplearning4j.nn.conf.layers.OutputLayer;
 import org.deeplearning4j.nn.conf.layers.SubsamplingLayer;
 import org.deeplearning4j.nn.graph.ComputationGraph;
@@ -25,14 +42,17 @@ import org.nd4j.linalg.lossfunctions.LossFunctions;
 
 /**
  * VGG-16, from Very Deep Convolutional Networks for Large-Scale Image Recognition
- * https://arxiv.org/abs/1409.1556
+ * <a href="https://arxiv.org/abs/1409.1556">https://arxiv.org/abs/1409.1556</a><br>
+ * <br>
+ * Deep Face Recognition<br>
+ * <a href="http://www.robots.ox.ac.uk/~vgg/publications/2015/Parkhi15/parkhi15.pdf">http://www.robots.ox.ac.uk/~vgg/publications/2015/Parkhi15/parkhi15.pdf</a>
  *
- * Deep Face Recognition
- * http://www.robots.ox.ac.uk/~vgg/publications/2015/Parkhi15/parkhi15.pdf
- *
- * <p>ImageNet weights for this model are available and have been converted from https://github.com/fchollet/keras/tree/1.1.2/keras/applications.</p>
- * <p>CIFAR-10 weights for this model are available and have been converted using "approach 2" from https://github.com/rajatvikramsingh/cifar10-vgg16.</p>
- * <p>VGGFace weights for this model are available and have been converted from https://github.com/rcmalli/keras-vggface.</p>
+ * <p>ImageNet weights for this model are available and have been converted from <a href="https://github.com/fchollet/keras/tree/1.1.2/keras/applications">
+ *     https://github.com/fchollet/keras/tree/1.1.2/keras/applications</a>.</p>
+ * <p>CIFAR-10 weights for this model are available and have been converted using "approach 2" from <a href="https://github.com/rajatvikramsingh/cifar10-vgg16">
+ *     https://github.com/rajatvikramsingh/cifar10-vgg16</a>.</p>
+ * <p>VGGFace weights for this model are available and have been converted from <a href="https://github.com/rcmalli/keras-vggface">
+ *     https://github.com/rcmalli/keras-vggface</a>.</p>
  *
  * @author Justin Long (crockpotveggies)
  */
@@ -137,16 +157,15 @@ public class VGG16 extends ZooModel {
                         .layer(17, new SubsamplingLayer.Builder()
                                 .poolingType(SubsamplingLayer.PoolingType.MAX).kernelSize(2, 2)
                                 .stride(2, 2).build(), "16")
-                        //                .layer(18, new DenseLayer.Builder().nOut(4096).dropOut(0.5)
-                        //                        .build())
-                        //                .layer(19, new DenseLayer.Builder().nOut(4096).dropOut(0.5)
-                        //                        .build())
-                        .layer(18, new OutputLayer.Builder(
+                        .layer(18, new DenseLayer.Builder().nOut(4096).dropOut(0.5)
+                                                .build(), "17")
+                        .layer(19, new DenseLayer.Builder().nOut(4096).dropOut(0.5)
+                                                .build(), "18")
+                        .layer(20, new OutputLayer.Builder(
                                 LossFunctions.LossFunction.NEGATIVELOGLIKELIHOOD).name("output")
                                 .nOut(numClasses).activation(Activation.SOFTMAX) // radial basis function required
-                                .build(), "17")
-                        .setOutputs("18")
-                        .backprop(true).pretrain(false)
+                                .build(), "19")
+                        .setOutputs("20")
                         .setInputTypes(InputType.convolutionalFlat(inputShape[2], inputShape[1], inputShape[0]))
                         .build();
 

@@ -1,7 +1,26 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.versioncheck;
 
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.io.FileUtils;
+import org.nd4j.config.ND4JSystemProperties;
 
+import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URL;
@@ -21,11 +40,12 @@ import java.util.*;
 public class VersionCheck {
 
     /**
-     * Setting the system property to false will stop ND4J from performing the version check, and logging any
-     * warnings/errors. By default, the version check is unable.
+     * @deprecated Use {@link org.nd4j.config.ND4JSystemProperties#VERSION_CHECK_PROPERTY}
      */
-    public static final String VERSION_CHECK_PROPERTY = "org.nd4j.versioncheck";
+    @Deprecated
+    public static final String VERSION_CHECK_PROPERTY = ND4JSystemProperties.VERSION_CHECK_PROPERTY;
     public static final String GIT_PROPERTY_FILE_SUFFIX = "-git.properties";
+    public static final String PROPERTIES_FILE_SUFFIX = "properties";
 
     private static final String SCALA_210_SUFFIX = "_2.10";
     private static final String SCALA_211_SUFFIX = "_2.11";
@@ -69,7 +89,7 @@ public class VersionCheck {
      * if necessary.
      */
     public static void checkVersions(){
-        boolean doCheck = Boolean.parseBoolean(System.getProperty(VERSION_CHECK_PROPERTY, "true"));
+        boolean doCheck = Boolean.parseBoolean(System.getProperty(ND4JSystemProperties.VERSION_CHECK_PROPERTY, "true"));
 
         if(!doCheck){
             return;
@@ -215,14 +235,17 @@ public class VersionCheck {
                         public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
                             URI fileUri = file.toUri();
                             String s = fileUri.toString();
-                            if(s.endsWith(GIT_PROPERTY_FILE_SUFFIX)){
+                            if (s.endsWith(GIT_PROPERTY_FILE_SUFFIX)) {
                                 out.add(fileUri);
                             }
                             return FileVisitResult.CONTINUE;
                         }
                     });
                 }
-            } catch (Exception e){
+            } catch (NoClassDefFoundError e){
+                //Should only happen on Android 7.0 or earlier - silently ignore
+                //https://github.com/deeplearning4j/deeplearning4j/issues/6609
+            } catch (Throwable e){
                 //log and skip
                 log.debug("Error finding/loading version check resources", e);
             }

@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.models.glove;
 
 import lombok.NonNull;
@@ -12,6 +28,7 @@ import org.deeplearning4j.text.sentenceiterator.BasicLineIterator;
 import org.deeplearning4j.text.sentenceiterator.PrefetchingSentenceIterator;
 import org.deeplearning4j.text.sentenceiterator.SentenceIterator;
 import org.deeplearning4j.text.sentenceiterator.SynchronizedSentenceIterator;
+import org.deeplearning4j.util.DL4JFileUtils;
 import org.deeplearning4j.util.ThreadUtils;
 import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.primitives.Pair;
@@ -273,7 +290,7 @@ public class AbstractCoOccurrences<T extends SequenceElement> implements Seriali
             // use temp file, if no target file was specified
             try {
                 if (this.target == null) {
-                    this.target = File.createTempFile("cooccurrence", "map");
+                    this.target = DL4JFileUtils.createTempFile("cooccurrence", "map");
                 }
                 this.target.deleteOnExit();
             } catch (Exception e) {
@@ -401,8 +418,8 @@ public class AbstractCoOccurrences<T extends SequenceElement> implements Seriali
                 counter = new RoundCount(1);
                 tempFiles = new File[2];
 
-                tempFiles[0] = File.createTempFile("aco", "tmp");
-                tempFiles[1] = File.createTempFile("aco", "tmp");
+                tempFiles[0] = DL4JFileUtils.createTempFile("aco", "tmp");
+                tempFiles[1] = DL4JFileUtils.createTempFile("aco", "tmp");
 
                 tempFiles[0].deleteOnExit();
                 tempFiles[1].deleteOnExit();

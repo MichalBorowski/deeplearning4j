@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.nn.modelimport.keras.configurations;
 
 import org.deeplearning4j.nn.conf.distribution.*;
@@ -6,9 +22,9 @@ import org.deeplearning4j.nn.modelimport.keras.config.Keras1LayerConfiguration;
 import org.deeplearning4j.nn.modelimport.keras.config.Keras2LayerConfiguration;
 import org.deeplearning4j.nn.modelimport.keras.config.KerasLayerConfiguration;
 import org.deeplearning4j.nn.modelimport.keras.layers.core.KerasDense;
+import org.deeplearning4j.nn.weights.IWeightInit;
 import org.deeplearning4j.nn.weights.WeightInit;
 import org.junit.Test;
-import org.nd4j.linalg.primitives.Pair;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -35,22 +51,21 @@ public class KerasInitilizationTest {
 
         String[] keras1Inits = initializers(conf1);
         String[] keras2Inits = initializers(conf2);
-        WeightInit[] dl4jInits = dl4jInitializers();
-        Distribution[] dl4jDistributions = dl4jDistributions();
+        IWeightInit[] dl4jInits = dl4jInitializers();
 
         for (int i = 0; i < dl4jInits.length - 1; i++) {
-            initilizationDenseLayer(conf1, keras1, keras1Inits[i], dl4jInits[i], dl4jDistributions[i]);
-            initilizationDenseLayer(conf2, keras2, keras2Inits[i], dl4jInits[i], dl4jDistributions[i]);
+            initilizationDenseLayer(conf1, keras1, keras1Inits[i], dl4jInits[i]);
+            initilizationDenseLayer(conf2, keras2, keras2Inits[i], dl4jInits[i]);
 
             initilizationDenseLayer(conf2, keras2, keras2Inits[dl4jInits.length - 1],
-                    dl4jInits[dl4jInits.length - 1], dl4jDistributions[dl4jInits.length - 1]);
+                    dl4jInits[dl4jInits.length - 1]);
         }
     }
 
     private String[] initializers(KerasLayerConfiguration conf) {
         return new String[]{
                 conf.getINIT_GLOROT_NORMAL(),
-                conf.getINIT_GLOROT_UNIFORM(),
+                conf.getINIT_GLOROT_UNIFORM_ALIAS(),
                 conf.getINIT_LECUN_NORMAL(),
                 conf.getINIT_LECUN_UNIFORM(),
                 conf.getINIT_RANDOM_UNIFORM(),
@@ -67,22 +82,22 @@ public class KerasInitilizationTest {
         };
     }
 
-    private WeightInit[] dl4jInitializers() {
-        return new WeightInit[]{
-                WeightInit.XAVIER,
-                WeightInit.XAVIER_UNIFORM,
-                WeightInit.LECUN_NORMAL,
-                WeightInit.LECUN_UNIFORM,
-                WeightInit.DISTRIBUTION,
-                WeightInit.RELU,
-                WeightInit.RELU_UNIFORM,
-                WeightInit.ONES,
-                WeightInit.ZERO,
-                WeightInit.IDENTITY,
-                WeightInit.DISTRIBUTION,
-                WeightInit.DISTRIBUTION,
-                WeightInit.DISTRIBUTION,
-                WeightInit.VAR_SCALING_NORMAL_FAN_IN};
+    private IWeightInit[] dl4jInitializers() {
+        return new IWeightInit[]{
+                WeightInit.XAVIER.getWeightInitFunction(),
+                WeightInit.XAVIER_UNIFORM.getWeightInitFunction(),
+                WeightInit.LECUN_NORMAL.getWeightInitFunction(),
+                WeightInit.LECUN_UNIFORM.getWeightInitFunction(),
+                WeightInit.DISTRIBUTION.getWeightInitFunction(new UniformDistribution(minValue, maxValue)),
+                WeightInit.RELU.getWeightInitFunction(),
+                WeightInit.RELU_UNIFORM.getWeightInitFunction(),
+                WeightInit.ONES.getWeightInitFunction(),
+                WeightInit.ZERO.getWeightInitFunction(),
+                WeightInit.IDENTITY.getWeightInitFunction(),
+                WeightInit.DISTRIBUTION.getWeightInitFunction(new NormalDistribution(mean, stdDev)),
+                WeightInit.DISTRIBUTION.getWeightInitFunction(new OrthogonalDistribution(gain)),
+                WeightInit.DISTRIBUTION.getWeightInitFunction(new ConstantDistribution(value)),
+                WeightInit.VAR_SCALING_NORMAL_FAN_IN.getWeightInitFunction()};
     }
 
     private Distribution[] dl4jDistributions() {
@@ -104,7 +119,7 @@ public class KerasInitilizationTest {
     }
 
     private void initilizationDenseLayer(KerasLayerConfiguration conf, Integer kerasVersion,
-                                         String initializer, WeightInit dl4jInitializer, Distribution dl4jDistribution)
+                                         String initializer, IWeightInit dl4jInitializer)
             throws Exception {
         Map<String, Object> layerConfig = new HashMap<>();
         layerConfig.put(conf.getLAYER_FIELD_CLASS_NAME(), conf.getLAYER_CLASS_NAME_DENSE());
@@ -145,8 +160,7 @@ public class KerasInitilizationTest {
         layerConfig.put(conf.getLAYER_FIELD_KERAS_VERSION(), kerasVersion);
 
         DenseLayer layer = new KerasDense(layerConfig, false).getDenseLayer();
-        assertEquals(dl4jInitializer, layer.getWeightInit());
-        assertEquals(dl4jDistribution, layer.getDist());
+        assertEquals(dl4jInitializer, layer.getWeightInitFn());
 
     }
 }

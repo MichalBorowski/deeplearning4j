@@ -1,39 +1,39 @@
-/*-
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
  *
- *  * Copyright 2016 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
  *
- */
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.deeplearning4j.nn.modelimport.keras;
 
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.io.IOUtils;
 import org.deeplearning4j.nn.conf.ComputationGraphConfiguration;
 import org.deeplearning4j.nn.conf.MultiLayerConfiguration;
 import org.deeplearning4j.nn.graph.ComputationGraph;
 import org.deeplearning4j.nn.modelimport.keras.exceptions.InvalidKerasConfigurationException;
 import org.deeplearning4j.nn.modelimport.keras.exceptions.UnsupportedKerasConfigurationException;
 import org.deeplearning4j.nn.multilayer.MultiLayerNetwork;
+import org.deeplearning4j.util.DL4JFileUtils;
 
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.*;
 
 /**
  * Reads stored Keras configurations and weights from one of two archives:
- * either (1) a single HDF5 file storing model and training JSON configurations
- * and weights or (2) separate text file storing model JSON configuration and
- * HDF5 file storing weights.
+ * either as
+ *
+ * - a single HDF5 file storing model and training JSON configurations and weights
+ * - separate text file storing model JSON configuration and HDF5 file storing weights.
  *
  * @author dave@skymind.io
  */
@@ -47,10 +47,16 @@ public class KerasModelImport {
      * @return ComputationGraph
      * @see ComputationGraph
      */
-    public static ComputationGraph importKerasModelAndWeights(
-            InputStream modelHdf5Stream,
-            boolean enforceTrainingConfig) {
-        throw new UnsupportedOperationException("Reading HDF5 files from InputStreams currently unsupported.");
+    public static ComputationGraph importKerasModelAndWeights( InputStream modelHdf5Stream, boolean enforceTrainingConfig)
+            throws IOException, UnsupportedKerasConfigurationException, InvalidKerasConfigurationException{
+        File f = null;
+        try{
+            f = toTempFile(modelHdf5Stream);
+            return importKerasModelAndWeights(f.getAbsolutePath(), enforceTrainingConfig);
+        } finally {
+            if(f != null)
+                f.delete();
+        }
     }
 
     /**
@@ -60,8 +66,15 @@ public class KerasModelImport {
      * @return ComputationGraph
      * @see ComputationGraph
      */
-    public static ComputationGraph importKerasModelAndWeights(InputStream modelHdf5Stream) {
-        throw new UnsupportedOperationException("Reading HDF5 files from InputStreams currently unsupported.");
+    public static ComputationGraph importKerasModelAndWeights(InputStream modelHdf5Stream) throws IOException, UnsupportedKerasConfigurationException, InvalidKerasConfigurationException {
+        File f = null;
+        try{
+            f = toTempFile(modelHdf5Stream);
+            return importKerasModelAndWeights(f.getAbsolutePath());
+        } finally {
+            if(f != null)
+                f.delete();
+        }
     }
 
     /**
@@ -75,7 +88,14 @@ public class KerasModelImport {
     public static MultiLayerNetwork importKerasSequentialModelAndWeights(InputStream modelHdf5Stream,
                                                                          boolean enforceTrainingConfig)
             throws IOException, InvalidKerasConfigurationException, UnsupportedKerasConfigurationException {
-        throw new UnsupportedOperationException("Reading HDF5 files from InputStreams currently unsupported.");
+        File f = null;
+        try{
+            f = toTempFile(modelHdf5Stream);
+            return importKerasSequentialModelAndWeights(f.getAbsolutePath(), enforceTrainingConfig);
+        } finally {
+            if(f != null)
+                f.delete();
+        }
     }
 
     /**
@@ -87,7 +107,14 @@ public class KerasModelImport {
      */
     public static MultiLayerNetwork importKerasSequentialModelAndWeights(InputStream modelHdf5Stream)
             throws IOException, InvalidKerasConfigurationException, UnsupportedKerasConfigurationException {
-        throw new UnsupportedOperationException("Reading HDF5 files from InputStreams currently unsupported.");
+        File f = null;
+        try{
+            f = toTempFile(modelHdf5Stream);
+            return importKerasSequentialModelAndWeights(f.getAbsolutePath());
+        } finally {
+            if(f != null)
+                f.delete();
+        }
     }
 
     /**
@@ -212,6 +239,7 @@ public class KerasModelImport {
                                                               boolean enforceTrainingConfig)
             throws IOException, InvalidKerasConfigurationException, UnsupportedKerasConfigurationException {
         KerasModel kerasModel = new KerasModel().modelBuilder().modelJsonFilename(modelJsonFilename)
+                .enforceTrainingConfig(false)
                 .weightsHdf5FilenameNoRoot(weightsHdf5Filename).enforceTrainingConfig(enforceTrainingConfig)
                 .buildModel();
         return kerasModel.getComputationGraph();
@@ -230,6 +258,7 @@ public class KerasModelImport {
     public static ComputationGraph importKerasModelAndWeights(String modelJsonFilename, String weightsHdf5Filename)
             throws IOException, InvalidKerasConfigurationException, UnsupportedKerasConfigurationException {
         KerasModel kerasModel = new KerasModel().modelBuilder().modelJsonFilename(modelJsonFilename)
+                .enforceTrainingConfig(false)
                 .weightsHdf5FilenameNoRoot(weightsHdf5Filename).enforceTrainingConfig(true).buildModel();
         return kerasModel.getComputationGraph();
     }
@@ -246,7 +275,8 @@ public class KerasModelImport {
      * @see MultiLayerNetwork
      */
     public static MultiLayerNetwork importKerasSequentialModelAndWeights(String modelJsonFilename,
-                                                                         String weightsHdf5Filename, boolean enforceTrainingConfig)
+                                                                         String weightsHdf5Filename,
+                                                                         boolean enforceTrainingConfig)
             throws IOException, InvalidKerasConfigurationException, UnsupportedKerasConfigurationException {
         KerasSequentialModel kerasModel = new KerasSequentialModel().modelBuilder().modelJsonFilename(modelJsonFilename)
                 .weightsHdf5FilenameNoRoot(weightsHdf5Filename).enforceTrainingConfig(enforceTrainingConfig)
@@ -268,7 +298,7 @@ public class KerasModelImport {
                                                                          String weightsHdf5Filename)
             throws IOException, InvalidKerasConfigurationException, UnsupportedKerasConfigurationException {
         KerasSequentialModel kerasModel = new KerasSequentialModel().modelBuilder().modelJsonFilename(modelJsonFilename)
-                .weightsHdf5FilenameNoRoot(weightsHdf5Filename).enforceTrainingConfig(true).buildSequential();
+                .weightsHdf5FilenameNoRoot(weightsHdf5Filename).enforceTrainingConfig(false).buildSequential();
         return kerasModel.getMultiLayerNetwork();
     }
 
@@ -302,7 +332,7 @@ public class KerasModelImport {
     public static ComputationGraphConfiguration importKerasModelConfiguration(String modelJsonFilename)
             throws IOException, InvalidKerasConfigurationException, UnsupportedKerasConfigurationException {
         KerasModel kerasModel = new KerasModel().modelBuilder().modelJsonFilename(modelJsonFilename)
-                .enforceTrainingConfig(true).buildModel();
+                .enforceTrainingConfig(false).buildModel();
         return kerasModel.getComputationGraphConfiguration();
     }
 
@@ -336,7 +366,19 @@ public class KerasModelImport {
     public static MultiLayerConfiguration importKerasSequentialConfiguration(String modelJsonFilename)
             throws IOException, InvalidKerasConfigurationException, UnsupportedKerasConfigurationException {
         KerasSequentialModel kerasModel = new KerasSequentialModel().modelBuilder().modelJsonFilename(modelJsonFilename)
-                .enforceTrainingConfig(true).buildSequential();
+                .enforceTrainingConfig(false).buildSequential();
         return kerasModel.getMultiLayerConfiguration();
+    }
+
+    private static File toTempFile(InputStream is) throws IOException {
+        File f = DL4JFileUtils.createTempFile("DL4JKerasModelImport",".bin");
+        f.deleteOnExit();
+
+
+        try (OutputStream os = new BufferedOutputStream(new FileOutputStream(f))) {
+            IOUtils.copy(is, os);
+            os.flush();
+            return f;
+        }
     }
 }

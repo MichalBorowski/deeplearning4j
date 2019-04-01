@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.gradientcheck;
 
 import org.deeplearning4j.BaseDL4JTest;
@@ -9,11 +25,9 @@ import org.deeplearning4j.nn.conf.distribution.NormalDistribution;
 import org.deeplearning4j.nn.conf.inputs.InputType;
 import org.deeplearning4j.nn.conf.layers.*;
 import org.deeplearning4j.nn.multilayer.MultiLayerNetwork;
-import org.deeplearning4j.nn.weights.WeightInit;
 import org.junit.Test;
 import org.nd4j.linalg.activations.Activation;
-import org.nd4j.linalg.api.buffer.DataBuffer;
-import org.nd4j.linalg.api.buffer.util.DataTypeUtil;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.learning.config.NoOp;
@@ -29,7 +43,7 @@ import static org.junit.Assert.assertTrue;
 public class GlobalPoolingGradientCheckTests extends BaseDL4JTest {
 
     static {
-        Nd4j.setDataType(DataBuffer.Type.DOUBLE);
+        Nd4j.setDataType(DataType.DOUBLE);
     }
 
     private static final boolean PRINT_RESULTS = true;
@@ -56,14 +70,14 @@ public class GlobalPoolingGradientCheckTests extends BaseDL4JTest {
             for (PoolingType pt : poolingTypes) {
 
                 MultiLayerConfiguration conf = new NeuralNetConfiguration.Builder()
-                                .updater(new NoOp()).weightInit(WeightInit.DISTRIBUTION)
+                                .updater(new NoOp())
                                 .dist(new NormalDistribution(0, 1.0)).seed(12345L).list()
                                 .layer(0, new GravesLSTM.Builder().nIn(nIn).nOut(layerSize).activation(Activation.TANH)
                                                 .build())
                                 .layer(1, new GlobalPoolingLayer.Builder().poolingType(pt).build())
                                 .layer(2, new OutputLayer.Builder(LossFunctions.LossFunction.MCXENT)
                                                 .activation(Activation.SOFTMAX).nIn(layerSize).nOut(nOut).build())
-                                .pretrain(false).backprop(true).build();
+                                .build();
 
                 MultiLayerNetwork mln = new MultiLayerNetwork(conf);
                 mln.init();
@@ -119,14 +133,14 @@ public class GlobalPoolingGradientCheckTests extends BaseDL4JTest {
             for (PoolingType pt : poolingTypes) {
 
                 MultiLayerConfiguration conf = new NeuralNetConfiguration.Builder()
-                                .updater(new NoOp()).weightInit(WeightInit.DISTRIBUTION)
+                                .updater(new NoOp())
                                 .dist(new NormalDistribution(0, 1.0)).seed(12345L).list()
                                 .layer(0, new ConvolutionLayer.Builder().kernelSize(2, 2).stride(1, 1).nOut(layerDepth)
                                                 .build())
                                 .layer(1, new GlobalPoolingLayer.Builder().poolingType(pt).build())
                                 .layer(2, new OutputLayer.Builder(LossFunctions.LossFunction.MCXENT)
                                                 .activation(Activation.SOFTMAX).nOut(nOut).build())
-                                .pretrain(false).backprop(true)
+
                                 .setInputType(InputType.convolutional(inputH, inputW, inputDepth)).build();
 
                 MultiLayerNetwork mln = new MultiLayerNetwork(conf);
@@ -174,14 +188,14 @@ public class GlobalPoolingGradientCheckTests extends BaseDL4JTest {
         for (PoolingType pt : poolingTypes) {
 
             MultiLayerConfiguration conf = new NeuralNetConfiguration.Builder()
-                            .updater(new NoOp()).weightInit(WeightInit.DISTRIBUTION)
+                            .updater(new NoOp())
                             .dist(new NormalDistribution(0, 1.0)).seed(12345L).list()
                             .layer(0, new GravesLSTM.Builder().nIn(nIn).nOut(layerSize).activation(Activation.TANH)
                                             .build())
                             .layer(1, new GlobalPoolingLayer.Builder().poolingType(pt).build())
                             .layer(2, new OutputLayer.Builder(LossFunctions.LossFunction.MCXENT)
                                             .activation(Activation.SOFTMAX).nIn(layerSize).nOut(nOut).build())
-                            .pretrain(false).backprop(true).build();
+                            .build();
 
             MultiLayerNetwork mln = new MultiLayerNetwork(conf);
             mln.init();
@@ -259,7 +273,7 @@ public class GlobalPoolingGradientCheckTests extends BaseDL4JTest {
                     }
 
                     MultiLayerConfiguration conf = new NeuralNetConfiguration.Builder()
-                                    .updater(new NoOp()).weightInit(WeightInit.DISTRIBUTION)
+                                    .updater(new NoOp())
                                     .dist(new NormalDistribution(0, 1.0)).convolutionMode(ConvolutionMode.Same)
                                     .seed(12345L).list()
                                     .layer(0, new ConvolutionLayer.Builder().kernelSize(kernel).stride(stride)
@@ -267,7 +281,7 @@ public class GlobalPoolingGradientCheckTests extends BaseDL4JTest {
                                     .layer(1, new GlobalPoolingLayer.Builder().poolingType(pt).build())
                                     .layer(2, new OutputLayer.Builder(LossFunctions.LossFunction.MCXENT)
                                                     .activation(Activation.SOFTMAX).nOut(nOut).build())
-                                    .pretrain(false).backprop(true)
+
                                     .setInputType(InputType.convolutional(inputH, inputW, inputDepth)).build();
 
                     MultiLayerNetwork mln = new MultiLayerNetwork(conf);
@@ -278,9 +292,10 @@ public class GlobalPoolingGradientCheckTests extends BaseDL4JTest {
 
                     INDArray inputMask;
                     if (miniBatchSize == 1) {
-                        inputMask = Nd4j.create(new double[] {1, 1, 1, 1, 0});
+                        inputMask = Nd4j.create(new double[] {1, 1, 1, 1, 0}).reshape(1,1,(maskDim == 2 ? inputH : 1), (maskDim == 3 ? inputW : 1));
                     } else if (miniBatchSize == 3) {
-                        inputMask = Nd4j.create(new double[][] {{1, 1, 1, 1, 1}, {1, 1, 1, 1, 0}, {1, 1, 1, 0, 0}});
+                        inputMask = Nd4j.create(new double[][] {{1, 1, 1, 1, 1}, {1, 1, 1, 1, 0}, {1, 1, 1, 0, 0}})
+                                .reshape(miniBatchSize,1,(maskDim == 2 ? inputH : 1), (maskDim == 3 ? inputW : 1));
                     } else {
                         throw new RuntimeException();
                     }

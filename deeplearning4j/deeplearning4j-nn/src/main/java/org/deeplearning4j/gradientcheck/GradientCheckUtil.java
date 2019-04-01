@@ -1,8 +1,25 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.gradientcheck;
 
 import lombok.extern.slf4j.Slf4j;
 import lombok.val;
 import org.deeplearning4j.nn.api.Model;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.function.Consumer;
 import org.nd4j.linalg.lossfunctions.impl.LossBinaryXENT;
 import org.nd4j.linalg.primitives.Pair;
@@ -42,9 +59,9 @@ import java.util.*;
  * Basic idea: compare calculated gradients with those calculated numerically,
  * to check implementation of backpropagation gradient calculation.<br>
  * See:<br>
- * - http://cs231n.github.io/neural-networks-3/#gradcheck<br>
- * - http://ufldl.stanford.edu/wiki/index.php/Gradient_checking_and_advanced_optimization<br>
- * - https://code.google.com/p/cuda-convnet/wiki/CheckingGradients<br>
+ * - <a href="http://cs231n.github.io/neural-networks-3/#gradcheck">http://cs231n.github.io/neural-networks-3/#gradcheck</a><br>
+ * - <a href="http://ufldl.stanford.edu/wiki/index.php/Gradient_checking_and_advanced_optimization">http://ufldl.stanford.edu/wiki/index.php/Gradient_checking_and_advanced_optimization</a><br>
+ * - <a href="https://code.google.com/p/cuda-convnet/wiki/CheckingGradients">https://code.google.com/p/cuda-convnet/wiki/CheckingGradients</a><br>
  *
  *
  * Is C is cost function, then dC/dW ~= (C(w+epsilon)-C(w-epsilon)) / (2*epsilon).<br>
@@ -115,6 +132,13 @@ public class GradientCheckUtil {
     }
 
     public static boolean checkGradients(MultiLayerNetwork mln, double epsilon, double maxRelError,
+                                         double minAbsoluteError, boolean print, boolean exitOnFirstError, INDArray input,
+                                         INDArray labels, Set<String> excludeParams) {
+        return checkGradients(mln, epsilon, maxRelError, minAbsoluteError, print, exitOnFirstError, input, labels, null, null,
+                false, -1, excludeParams, (Integer)null);
+    }
+
+    public static boolean checkGradients(MultiLayerNetwork mln, double epsilon, double maxRelError,
                                          double minAbsoluteError, boolean print, boolean exitOnFirstError,
                                          INDArray input, INDArray labels, INDArray inputMask, INDArray labelMask) {
         return checkGradients(mln, epsilon, maxRelError, minAbsoluteError, print, exitOnFirstError,
@@ -169,11 +193,11 @@ public class GradientCheckUtil {
         if (!(mln.getOutputLayer() instanceof IOutputLayer))
             throw new IllegalArgumentException("Cannot check backprop gradients without OutputLayer");
 
-        DataBuffer.Type dataType = DataTypeUtil.getDtypeFromContext();
-        if (dataType != DataBuffer.Type.DOUBLE) {
+        DataType dataType = DataTypeUtil.getDtypeFromContext();
+        if (dataType != DataType.DOUBLE) {
             throw new IllegalStateException("Cannot perform gradient check: Datatype is not set to double precision ("
                             + "is: " + dataType + "). Double precision must be used for gradient checks. Set "
-                            + "DataTypeUtil.setDTypeForContext(DataBuffer.Type.DOUBLE); before using GradientCheckUtil");
+                            + "DataTypeUtil.setDTypeForContext(DataType.DOUBLE); before using GradientCheckUtil");
         }
 
         //Check network configuration:
@@ -438,11 +462,11 @@ public class GradientCheckUtil {
             throw new IllegalArgumentException(
                             "Invalid labels arrays: expect " + graph.getNumOutputArrays() + " outputs");
 
-        DataBuffer.Type dataType = DataTypeUtil.getDtypeFromContext();
-        if (dataType != DataBuffer.Type.DOUBLE) {
+        DataType dataType = DataTypeUtil.getDtypeFromContext();
+        if (dataType != DataType.DOUBLE) {
             throw new IllegalStateException("Cannot perform gradient check: Datatype is not set to double precision ("
                             + "is: " + dataType + "). Double precision must be used for gradient checks. Set "
-                            + "DataTypeUtil.setDTypeForContext(DataBuffer.Type.DOUBLE); before using GradientCheckUtil");
+                            + "DataTypeUtil.setDTypeForContext(DataType.DOUBLE); before using GradientCheckUtil");
         }
 
         //Check configuration
@@ -624,11 +648,11 @@ public class GradientCheckUtil {
         if (maxRelError <= 0.0 || maxRelError > 0.25)
             throw new IllegalArgumentException("Invalid maxRelativeError: " + maxRelError);
 
-        DataBuffer.Type dataType = DataTypeUtil.getDtypeFromContext();
-        if (dataType != DataBuffer.Type.DOUBLE) {
+        DataType dataType = DataTypeUtil.getDtypeFromContext();
+        if (dataType != DataType.DOUBLE) {
             throw new IllegalStateException("Cannot perform gradient check: Datatype is not set to double precision ("
                             + "is: " + dataType + "). Double precision must be used for gradient checks. Set "
-                            + "DataTypeUtil.setDTypeForContext(DataBuffer.Type.DOUBLE); before using GradientCheckUtil");
+                            + "DataTypeUtil.setDTypeForContext(DataType.DOUBLE); before using GradientCheckUtil");
         }
 
         //Check network configuration:

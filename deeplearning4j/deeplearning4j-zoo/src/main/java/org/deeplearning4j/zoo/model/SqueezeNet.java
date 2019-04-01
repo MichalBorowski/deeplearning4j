@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.zoo.model;
 
 import lombok.AllArgsConstructor;
@@ -22,13 +38,15 @@ import org.nd4j.linalg.learning.config.AdaDelta;
 import org.nd4j.linalg.learning.config.IUpdater;
 import org.nd4j.linalg.lossfunctions.LossFunctions;
 
+import java.io.IOException;
+
 /**
  * U-Net
  *
  * An implementation of SqueezeNet. Touts similar accuracy to AlexNet with a fraction of the parameters.
  *
- * <p>Paper: https://arxiv.org/abs/1602.07360</p>
- * <p>ImageNet weights for this model are available and have been converted from https://github.com/rcmalli/keras-squeezenet/.</p>
+ * <p>Paper: <a href="https://arxiv.org/abs/1602.07360">https://arxiv.org/abs/1602.07360</a></p>
+ * <p>ImageNet weights for this model are available and have been converted from <a href="https://github.com/rcmalli/keras-squeezenet/">https://github.com/rcmalli/keras-squeezenet/</a>.</p>
  *
  * @note Pretrained ImageNet weights are "special". Output shape is (1,1000,1,1).
  * @author Justin Long (crockpotveggies)
@@ -63,6 +81,14 @@ public class SqueezeNet extends ZooModel {
             return 3711411239L;
         else
             return 0L;
+    }
+
+    @Override
+    public ComputationGraph initPretrained(PretrainedType pretrainedType) throws IOException {
+        ComputationGraph cg = (ComputationGraph) super.initPretrained(pretrainedType);
+        //Set collapse dimensions to true in global avg pooling - more useful for users [N,1000] rather than [N,1000,1,1] out. Also matches non-pretrain config
+        ((GlobalPoolingLayer)cg.getLayer("global_average_pooling2d_5").conf().getLayer()).setCollapseDimensions(true);
+        return cg;
     }
 
     @Override
@@ -123,7 +149,7 @@ public class SqueezeNet extends ZooModel {
                 // output
                 .addLayer("drop9", new DropoutLayer.Builder(0.5).build(), "fire9")
                 .addLayer("conv10", new ConvolutionLayer.Builder(1,1).nOut(numClasses)
-                        .cudnnAlgoMode(cudnnAlgoMode).build(), "input")
+                        .cudnnAlgoMode(cudnnAlgoMode).build(), "drop9")
                 .addLayer("conv10_act", new ActivationLayer(Activation.RELU), "conv10")
                 .addLayer("avg_pool", new GlobalPoolingLayer(PoolingType.AVG), "conv10_act")
 
@@ -131,8 +157,8 @@ public class SqueezeNet extends ZooModel {
                 .addLayer("loss", new LossLayer.Builder(LossFunctions.LossFunction.MCXENT).build(), "softmax")
 
                 .setOutputs("loss")
-                .backprop(true)
-                .pretrain(false);
+
+                ;
 
         return graph;
     }
@@ -145,11 +171,12 @@ public class SqueezeNet extends ZooModel {
                         .cudnnAlgoMode(cudnnAlgoMode).build(), input)
                 .addLayer(prefix+"_relu_sq1x1", new ActivationLayer(Activation.RELU), prefix+"_sq1x1")
 
-                .addLayer(prefix+"exp1x1", new ConvolutionLayer.Builder(1, 1).nOut(expand)
+                .addLayer(prefix+"_exp1x1", new ConvolutionLayer.Builder(1, 1).nOut(expand)
                         .cudnnAlgoMode(cudnnAlgoMode).build(), prefix+"_relu_sq1x1")
                 .addLayer(prefix+"_relu_exp1x1", new ActivationLayer(Activation.RELU), prefix+"_exp1x1")
 
                 .addLayer(prefix+"_exp3x3", new ConvolutionLayer.Builder(3,3).nOut(expand)
+                        .convolutionMode(ConvolutionMode.Same)
                         .cudnnAlgoMode(cudnnAlgoMode).build(), prefix+"_relu_sq1x1")
                 .addLayer(prefix+"_relu_exp3x3", new ActivationLayer(Activation.RELU), prefix+"_exp3x3")
 

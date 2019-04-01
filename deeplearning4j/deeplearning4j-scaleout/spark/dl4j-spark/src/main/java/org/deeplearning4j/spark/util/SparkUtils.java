@@ -1,5 +1,25 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.spark.util;
 
+import lombok.NonNull;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -14,6 +34,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function;
 import org.apache.spark.api.java.function.Function2;
 import org.apache.spark.api.java.function.PairFunction;
+import org.apache.spark.broadcast.Broadcast;
 import org.apache.spark.serializer.SerializerInstance;
 import org.deeplearning4j.spark.api.Repartition;
 import org.deeplearning4j.spark.api.RepartitionStrategy;
@@ -23,11 +44,15 @@ import org.deeplearning4j.spark.impl.common.CountPartitionsFunction;
 import org.deeplearning4j.spark.impl.common.SplitPartitionsFunction;
 import org.deeplearning4j.spark.impl.common.SplitPartitionsFunction2;
 import org.deeplearning4j.spark.impl.common.repartition.BalancedPartitioner;
+import org.deeplearning4j.spark.impl.common.repartition.EqualPartitioner;
 import org.deeplearning4j.spark.impl.common.repartition.HashingBalancedPartitioner;
 import org.deeplearning4j.spark.impl.common.repartition.MapTupleToPairFlatMap;
+import org.deeplearning4j.spark.impl.repartitioner.EqualRepartitioner;
+import org.deeplearning4j.util.UIDProvider;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.dataset.DataSet;
 import org.nd4j.linalg.factory.Nd4j;
+import org.nd4j.linalg.util.MathUtils;
 import org.slf4j.Logger;
 import scala.Tuple2;
 
@@ -42,13 +67,16 @@ import java.util.*;
  *
  * @author Alex Black
  */
+@Slf4j
 public class SparkUtils {
 
     private static final String KRYO_EXCEPTION_MSG = "Kryo serialization detected without an appropriate registrator "
                     + "for ND4J INDArrays.\nWhen using Kryo, An appropriate Kryo registrator must be used to avoid"
                     + " serialization issues (NullPointerException) with off-heap data in INDArrays.\n"
                     + "Use nd4j-kryo_2.10 or _2.11 artifact, with sparkConf.set(\"spark.kryo.registrator\", \"org.nd4j.Nd4jRegistrator\");\n"
-                    + "See https://deeplearning4j.org/spark#kryo for more details";
+                    + "See https://deeplearning4j.org/docs/latest/deeplearning4j-scaleout-howto#kryo for more details";
+
+    private static String sparkExecutorId;
 
     private SparkUtils() {}
 
@@ -378,22 +406,37 @@ public class SparkUtils {
                 JavaPairRDD<Integer, T> pairIndexed = indexedRDD(rdd);
 
                 int remainder = (totalObjects - numPartitions * objectsPerPartition) % numPartitions;
+                log.info("Amount to rebalance: numPartitions={}, objectsPerPartition={}, remainder={}", numPartitions, objectsPerPartition, remainder);
                 pairIndexed = pairIndexed
                                 .partitionBy(new BalancedPartitioner(numPartitions, objectsPerPartition, remainder));
-
                 return pairIndexed.values();
             default:
                 throw new RuntimeException("Unknown setting for repartition: " + repartition);
         }
     }
 
-    static <T> JavaPairRDD<Integer, T> indexedRDD(JavaRDD<T> rdd) {
+    public static <T> JavaPairRDD<Integer, T> indexedRDD(JavaRDD<T> rdd) {
         return rdd.zipWithIndex().mapToPair(new PairFunction<Tuple2<T, Long>, Integer, T>() {
             @Override
             public Tuple2<Integer, T> call(Tuple2<T, Long> elemIdx) {
                 return new Tuple2<>(elemIdx._2().intValue(), elemIdx._1());
             }
         });
+    }
+
+    public static <T> JavaRDD<T> repartitionEqually(JavaRDD<T> rdd, Repartition repartition, int numPartitions){
+        int origNumPartitions = rdd.partitions().size();
+        switch (repartition) {
+            case Never:
+                return rdd;
+            case NumPartitionsWorkersDiffers:
+                if (origNumPartitions == numPartitions)
+                    return rdd;
+            case Always:
+                return new EqualRepartitioner().repartition(rdd, -1, numPartitions);
+            default:
+                throw new RuntimeException("Unknown setting for repartition: " + repartition);
+        }
     }
 
     /**
@@ -495,14 +538,68 @@ public class SparkUtils {
      * @throws IOException If error occurs getting directory contents
      */
     public static JavaRDD<String> listPaths(JavaSparkContext sc, String path, boolean recursive) throws IOException {
+        //NativeImageLoader.ALLOWED_FORMATS
+        return listPaths(sc, path, recursive, (Set<String>)null);
+    }
+
+    /**
+     * List of the files in the given directory (path), as a {@code JavaRDD<String>}
+     *
+     * @param sc                Spark context
+     * @param path              Path to list files in
+     * @param recursive         Whether to walk the directory tree recursively (i.e., include subdirectories)
+     * @param allowedExtensions If null: all files will be accepted. If non-null: only files with the specified extension will be allowed.
+     *                          Exclude the extension separator - i.e., use "txt" not ".txt" here.
+     * @return Paths in the directory
+     * @throws IOException If error occurs getting directory contents
+     */
+    public static JavaRDD<String> listPaths(JavaSparkContext sc, String path, boolean recursive, String[] allowedExtensions) throws IOException {
+        return listPaths(sc, path, recursive, (allowedExtensions == null ? null : new HashSet<>(Arrays.asList(allowedExtensions))));
+    }
+
+    /**
+     * List of the files in the given directory (path), as a {@code JavaRDD<String>}
+     *
+     * @param sc                Spark context
+     * @param path              Path to list files in
+     * @param recursive         Whether to walk the directory tree recursively (i.e., include subdirectories)
+     * @param allowedExtensions If null: all files will be accepted. If non-null: only files with the specified extension will be allowed.
+     *                          Exclude the extension separator - i.e., use "txt" not ".txt" here.
+     * @return Paths in the directory
+     * @throws IOException If error occurs getting directory contents
+     */
+    public static JavaRDD<String> listPaths(JavaSparkContext sc, String path, boolean recursive, Set<String> allowedExtensions) throws IOException {
+        return listPaths(sc, path, recursive, allowedExtensions, sc.hadoopConfiguration());
+    }
+
+    /**
+     * List of the files in the given directory (path), as a {@code JavaRDD<String>}
+     *
+     * @param sc                Spark context
+     * @param path              Path to list files in
+     * @param recursive         Whether to walk the directory tree recursively (i.e., include subdirectories)
+     * @param allowedExtensions If null: all files will be accepted. If non-null: only files with the specified extension will be allowed.
+     *                          Exclude the extension separator - i.e., use "txt" not ".txt" here.
+     * @param config            Hadoop configuration to use. Must not be null.
+     * @return Paths in the directory
+     * @throws IOException If error occurs getting directory contents
+     */
+    public static JavaRDD<String> listPaths(@NonNull JavaSparkContext sc, String path, boolean recursive,
+                                            Set<String> allowedExtensions, @NonNull Configuration config) throws IOException {
         List<String> paths = new ArrayList<>();
-        Configuration config = new Configuration();
         FileSystem hdfs = FileSystem.get(URI.create(path), config);
         RemoteIterator<LocatedFileStatus> fileIter = hdfs.listFiles(new org.apache.hadoop.fs.Path(path), recursive);
 
         while (fileIter.hasNext()) {
             String filePath = fileIter.next().getPath().toString();
-            paths.add(filePath);
+            if(allowedExtensions == null){
+                paths.add(filePath);
+            } else {
+                String ext = FilenameUtils.getExtension(path);
+                if(allowedExtensions.contains(ext)){
+                    paths.add(filePath);
+                }
+            }
         }
         return sc.parallelize(paths);
     }
@@ -528,5 +625,49 @@ public class SparkUtils {
 
         //Step 3: Recombine
         return singleExampleDataSets.values().mapPartitions(new BatchDataSetsFunction(newBatchSize));
+    }
+
+    /**
+     * Get the Spark executor ID<br>
+     * The ID is parsed from the JVM launch args. If that is not specified (or can't be obtained) then the value
+     * from {@link UIDProvider#getJVMUID()} is returned
+     * @return
+     */
+    public static String getSparkExecutorId(){
+        if(sparkExecutorId != null)
+            return sparkExecutorId;
+
+        synchronized (SparkUtils.class){
+            //re-check, in case some other thread set it while waiting for lock
+            if(sparkExecutorId != null)
+                return sparkExecutorId;
+
+            String s = System.getProperty("sun.java.command");
+            if(s == null || s.isEmpty() || !s.contains("executor-id")){
+                sparkExecutorId = UIDProvider.getJVMUID();
+                return sparkExecutorId;
+            }
+
+            int idx = s.indexOf("executor-id");
+            String sub = s.substring(idx);
+            String[] split = sub.split(" ");
+            if(split.length < 2){
+                sparkExecutorId = UIDProvider.getJVMUID();
+                return sparkExecutorId;
+            }
+            sparkExecutorId = split[1];
+            return sparkExecutorId;
+        }
+    }
+
+    public static Broadcast<byte[]> asByteArrayBroadcast(JavaSparkContext sc, INDArray array){
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        try {
+            Nd4j.write(array, new DataOutputStream(baos));
+        } catch (IOException e){
+            throw new RuntimeException(e);  //Should never happen
+        }
+        byte[] paramBytes = baos.toByteArray();       //See docs in EvaluationRunner for why we use byte[] instead of INDArray (thread locality etc)
+        return sc.broadcast(paramBytes);
     }
 }

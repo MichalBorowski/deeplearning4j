@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.autodiff.functions;
 
 import com.rits.cloning.Cloner;
@@ -10,11 +26,13 @@ import onnx.OnnxProto3;
 import org.nd4j.autodiff.samediff.SDVariable;
 import org.nd4j.autodiff.samediff.SameDiff;
 import org.nd4j.base.Preconditions;
+import org.nd4j.graph.DataType;
 import org.nd4j.imports.converters.DifferentialFunctionClassHolder;
 import org.nd4j.imports.descriptors.properties.AttributeAdapter;
 import org.nd4j.imports.descriptors.properties.PropertyMapping;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.api.ops.Op;
+import org.nd4j.linalg.api.shape.LongShapeDescriptor;
 import org.nd4j.linalg.exception.ND4JIllegalStateException;
 import org.nd4j.shade.jackson.annotation.JsonIgnore;
 import org.tensorflow.framework.AttrValue;
@@ -44,7 +62,7 @@ public abstract class DifferentialFunction {
     @Getter
     @Setter
     @JsonIgnore
-    protected Number scalarValue;
+    protected INDArray scalarValue;
 
 
     @Getter
@@ -62,7 +80,13 @@ public abstract class DifferentialFunction {
     private String ownName;
 
     public DifferentialFunction() {
-        setInstanceId();
+        this(true);
+    }
+
+    public DifferentialFunction(boolean sameDiff){
+        //Only need instance ID if using function in context of SameDiff, not standard ND4J with INDArray args
+        if(sameDiff)
+            setInstanceId();
     }
 
     /**
@@ -127,18 +151,30 @@ public abstract class DifferentialFunction {
      * @return
      */
     public Map<String,Object> propertiesForFunction() {
-        val fields = DifferentialFunctionClassHolder.getInstance().getFieldsForFunction(this);
+        Map<String,Field> fields = DifferentialFunctionClassHolder.getInstance().getFieldsForFunction(this);
         Map<String,Object> ret = new LinkedHashMap<>();
 
         for(val entry : fields.entrySet()) {
             try {
                 ret.put(entry.getKey(),fields.get(entry.getKey()).get(this));
             } catch (IllegalAccessException e) {
-                e.printStackTrace();
+                throw new RuntimeException("Unable to get property for field: " + entry.getKey(), e);
             }
         }
 
         return ret;
+    }
+
+    public void setPropertiesForFunction(Map<String,Object> properties){
+        Map<String,Field> fields = DifferentialFunctionClassHolder.getInstance().getFieldsForFunction(this);
+        for(String s : properties.keySet()){
+            Field f = fields.get(s);
+            if(f == null){
+                log.warn("No fields found for property name {} for class {}", s, this.getClass().getName());
+                continue;
+            }
+            setValueFor(f, properties.get(s));
+        }
     }
 
 
@@ -166,16 +202,64 @@ public abstract class DifferentialFunction {
      * @param value the value to set
      */
     public void setValueFor(Field target, Object value) {
-        if(value == null) {
-            throw new ND4JIllegalStateException("Unable to set field " + target + " using null value!");
+        if(value == null && target.getType().isPrimitive()) {
+            throw new ND4JIllegalStateException("Unable to set primitive field " + target + " of type " + target.getClass()
+                    + " using null value!");
         }
 
-        value = ensureProperType(target,value);
+        if(value != null) {
+            value = ensureProperType(target, value);
+        }
 
-        try {
-            target.set(this,value);
-        } catch (IllegalAccessException e) {
-            e.printStackTrace();
+        if(isConfigProperties()){
+            String propertyName = configFieldName();
+            if(propertyName == null)
+                propertyName = "config";
+            Field f = null;
+            Class<?> currClass = getClass();
+            try{
+                f = currClass.getDeclaredField(propertyName);
+            } catch (NoSuchFieldException e){
+                //OK, try superclass
+            }
+            while(f == null && currClass.getSuperclass() != null){
+                currClass = currClass.getSuperclass();
+                try{
+                    f = currClass.getDeclaredField(propertyName);
+                } catch (NoSuchFieldException e){
+                    //OK, try superclass
+                }
+            }
+
+            if(f == null){
+                throw new IllegalStateException("Could not find field \"" + propertyName + "\" for class " + getClass().getName());
+            }
+
+            try {
+                f.setAccessible(true);
+                Object o = f.get(this);
+                if(o == null){
+                    //Null config class - try to create one...
+                    Class<?> c = f.getType();
+                    try {
+                        o = c.newInstance();
+                    } catch (InstantiationException e){
+                        throw new RuntimeException("Error creating new instance of configuration object type " + c.getName(), e);
+                    }
+                    f.set(this, o);
+                }
+                target.set(o, value);
+            } catch (IllegalAccessException e){
+                throw new RuntimeException("Error setting configuration field \"" + propertyName + "\" for config field \"" + propertyName
+                    + "\" on class " + getClass().getName());
+            }
+
+        } else {
+            try {
+                target.set(this,value);
+            } catch (IllegalAccessException e) {
+                throw new RuntimeException("Error setting property for function " + getClass().getName(), e);
+            }
         }
     }
 
@@ -183,8 +267,20 @@ public abstract class DifferentialFunction {
     private Object ensureProperType(Field targetType,Object value) {
         val firstClass = targetType.getType();
         val valueType = value.getClass();
+
         if(!firstClass.equals(valueType)) {
-            if(firstClass.equals(int[].class)) {
+            if(firstClass.isEnum()){
+                if(valueType.equals(String.class)) {
+                    Object[] enumConstants = firstClass.getEnumConstants();
+                    for (int i = 0; i < enumConstants.length; i++) {
+                        if (enumConstants[i].toString().equalsIgnoreCase((String) value)) {
+                            return enumConstants[i];
+                        }
+                    }
+                    throw new IllegalStateException("Could not find enum constant value for value \"" + value
+                            + "\" for enum class " + firstClass.getName());
+                }
+            } else if(firstClass.equals(int[].class)) {
                 if(value instanceof Number) {
                     Number number = (Number) value;
                     value = number.intValue();
@@ -300,19 +396,6 @@ public abstract class DifferentialFunction {
     }
 
 
-
-    /**
-     * Return function properties for the given function
-     * @return
-     */
-    public FunctionProperties asProperties() {
-        return FunctionProperties.builder()
-                .name(opName())
-                .fieldNames(propertiesForFunction())
-                .build();
-    }
-
-
     /**
      *
      * @param sameDiff
@@ -420,19 +503,6 @@ public abstract class DifferentialFunction {
         return sameDiff.f();
     }
 
-    /**
-     * Returns true if this
-     * function has place holder inputs
-     * @return
-     */
-    public boolean hasPlaceHolderInputs() {
-        val args = args();
-        for(val arg : args)
-            if(sameDiff.hasPlaceHolderVariables(arg().getVarName()))
-                return true;
-        return false;
-    }
-
 
     /**
      * Return the arguments for a given function
@@ -521,7 +591,7 @@ public abstract class DifferentialFunction {
      * @return
      */
     public SDVariable arg() {
-        if(args() == null)
+        if(args() == null || args().length == 0)
             return null;
         return args()[0];
     }
@@ -705,15 +775,26 @@ public abstract class DifferentialFunction {
 
 
     /**
-     * Calculate
-     * the output shape for this op
-     * @return
+     * Calculate the output shape for this op
+     * @return List of output shape descriptors
      */
-    public List<long[]> calculateOutputShape() {
-        throw new UnsupportedOperationException();
+    public List<LongShapeDescriptor> calculateOutputShape() {
+        throw new ND4JIllegalStateException("calculateOutputShape() method leaked out for [" + this.opName() + "]");
     }
 
-
+    /**
+     * Calculate the data types for the output arrays.
+     * Though datatypes can also be inferred from {@link #calculateOutputShape()}, this method differs in that it does not
+     * require the input arrays to be populated.
+     * This is important as it allows us to do greedy datatype inference for the entire net - even if arrays are not
+     * available.
+     *
+     * @param dataTypes The data types of the inputs
+     * @return The data types of the outputs
+     */
+    public List<org.nd4j.linalg.api.buffer.DataType> calculateOutputDataTypes(List<org.nd4j.linalg.api.buffer.DataType> dataTypes){
+        throw new UnsupportedOperationException("calculateOutputDataTypes() has not been implemented for " + getClass().getName());
+    }
 
 
     @Override

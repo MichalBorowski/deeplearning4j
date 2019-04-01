@@ -1,20 +1,18 @@
-/*-
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
  *
- *  * Copyright 2016 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
  *
- */
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.deeplearning4j.earlystopping.termination;
 
@@ -41,7 +39,8 @@ public class ScoreImprovementEpochTerminationCondition implements EpochTerminati
         this.maxEpochsWithNoImprovement = maxEpochsWithNoImprovement;
     }
 
-    public ScoreImprovementEpochTerminationCondition(int maxEpochsWithNoImprovement, double minImprovement) {
+    public ScoreImprovementEpochTerminationCondition(@JsonProperty("maxEpochsWithNoImprovement") int maxEpochsWithNoImprovement,
+                                                     @JsonProperty("minImprovement") double minImprovement) {
         this.maxEpochsWithNoImprovement = maxEpochsWithNoImprovement;
         this.minImprovement = minImprovement;
     }
@@ -53,13 +52,13 @@ public class ScoreImprovementEpochTerminationCondition implements EpochTerminati
     }
 
     @Override
-    public boolean terminate(int epochNum, double score) {
+    public boolean terminate(int epochNum, double score, boolean minimize) {
         if (bestEpoch == -1) {
             bestEpoch = epochNum;
             bestScore = score;
             return false;
         } else {
-            double improvement = bestScore - score;
+            double improvement = (minimize ? bestScore - score : score - bestScore);
             if (improvement > minImprovement) {
                 if (minImprovement > 0) {
                     log.info("Epoch with score greater than threshold * * *");

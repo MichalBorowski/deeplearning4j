@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.linalg.shape.concat.padding;
 
 import lombok.val;
@@ -5,12 +21,12 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.nd4j.linalg.BaseNd4jTest;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.convolution.Convolution;
 import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.factory.Nd4jBackend;
 
-import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 
 /**
@@ -29,7 +45,7 @@ public class PaddingTestsC extends BaseNd4jTest {
 
     @Test
     public void testPrepend() {
-        INDArray linspace = Nd4j.linspace(1, 4, 4).reshape(2, 2);
+        INDArray linspace = Nd4j.linspace(1, 4, 4, DataType.DOUBLE).reshape(2, 2);
         INDArray assertion = Nd4j.create(new double[][] {{1, 1, 1, 1, 2}, {1, 1, 1, 3, 4}});
 
         INDArray prepend = Nd4j.prepend(linspace, 3, 1.0, -1);
@@ -79,7 +95,7 @@ public class PaddingTestsC extends BaseNd4jTest {
     public void testPaddingTensor() {
         //,1,1,1,1,2,2,0
         int kh = 1, kw = 1, sy = 1, sx = 1, ph = 2, pw = 2;
-        INDArray linspaced = Nd4j.linspace(1, 16, 16).reshape(2, 2, 2, 2);
+        INDArray linspaced = Nd4j.linspace(1, 16, 16, DataType.DOUBLE).reshape(2, 2, 2, 2);
         val n = linspaced.size(0);
         val c = linspaced.size(1);
         val h = linspaced.size(2);
@@ -97,7 +113,7 @@ public class PaddingTestsC extends BaseNd4jTest {
 
     @Test
     public void testAppend() {
-        INDArray linspace = Nd4j.linspace(1, 4, 4).reshape(2, 2);
+        INDArray linspace = Nd4j.linspace(1, 4, 4, DataType.DOUBLE).reshape(2, 2);
         INDArray otherAppend = Nd4j.append(linspace, 3, 1.0, -1);
         INDArray assertion = Nd4j.create(new double[][] {{1, 2, 1, 1, 1}, {3, 4, 1, 1, 1}});
 

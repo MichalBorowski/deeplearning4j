@@ -1,9 +1,26 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.linalg.api.blas;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.nd4j.linalg.BaseNd4jTest;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.factory.Nd4jBackend;
@@ -20,7 +37,7 @@ public class Level3Test extends BaseNd4jTest {
     }
 
     @Test
-    public void testGemm1() throws Exception {
+    public void testGemm1() {
         INDArray array1 = Nd4j.linspace(1, 100, 100).reshape(1, 100);
         INDArray array2 = Nd4j.linspace(1, 100, 100).reshape(100, 1);
 
@@ -30,7 +47,7 @@ public class Level3Test extends BaseNd4jTest {
     }
 
     @Test
-    public void testGemm2() throws Exception {
+    public void testGemm2() {
         INDArray array1 = Nd4j.linspace(1, 100, 100).reshape('f', 1, 100);
         INDArray array2 = Nd4j.linspace(1, 100, 100).reshape('f', 100, 1);
 
@@ -40,7 +57,7 @@ public class Level3Test extends BaseNd4jTest {
     }
 
     @Test
-    public void testGemm3() throws Exception {
+    public void testGemm3() {
         INDArray array1 = Nd4j.linspace(1, 1000, 1000).reshape(10, 100);
         INDArray array2 = Nd4j.linspace(1, 1000, 1000).reshape(100, 10);
 
@@ -58,7 +75,7 @@ public class Level3Test extends BaseNd4jTest {
     }
 
     @Test
-    public void testGemm4() throws Exception {
+    public void testGemm4() {
         INDArray array1 = Nd4j.linspace(1, 1000, 1000).reshape(10, 100);
         INDArray array2 = Nd4j.linspace(1, 1000, 1000).reshape('f', 100, 10);
 
@@ -75,7 +92,7 @@ public class Level3Test extends BaseNd4jTest {
     }
 
     @Test
-    public void testGemm5() throws Exception {
+    public void testGemm5() {
         INDArray array1 = Nd4j.linspace(1, 1000, 1000).reshape('f', 10, 100);
         INDArray array2 = Nd4j.linspace(1, 1000, 1000).reshape(100, 10);
 
@@ -89,7 +106,7 @@ public class Level3Test extends BaseNd4jTest {
     }
 
     @Test
-    public void testGemm6() throws Exception {
+    public void testGemm6() {
         INDArray array1 = Nd4j.linspace(1, 1000, 1000).reshape('f', 10, 100);
         INDArray array2 = Nd4j.linspace(1, 1000, 1000).reshape('f', 100, 10);
 

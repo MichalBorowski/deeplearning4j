@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.spark.util.data.validation;
 
 import org.apache.hadoop.conf.Configuration;
@@ -5,6 +21,9 @@ import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.function.Function;
+import org.apache.spark.broadcast.Broadcast;
+import org.datavec.spark.util.DefaultHadoopConfig;
+import org.datavec.spark.util.SerializableHadoopConfig;
 import org.deeplearning4j.spark.util.data.ValidationResult;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.dataset.MultiDataSet;
@@ -28,21 +47,28 @@ public class ValidateMultiDataSetFn implements Function<String, ValidationResult
     private final int numLabels;
     private final List<int[]> featuresShape;
     private final List<int[]> labelsShape;
+    private final Broadcast<SerializableHadoopConfig> conf;
     private transient FileSystem fileSystem;
 
     public ValidateMultiDataSetFn(boolean deleteInvalid, int numFeatures, int numLabels, List<int[]> featuresShape, List<int[]> labelsShape) {
+        this(deleteInvalid, numFeatures, numLabels, featuresShape, labelsShape, null);
+    }
+
+    public ValidateMultiDataSetFn(boolean deleteInvalid, int numFeatures, int numLabels, List<int[]> featuresShape, List<int[]> labelsShape, Broadcast<SerializableHadoopConfig> configuration) {
         this.deleteInvalid = deleteInvalid;
         this.numFeatures = numFeatures;
         this.numLabels = numLabels;
         this.featuresShape = featuresShape;
         this.labelsShape = labelsShape;
+        this.conf = configuration;
     }
 
     @Override
     public ValidationResult call(String path) throws Exception {
         if (fileSystem == null) {
+            Configuration c = conf == null ? DefaultHadoopConfig.get() : conf.getValue().getConfiguration();
             try {
-                fileSystem = FileSystem.get(new URI(path), new Configuration());
+                fileSystem = FileSystem.get(new URI(path), c);
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }

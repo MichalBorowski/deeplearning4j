@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 //
 //  Created by Yurii Shyrma on 25.01.2018
 //
@@ -13,9 +29,9 @@ namespace ops {
 
 CUSTOM_OP_IMPL(reverse_sequence, 2, 1, false, 0, 2) {
         
-    NDArray<T>* input      = INPUT_VARIABLE(0);
-    NDArray<T>* seqLengths = INPUT_VARIABLE(1);
-    NDArray<T>* output     = OUTPUT_VARIABLE(0);
+    auto input      = INPUT_VARIABLE(0);
+    auto seqLengths = INPUT_VARIABLE(1);
+    auto output     = OUTPUT_VARIABLE(0);
 
     int seqDim = INT_ARG(0);
     int batchDim = block.numI() > 1 ? INT_ARG(1) : 0;
@@ -27,14 +43,19 @@ CUSTOM_OP_IMPL(reverse_sequence, 2, 1, false, 0, 2) {
     REQUIRE_TRUE(batchDim < input->rankOf(), 0, "REVERSE_SEQUENSE operation: input integer parameter batchDim must be smaller than input array rank, but got %i and %i correspondingly !", batchDim, input->rankOf());
     REQUIRE_TRUE(seqDim < input->rankOf(), 0, "REVERSE_SEQUENSE operation: input integer parameter seqDim must be smaller than input array rank, but got %i  and %i correspondingly !", seqDim, input->rankOf());        
 
-    T maxElem = seqLengths->template reduceNumber<simdOps::Max<T>>();
-    REQUIRE_TRUE(maxElem <= (T)input->sizeAt(seqDim), 0, "REVERSE_SEQUENSE operation: max element in seqLengths array must be not greater than value of seqDim dimension of input array !");
+    auto maxElem = seqLengths->reduceNumber(reduce::Max);
+    REQUIRE_TRUE(maxElem.e<Nd4jLong>(0) <= input->sizeAt(seqDim), 0, "REVERSE_SEQUENSE operation: max element in seqLengths array must be not greater than value of seqDim dimension of input array !");
     
-    helpers::reverseSequence<T>(input, seqLengths, output, seqDim, batchDim);
+    helpers::reverseSequence(input, seqLengths, output, seqDim, batchDim);
 
-    return ND4J_STATUS_OK;
+    return Status::OK();
 }
 
+    DECLARE_TYPES(reverse_sequence) {
+        getOpDescriptor()->setAllowedInputTypes(0, {ALL_FLOATS, ALL_INTS});
+        getOpDescriptor()->setAllowedInputTypes(1, {DataType::INT32, DataType::INT64});
+        getOpDescriptor()->setAllowedOutputTypes(0, DataType::INHERIT);
+    }
 
 DECLARE_SHAPE_FN(reverse_sequence) {
 

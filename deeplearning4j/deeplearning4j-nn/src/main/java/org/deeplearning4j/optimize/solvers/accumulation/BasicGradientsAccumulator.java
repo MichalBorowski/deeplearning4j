@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.optimize.solvers.accumulation;
 
 import lombok.NonNull;
@@ -28,7 +44,7 @@ public class BasicGradientsAccumulator implements GradientsAccumulator {
     protected MessageHandler handler;
 
     // here we'll store messages coming from "somewhere else"
-    protected transient Queue<INDArray> gradients;
+    protected transient IndexedTail gradients;
 
     // this field stores current accumulated
     protected transient INDArray storage;
@@ -67,12 +83,17 @@ public class BasicGradientsAccumulator implements GradientsAccumulator {
      * @param handler MessageHandler instance that'll be used for communication purposes
      */
     public BasicGradientsAccumulator(int parties, @NonNull MessageHandler handler) {
-        this.gradients = new LinkedTransferQueue<>();
+        this.gradients = new IndexedTail(parties);
         this.handler = handler;
 
         this.handler.initialize(this);
         this.parties = parties;
         barrier = new CyclicBarrier(parties);
+    }
+
+    @Override
+    public IndexedTail getExternalSource() {
+        return gradients;
     }
 
     /**
@@ -82,7 +103,7 @@ public class BasicGradientsAccumulator implements GradientsAccumulator {
      * @param params
      */
     @Override
-    public void applyUpdate(StepFunction function, INDArray params, INDArray grad) {
+    public void applyUpdate(StepFunction function, INDArray params, INDArray grad, boolean isFinalStep) {
 
         try {
             updatesLock.readLock().lock();
@@ -111,6 +132,10 @@ public class BasicGradientsAccumulator implements GradientsAccumulator {
         }
     }
 
+    @Override
+    public void markExternalUpdates(boolean updatesAvailable) {
+        // no-op
+    }
 
     /**
      * This method applies accumulated updates via given StepFunction
@@ -154,7 +179,7 @@ public class BasicGradientsAccumulator implements GradientsAccumulator {
      * @param array
      */
     @Override
-    public void storeUpdate(INDArray array) {
+    public void storeUpdate(INDArray array, int iterationNumber, int epochNumber) {
         /*
             Here we want to do 4 things:
             1) update accumulated values
@@ -194,7 +219,7 @@ public class BasicGradientsAccumulator implements GradientsAccumulator {
                 Nd4j.getExecutioner().commit();
 
                 // if there's something to send - send it. Skip otherwise!!!
-                if (handler.broadcastUpdates(storage)) {
+                if (handler.broadcastUpdates(storage, iterationNumber, epochNumber)) {
                     ownCounter.getAndIncrement();
                 }
 
@@ -271,8 +296,13 @@ public class BasicGradientsAccumulator implements GradientsAccumulator {
     }
 
     @Override
-    public void setExternalSource(Queue<INDArray> source) {
-        // TODO: to be implemented
-        throw new UnsupportedOperationException();
+    public void setExternalSource(IndexedTail source) {
+        gradients = source;
+    }
+
+
+    @Override
+    public boolean hasAnything() {
+        return false;
     }
 }

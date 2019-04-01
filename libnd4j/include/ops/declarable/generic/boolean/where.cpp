@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 //
 //  @author raver119@gmail.com
 //
@@ -7,17 +23,19 @@
 
 #include <helpers/ShapeUtils.h>
 #include <ops/declarable/CustomOperations.h>
+#include <ops/declarable/helpers/where.h>
 
 namespace nd4j {
     namespace ops {
         CUSTOM_OP_IMPL(Where, 1, 1, false, 0, 0) {
             auto condition = INPUT_VARIABLE(0);
+            auto z = OUTPUT_VARIABLE(0);
+            if (z->isEmpty())
+                return ND4J_STATUS_OK;
 
             if (block.width() == 3) {
                 auto x = INPUT_VARIABLE(1);
                 auto y = INPUT_VARIABLE(2);
-
-                auto z = OUTPUT_VARIABLE(0);
 
                 REQUIRE_TRUE(x->isSameShape(y), 0, "X and Y must have equal shapes");
 
@@ -25,25 +43,30 @@ namespace nd4j {
                 if (condition->isSameShape(x)) {
                     // FIXME: for perf it might be better to issue memcpy here, and fill only mismatched values from either X or Y
                     for (int e = 0; e < condition->lengthOf(); e++) {
-                        T v = condition->getIndexedScalar(e);
-                        T r = v == (T) 0.0f ? y->getIndexedScalar(e) : x->getIndexedScalar(e);
-                        z->putIndexedScalar(e, r);
+                        if (y->isR()) {
+                            auto r = !condition->e<bool>(e) ? y->e<double>(e)
+                                                                           : x->e<double>(e);
+                            z->p(e, r);
+                        } else {
+                            auto r = !condition->e<bool>(e) ? y->e<Nd4jLong>(e)
+                                                                           : x->e<Nd4jLong>(e);
+                            z->p(e, r);
+                        }
                     }
                 } else {
                     REQUIRE_TRUE(condition->lengthOf() == x->sizeAt(0), 0, "Condition length should be equal to the dim0 of x/y to act as TAD-mask, but got %d instead", condition->lengthOf());
 
-                    auto dims = ShapeUtils<T>::convertAxisToTadTarget(x->rankOf(), {0});
-                    auto tadsX = NDArrayFactory<T>::allTensorsAlongDimension(x, dims);
-                    auto tadsY = NDArrayFactory<T>::allTensorsAlongDimension(y, dims);
-                    auto tadsZ = NDArrayFactory<T>::allTensorsAlongDimension(z, dims);
+                    auto dims = ShapeUtils::convertAxisToTadTarget(x->rankOf(), {0});
+                    auto tadsX = x->allTensorsAlongDimension(dims);
+                    auto tadsY = y->allTensorsAlongDimension(dims);
+                    auto tadsZ = z->allTensorsAlongDimension(dims);
 
                     for (int e = 0; e < tadsX->size(); e++) {
-                        T v = condition->getIndexedScalar(e);
-
-                        if (v == (T) 0.0f)
+                        if (!condition->e<bool>(e)) {
                             tadsZ->at(e)->assign(tadsY->at(e));
-                        else
+                        } else {
                             tadsZ->at(e)->assign(tadsX->at(e));
+                        }
                     }
 
                     delete tadsX;
@@ -52,35 +75,17 @@ namespace nd4j {
                 }
             } else {
                 // in this case we return 2D matrix, which basically contains coordinates fo true
-
                 REQUIRE_TRUE(block.width() == 1, 0, "Where op takes either 1 or 3 operands, But got %d operands instead", block.width());
+                auto output = OUTPUT_VARIABLE(0);
 
                 int width = condition->rankOf();
+                if (z->isEmpty())
+                    return ND4J_STATUS_OK;
 
-                std::vector<int> dims = ShapeUtils<T>::convertAxisToTadTarget(width, {0});
+                std::vector<int> dims = ShapeUtils::convertAxisToTadTarget(width, {0});
 
-                NDArrayList<T> list(0, true);
-                int cnt = 0;
-
-                Nd4jLong idx[MAX_RANK];
-                for (int e = 0; e < condition->lengthOf(); e++) {
-                    shape::ind2subC(condition->rankOf(), condition->shapeOf(), e, idx);
-
-                    auto offset = shape::getOffset(0, condition->shapeOf(), condition->stridesOf(), idx, condition->rankOf());
-                    T v = condition->buffer()[offset];
-                    if (v != (T) 0.0f) {
-                        auto array = new NDArray<T>('c', {1, condition->rankOf()});
-                        for (int f = 0; f < condition->rankOf(); f++)
-                            array->putIndexedScalar(f, (T) idx[f]);
-
-                        list.write(cnt++, array);
-                    }
-                }
-
-                auto result = list.stack();
-                OVERWRITE_RESULT(result);
+                helpers::_where(*condition, *output, block.workspace());
             }
-
             return ND4J_STATUS_OK;
         }
 
@@ -93,22 +98,44 @@ namespace nd4j {
                 return SHAPELIST(newshape);
             } else {
                 // FIXME: we can't estimate result here in this case
+                // output shape is the 2D tensor num_true x rankOf (inShape)
+                auto condition = INPUT_VARIABLE(0);
                 auto inShape = inputShape->at(0);
+                Nd4jLong numOfTrue = 0; //condition->reduceNumber(reduce::CountNonZero, nullptr).e<Nd4jLong>(0);
+                for (Nd4jLong i = 0; i < condition->lengthOf(); i++)
+                    if (condition->e<bool>(i)) numOfTrue++;
 
-                Nd4jLong *newshape;
-                ALLOCATE(newshape, block.getWorkspace(), shape::shapeInfoLength(2), Nd4jLong);
+                Nd4jLong *newShape;
 
-                newshape[0] = 2;
-                newshape[1] = 10;
-                newshape[2] = 10;
-                newshape[3] = 1;
-                newshape[4] = 1;
-                newshape[5] = 0;
-                newshape[6] = 1;
-                newshape[7] = 99;
+                if (numOfTrue > 0) {
+                    ALLOCATE(newShape, block.getWorkspace(), shape::shapeInfoLength(2), Nd4jLong);
 
-                return SHAPELIST(newshape);
+                    newShape[0] = 2;
+                    newShape[1] = numOfTrue;
+                    newShape[2] = shape::rank(inShape);
+                    newShape[3] = 1;
+                    newShape[4] = 1;
+                    newShape[5] = 0;
+                    newShape[6] = 1;
+                    newShape[7] = 99;
+
+                    ArrayOptions::setDataType(newShape, nd4j::DataType::INT64);
+                }
+                else {
+                    newShape = ShapeBuilders::createScalarShapeInfo(nd4j::DataType::INT64, block.getWorkspace());
+                    ArrayOptions::setPropertyBit(newShape, ARRAY_EMPTY);
+                }
+
+                return SHAPELIST(newShape);
             }
+        }
+
+        DECLARE_TYPES(Where) {
+            getOpDescriptor()
+                    ->setAllowedInputTypes(0, DataType::ANY) // bool
+                    ->setAllowedInputTypes(1, DataType::ANY)
+                    ->setAllowedInputTypes(2, DataType::ANY)
+                    ->setAllowedOutputTypes(0, {ALL_INTS, ALL_FLOATS});
         }
     }
 }

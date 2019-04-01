@@ -1,21 +1,18 @@
-/*-
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
  *
- *  * Copyright 2015 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
  *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
  *
- */
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.nd4j.linalg.jcublas.buffer;
 
@@ -24,6 +21,7 @@ import org.bytedeco.javacpp.indexer.Indexer;
 import org.nd4j.jita.allocator.impl.AllocationShape;
 import org.nd4j.jita.allocator.impl.AtomicAllocator;
 import org.nd4j.linalg.api.buffer.DataBuffer;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.memory.MemoryWorkspace;
 import org.nd4j.linalg.util.ArrayUtil;
 
@@ -81,7 +79,7 @@ public class CudaDoubleDataBuffer extends BaseCudaDataBuffer {
      */
     @Override
     protected void initTypeAndSize() {
-        type = Type.DOUBLE;
+        type = DataType.DOUBLE;
         elementSize = 8;
     }
 
@@ -137,63 +135,21 @@ public class CudaDoubleDataBuffer extends BaseCudaDataBuffer {
     }
 
     public CudaDoubleDataBuffer(byte[] data, long length) {
-        super(data, length);
+        super(data, length, DataType.DOUBLE);
     }
 
     public CudaDoubleDataBuffer(ByteBuffer buffer, long length) {
-        super(buffer, (int) length);
+        super(buffer, (int) length, DataType.DOUBLE);
     }
 
     public CudaDoubleDataBuffer(ByteBuffer buffer, long length, long offset) {
-        super(buffer, length, offset);
-    }
-
-
-    @Override
-    public void assign(long[] indices, float[] data, boolean contiguous, long inc) {
-
-        if (indices.length != data.length)
-            throw new IllegalArgumentException("Indices and data length must be the same");
-        if (indices.length > length())
-            throw new IllegalArgumentException("More elements than space to assign. This buffer is of length "
-                            + length() + " where the indices are of length " + data.length);
-
-        if (contiguous) {
-            /*long offset = indices[0];
-            Pointer p = Pointer.to(data);
-            set(offset, data.length, p, inc);
-            */
-            throw new UnsupportedOperationException();
-        } else
-            throw new UnsupportedOperationException("Non contiguous is not supported");
-
-    }
-
-    @Override
-    public void assign(long[] indices, double[] data, boolean contiguous, long inc) {
-        if (indices.length != data.length)
-            throw new IllegalArgumentException("Indices and data length must be the same");
-        if (indices.length > length())
-            throw new IllegalArgumentException("More elements than space to assign. This buffer is of length "
-                            + length() + " where the indices are of length " + data.length);
-
-        if (contiguous) {
-            /*long offset = indices[0];
-            Pointer p = Pointer.to(data);
-            set(offset, data.length, p, inc);
-            */
-            throw new UnsupportedOperationException();
-        } else
-            throw new UnsupportedOperationException("Non contiguous is not supported");
-
+        super(buffer, length, offset, DataType.DOUBLE);
     }
 
     @Override
     protected DataBuffer create(long length) {
         return new CudaDoubleDataBuffer(length);
     }
-
-
 
     @Override
     public void setData(int[] data) {
@@ -254,7 +210,7 @@ public class CudaDoubleDataBuffer extends BaseCudaDataBuffer {
         //wrappedBuffer.order(ByteOrder.nativeOrder());
 
         this.allocationPoint = AtomicAllocator.getInstance().allocateMemory(this,
-                        new AllocationShape(length, elementSize, Type.DOUBLE), false);
+                        new AllocationShape(length, elementSize, DataType.DOUBLE), false);
         this.trackingPoint = allocationPoint.getObjectId();
         //this.wrappedBuffer = allocationPoint.getPointers().getHostPointer().asByteBuffer();
         //this.wrappedBuffer.order(ByteOrder.nativeOrder());

@@ -1,15 +1,31 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.linalg.cpu.nativecpu;
 
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
-import org.bytedeco.javacpp.BytePointer;
-import org.bytedeco.javacpp.FloatPointer;
 import org.bytedeco.javacpp.Pointer;
+import org.nd4j.linalg.api.memory.AllocationsTracker;
+import org.nd4j.linalg.api.memory.enums.AllocationKind;
+import org.nd4j.linalg.api.memory.enums.MemoryKind;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.exception.ND4JIllegalStateException;
 import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.memory.BasicMemoryManager;
-import org.nd4j.linalg.api.memory.enums.MemoryKind;
 import org.nd4j.nativeblas.NativeOpsHolder;
 
 import java.util.Map;
@@ -32,10 +48,9 @@ public class CpuMemoryManager extends BasicMemoryManager {
         Pointer ptr = NativeOpsHolder.getInstance().getDeviceNativeOps().mallocHost(bytes, 0);
 
         if (ptr == null || ptr.address() == 0L)
-            throw new ND4JIllegalStateException("Failed to allocate [" + bytes + "] bytes");
+            throw new OutOfMemoryError("Failed to allocate [" + bytes + "] bytes");
 
         //log.info("Allocating {} bytes at MemoryManager", bytes);
-
 
         if (initialize)
             Pointer.memset(ptr, 0, bytes);
@@ -53,6 +68,7 @@ public class CpuMemoryManager extends BasicMemoryManager {
     @Override
     public void release(@NonNull Pointer pointer, MemoryKind kind) {
         Pointer.free(pointer);
+        pointer.setNull();
     }
 
     /**
@@ -89,5 +105,10 @@ public class CpuMemoryManager extends BasicMemoryManager {
     @Override
     public Map<Integer, Long> getBandwidthUse() {
         return null;
+    }
+
+    @Override
+    public long allocatedMemory(Integer deviceId) {
+        return Pointer.totalBytes() + AllocationsTracker.getInstance().bytesOnDevice(AllocationKind.GENERAL, deviceId) + AllocationsTracker.getInstance().bytesOnDevice(AllocationKind.WORKSPACE, deviceId);
     }
 }

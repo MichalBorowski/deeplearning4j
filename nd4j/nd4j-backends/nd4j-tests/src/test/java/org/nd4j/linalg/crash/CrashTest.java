@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.linalg.crash;
 
 import lombok.extern.slf4j.Slf4j;
@@ -7,12 +23,13 @@ import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.nd4j.linalg.BaseNd4jTest;
 import org.nd4j.linalg.api.ndarray.INDArray;
-import org.nd4j.linalg.api.ops.impl.accum.distances.ManhattanDistance;
 import org.nd4j.linalg.api.ops.impl.indexaccum.IMax;
-import org.nd4j.linalg.api.ops.impl.transforms.LogSoftMax;
-import org.nd4j.linalg.api.ops.impl.transforms.OldSoftMax;
-import org.nd4j.linalg.api.ops.impl.transforms.SoftMaxDerivative;
-import org.nd4j.linalg.api.ops.impl.transforms.Sqrt;
+import org.nd4j.linalg.api.ops.impl.reduce3.ManhattanDistance;
+import org.nd4j.linalg.api.ops.impl.transforms.custom.LogSoftMax;
+import org.nd4j.linalg.api.ops.impl.transforms.floating.Sqrt;
+import org.nd4j.linalg.api.ops.impl.transforms.strict.OldLogSoftMax;
+import org.nd4j.linalg.api.ops.impl.transforms.strict.OldSoftMax;
+import org.nd4j.linalg.api.ops.impl.transforms.strict.SoftMaxDerivative;
 import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.factory.Nd4jBackend;
 import org.nd4j.linalg.indexing.BooleanIndexing;
@@ -105,7 +122,7 @@ public class CrashTest extends BaseNd4jTest {
         float sum = x.sumNumber().floatValue();
 
         // index reduction
-        Nd4j.getExecutioner().exec(new IMax(x), Integer.MAX_VALUE);
+        Nd4j.getExecutioner().exec(new IMax(x));
 
         // casual transform
         Nd4j.getExecutioner().exec(new Sqrt(x, x));
@@ -143,7 +160,7 @@ public class CrashTest extends BaseNd4jTest {
         // logisoftmax, softmax & softmax derivative
         Nd4j.getExecutioner().exec(new OldSoftMax(x));
         Nd4j.getExecutioner().exec(new SoftMaxDerivative(x));
-        Nd4j.getExecutioner().exec(new LogSoftMax(x));
+        Nd4j.getExecutioner().exec(new OldLogSoftMax(x));
 
 
         // BooleanIndexing

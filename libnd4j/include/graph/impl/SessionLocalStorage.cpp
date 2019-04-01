@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 //
 // @author raver119@gmail.com
 //
@@ -8,17 +24,14 @@
 
 namespace nd4j {
     namespace graph {
-
-        template <typename T>
-        SessionLocalStorage<T>::SessionLocalStorage(VariableSpace<T>* variableSpace, Stash<T>* stash) {
+        SessionLocalStorage::SessionLocalStorage(VariableSpace* variableSpace, Stash* stash) {
             // we start from 1, since key 0 holds original VariableSpace
             _sessionCounter.store(1);
             _variableSpace = variableSpace;
             _stash = stash;
         }
 
-        template <typename T>
-        VariableSpace<T>* SessionLocalStorage<T>::localVariableSpace(Nd4jLong sessionId) {
+        VariableSpace* SessionLocalStorage::localVariableSpace(Nd4jLong sessionId) {
             _mutex.lock();
             auto varSpace = _threadVariableSpace.at(sessionId);
             _mutex.unlock();
@@ -26,21 +39,18 @@ namespace nd4j {
             return varSpace;
         }
 
-        template <typename T>
-        VariableSpace<T>* SessionLocalStorage<T>::localVariableSpace() {
+        VariableSpace* SessionLocalStorage::localVariableSpace() {
             return localVariableSpace(getSessionId());
         }
 
-        template <typename T>
-        SessionLocalStorage<T>::~SessionLocalStorage() {
+        SessionLocalStorage::~SessionLocalStorage() {
             for (const auto & v: _threadVariableSpace) {
                 delete v.second;
             }
         }
 
 
-        template <typename T>
-        Nd4jLong SessionLocalStorage<T>::getThreadId() {
+        Nd4jLong SessionLocalStorage::getThreadId() {
 #ifdef __APPLE__
             // syscall?
 #elif _WIN32
@@ -53,16 +63,14 @@ namespace nd4j {
             return (*ptr);
         }
 
-        template <typename T>
-        int SessionLocalStorage<T>::numberOfSessions() {
+        int SessionLocalStorage::numberOfSessions() {
             _mutex.lock();
             int size = (int) _threadSession.size();
             _mutex.unlock();
             return size;
         }
 
-        template <typename T>
-        void SessionLocalStorage<T>::endSession(Nd4jLong sessionId) {
+        void SessionLocalStorage::endSession(Nd4jLong sessionId) {
             // we should delete specific holders here
             _mutex.lock();
             auto vs = _threadVariableSpace[sessionId];
@@ -72,8 +80,7 @@ namespace nd4j {
             _mutex.unlock();
         }
 
-        template <typename T>
-        void SessionLocalStorage<T>::endSession() {
+        void SessionLocalStorage::endSession() {
             auto tid = getThreadId();
 
             _mutex.lock();
@@ -86,8 +93,7 @@ namespace nd4j {
             endSession(ntid);
         }
 
-        template <typename T>
-        Nd4jLong SessionLocalStorage<T>::getSessionId() {
+        Nd4jLong SessionLocalStorage::getSessionId() {
             auto tid = getThreadId();
 
             _mutex.lock();
@@ -98,8 +104,7 @@ namespace nd4j {
             return ntid;
         }
 
-        template <typename T>
-        Nd4jLong nd4j::graph::SessionLocalStorage<T>::startSession() {
+        Nd4jLong nd4j::graph::SessionLocalStorage::startSession() {
             auto tid = getThreadId();
 
             nd4j_debug("Adding ThreadId: %i;\n", (int) tid);
@@ -113,10 +118,6 @@ namespace nd4j {
 
             return ntid;
         }
-
-        template class ND4J_EXPORT SessionLocalStorage<float>;
-        template class ND4J_EXPORT SessionLocalStorage<float16>;
-        template class ND4J_EXPORT SessionLocalStorage<double>;
     }
 }
 

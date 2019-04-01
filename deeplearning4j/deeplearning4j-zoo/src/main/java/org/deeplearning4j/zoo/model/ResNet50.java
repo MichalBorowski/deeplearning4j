@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.zoo.model;
 
 import lombok.AllArgsConstructor;
@@ -13,7 +29,9 @@ import org.deeplearning4j.nn.conf.graph.ElementWiseVertex;
 import org.deeplearning4j.nn.conf.inputs.InputType;
 import org.deeplearning4j.nn.conf.layers.*;
 import org.deeplearning4j.nn.graph.ComputationGraph;
+import org.deeplearning4j.nn.weights.IWeightInit;
 import org.deeplearning4j.nn.weights.WeightInit;
+import org.deeplearning4j.nn.weights.WeightInitDistribution;
 import org.deeplearning4j.zoo.ModelMetaData;
 import org.deeplearning4j.zoo.PretrainedType;
 import org.deeplearning4j.zoo.ZooModel;
@@ -26,8 +44,8 @@ import org.nd4j.linalg.lossfunctions.LossFunctions;
 /**
  * Residual networks for deep learning.
  *
- * <p>Paperp: https://arxiv.org/abs/1512.03385</p>
- * <p>ImageNet weights for this model are available and have been converted from https://keras.io/applications/.</p>
+ * <p>Paper: <a href="https://arxiv.org/abs/1512.03385">https://arxiv.org/abs/1512.03385</a></p>
+ * <p>ImageNet weights for this model are available and have been converted from <a href="https://keras.io/applications/"></a>https://keras.io/applications/</a>.</p>
  *
  * @author Justin Long (crockpotveggies)
  */
@@ -38,7 +56,7 @@ public class ResNet50 extends ZooModel {
     @Builder.Default private long seed = 1234;
     @Builder.Default private int[] inputShape = new int[] {3, 224, 224};
     @Builder.Default private int numClasses = 0;
-    @Builder.Default private WeightInit weightInit = WeightInit.DISTRIBUTION;
+    @Builder.Default private IWeightInit weightInit = new WeightInitDistribution(new TruncatedNormalDistribution(0.0, 0.5));
     @Builder.Default private IUpdater updater = new RmsProp(0.1, 0.96, 0.001);
     @Builder.Default private CacheMode cacheMode = CacheMode.NONE;
     @Builder.Default private WorkspaceMode workspaceMode = WorkspaceMode.ENABLED;
@@ -166,7 +184,6 @@ public class ResNet50 extends ZooModel {
                         .optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT)
                         .updater(updater)
                         .weightInit(weightInit)
-                        .dist(new TruncatedNormalDistribution(0.0, 0.5))
                         .l1(1e-7)
                         .l2(5e-5)
                         .miniBatch(true)
@@ -219,7 +236,7 @@ public class ResNet50 extends ZooModel {
                                         new OutputLayer.Builder(LossFunctions.LossFunction.NEGATIVELOGLIKELIHOOD)
                                                         .nOut(numClasses).activation(Activation.SOFTMAX).build(),
                                         "avgpool")
-                        .setOutputs("output").backprop(true).pretrain(false);
+                        .setOutputs("output");
 
         return graph;
     }

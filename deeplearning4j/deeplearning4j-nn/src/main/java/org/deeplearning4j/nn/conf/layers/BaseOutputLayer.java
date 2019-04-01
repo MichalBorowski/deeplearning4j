@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.nn.conf.layers;
 
 import lombok.*;
@@ -26,7 +42,7 @@ public abstract class BaseOutputLayer extends FeedForwardLayer {
         this.hasBias = builder.hasBias;
     }
 
-    public boolean hasBias(){
+    public boolean hasBias() {
         return hasBias;
     }
 
@@ -64,20 +80,40 @@ public abstract class BaseOutputLayer extends FeedForwardLayer {
     }
 
 
+    @Getter
+    @Setter
     public static abstract class Builder<T extends Builder<T>> extends FeedForwardLayer.Builder<T> {
+
+        /**
+         * Loss function for the output layer
+         */
         protected ILossFunction lossFn = new LossMCXENT();
+
+        /**
+         * If true (default): include bias parameters in the model. False: no bias.
+         *
+         */
         private boolean hasBias = true;
 
         public Builder() {}
 
+        /**
+         * @param lossFunction Loss function for the output layer
+         */
         public Builder(LossFunction lossFunction) {
             lossFunction(lossFunction);
         }
 
+        /**
+         * @param lossFunction Loss function for the output layer
+         */
         public Builder(ILossFunction lossFunction) {
-            this.lossFn = lossFunction;
+            this.setLossFn(lossFunction);
         }
 
+        /**
+         * @param lossFunction Loss function for the output layer
+         */
         public T lossFunction(LossFunction lossFunction) {
             return lossFunction(lossFunction.getILossFunction());
         }
@@ -87,13 +123,16 @@ public abstract class BaseOutputLayer extends FeedForwardLayer {
          *
          * @param hasBias If true: include bias parameters in this model
          */
-        public T hasBias(boolean hasBias){
-            this.hasBias = hasBias;
-            return (T)this;
+        public T hasBias(boolean hasBias) {
+            this.setHasBias(hasBias);
+            return (T) this;
         }
 
+        /**
+         * @param lossFunction Loss function for the output layer
+         */
         public T lossFunction(ILossFunction lossFunction) {
-            this.lossFn = lossFunction;
+            this.setLossFn(lossFunction);
             return (T) this;
         }
     }

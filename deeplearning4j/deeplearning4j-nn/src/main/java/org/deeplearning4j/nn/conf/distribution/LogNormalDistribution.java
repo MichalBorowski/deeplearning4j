@@ -1,30 +1,34 @@
-/*-
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
  *
- *  * Copyright 2015 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
  *
- */
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.deeplearning4j.nn.conf.distribution;
 
+import lombok.Data;
+import lombok.EqualsAndHashCode;
 import org.nd4j.shade.jackson.annotation.JsonCreator;
 import org.nd4j.shade.jackson.annotation.JsonProperty;
 
 /**
- * A log-normal distribution.
+ * A log-normal distribution, with two parameters: mean and standard deviation.
+ * Note: the mean and standard deviation are for the logarithm of the values.
+ * Put another way: if X~LogN(M,S), then mean(log(X))=M, and stdev(log(X))=S
  *
  */
+@EqualsAndHashCode(callSuper = false)
+@Data
 public class LogNormalDistribution extends Distribution {
 
     private double mean, std;
@@ -42,51 +46,7 @@ public class LogNormalDistribution extends Distribution {
         this.std = std;
     }
 
-    public double getMean() {
-        return mean;
-    }
-
-    public void setMean(double mean) {
-        this.mean = mean;
-    }
-
-    public double getStd() {
-        return std;
-    }
-
-    public void setStd(double std) {
-        this.std = std;
-    }
-
-    @Override
-    public int hashCode() {
-        final int prime = 31;
-        int result = 1;
-        long temp;
-        temp = Double.doubleToLongBits(mean);
-        result = prime * result + (int) (temp ^ (temp >>> 32));
-        temp = Double.doubleToLongBits(std);
-        result = prime * result + (int) (temp ^ (temp >>> 32));
-        return result;
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-        if (this == obj)
-            return true;
-        if (obj == null)
-            return false;
-        if (getClass() != obj.getClass())
-            return false;
-        LogNormalDistribution other = (LogNormalDistribution) obj;
-        if (Double.doubleToLongBits(mean) != Double.doubleToLongBits(other.mean))
-            return false;
-        if (Double.doubleToLongBits(std) != Double.doubleToLongBits(other.std))
-            return false;
-        return true;
-    }
-
     public String toString() {
-        return "LogNormalDistribution{" + "mean=" + mean + ", std=" + std + '}';
+        return "LogNormalDistribution(" + "mean=" + mean + ", std=" + std + ')';
     }
 }

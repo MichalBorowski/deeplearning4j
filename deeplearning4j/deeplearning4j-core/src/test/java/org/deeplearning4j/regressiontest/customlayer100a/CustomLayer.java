@@ -1,5 +1,23 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.regressiontest.customlayer100a;
 
+import lombok.Getter;
+import lombok.Setter;
 import lombok.val;
 import org.deeplearning4j.nn.api.Layer;
 import org.deeplearning4j.nn.api.ParamInitializer;
@@ -49,7 +67,7 @@ public class CustomLayer extends FeedForwardLayer {
 
     @Override
     public Layer instantiate(NeuralNetConfiguration conf, Collection<TrainingListener> iterationListeners,
-                             int layerIndex, INDArray layerParamsView, boolean initializeParams) {
+            int layerIndex, INDArray layerParamsView, boolean initializeParams) {
         //The instantiate method is how we go from the configuration class (i.e., this class) to the implementation class
         // (i.e., a CustomLayerImpl instance)
         //For the most part, it's the same for each type of layer
@@ -94,11 +112,11 @@ public class CustomLayer extends FeedForwardLayer {
         InputType outputType = getOutputType(-1, inputType);
 
         val numParams = initializer().numParams(this);
-        int updaterStateSize = (int)getIUpdater().stateSize(numParams);
+        int updaterStateSize = (int) getIUpdater().stateSize(numParams);
 
         int trainSizeFixed = 0;
         int trainSizeVariable = 0;
-        if(getIDropout() != null){
+        if (getIDropout() != null) {
             //Assume we dup the input for dropout
             trainSizeVariable += inputType.arrayElementsPerExample();
         }
@@ -109,10 +127,12 @@ public class CustomLayer extends FeedForwardLayer {
         trainSizeVariable += outputType.arrayElementsPerExample();
 
         return new LayerMemoryReport.Builder(layerName, CustomLayer.class, inputType, outputType)
-            .standardMemory(numParams, updaterStateSize)
-            .workingMemory(0, 0, trainSizeFixed, trainSizeVariable)     //No additional memory (beyond activations) for inference
-            .cacheMemory(MemoryReport.CACHE_MODE_ALL_ZEROS, MemoryReport.CACHE_MODE_ALL_ZEROS) //No caching in DenseLayer
-            .build();
+                .standardMemory(numParams, updaterStateSize)
+                .workingMemory(0, 0, trainSizeFixed,
+                        trainSizeVariable)     //No additional memory (beyond activations) for inference
+                .cacheMemory(MemoryReport.CACHE_MODE_ALL_ZEROS,
+                        MemoryReport.CACHE_MODE_ALL_ZEROS) //No caching in DenseLayer
+                .build();
     }
 
 
@@ -120,6 +140,8 @@ public class CustomLayer extends FeedForwardLayer {
     //Note that we are inheriting all of the FeedForwardLayer.Builder options: things like n
     public static class Builder extends FeedForwardLayer.Builder<Builder> {
 
+        @Getter
+        @Setter
         private IActivation secondActivationFunction;
 
         //This is an example of a custom property in the configuration
@@ -138,7 +160,7 @@ public class CustomLayer extends FeedForwardLayer {
          *
          * @param secondActivationFunction Second activation function for the layer
          */
-        public Builder secondActivationFunction(Activation secondActivationFunction){
+        public Builder secondActivationFunction(Activation secondActivationFunction) {
             this.secondActivationFunction = secondActivationFunction.getActivationFunction();
             return this;
         }

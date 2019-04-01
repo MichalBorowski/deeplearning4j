@@ -1,9 +1,24 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.linalg.api.blas.impl;
 
 import org.nd4j.linalg.api.blas.Level1;
 import org.nd4j.linalg.api.buffer.DataBuffer;
-import org.nd4j.linalg.api.complex.IComplexNDArray;
-import org.nd4j.linalg.api.complex.IComplexNumber;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.ndarray.BaseSparseNDArray;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.api.ops.executioner.DefaultOpExecutioner;
@@ -31,13 +46,13 @@ public abstract class SparseBaseLevel1 extends SparseBaseLevel implements Level1
 
             switch (X.data().dataType()) {
                 case DOUBLE:
-                    DefaultOpExecutioner.validateDataType(DataBuffer.Type.DOUBLE, X, Y);
+                    DefaultOpExecutioner.validateDataType(DataType.DOUBLE, X, Y);
                     return ddoti(n, X, pointers, Y);
                 case FLOAT:
-                    DefaultOpExecutioner.validateDataType(DataBuffer.Type.FLOAT, X, Y);
+                    DefaultOpExecutioner.validateDataType(DataType.FLOAT, X, Y);
                     return sdoti(n, X, pointers, Y);
                 case HALF:
-                    DefaultOpExecutioner.validateDataType(DataBuffer.Type.HALF, X, Y);
+                    DefaultOpExecutioner.validateDataType(DataType.HALF, X, Y);
                     return hdoti(n, X, pointers, Y);
                 default:
             }
@@ -48,11 +63,6 @@ public abstract class SparseBaseLevel1 extends SparseBaseLevel implements Level1
 
     @Override
     public double dot(long n, DataBuffer dx, int offsetX, int incrX, DataBuffer y, int offsetY, int incrY) {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public IComplexNumber dot(long n, IComplexNumber alpha, IComplexNDArray X, IComplexNDArray Y) {
         throw new UnsupportedOperationException();
     }
 
@@ -67,20 +77,15 @@ public abstract class SparseBaseLevel1 extends SparseBaseLevel implements Level1
 
         switch (arr.data().dataType()) {
             case DOUBLE:
-                DefaultOpExecutioner.validateDataType(DataBuffer.Type.DOUBLE, arr);
+                DefaultOpExecutioner.validateDataType(DataType.DOUBLE, arr);
                 return dnrm2(arr.length(), arr, 1);
             case FLOAT:
-                DefaultOpExecutioner.validateDataType(DataBuffer.Type.FLOAT, arr);
+                DefaultOpExecutioner.validateDataType(DataType.FLOAT, arr);
                 return snrm2(arr.length(), arr, 1);
             case HALF:
                 return hnrm2(arr.length(), arr, 1);
             default:
         }
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public IComplexNumber nrm2(IComplexNDArray arr) {
         throw new UnsupportedOperationException();
     }
 
@@ -95,13 +100,13 @@ public abstract class SparseBaseLevel1 extends SparseBaseLevel implements Level1
 
         switch (arr.data().dataType()) {
             case DOUBLE:
-                DefaultOpExecutioner.validateDataType(DataBuffer.Type.DOUBLE, arr);
+                DefaultOpExecutioner.validateDataType(DataType.DOUBLE, arr);
                 return dasum(arr.length(), arr, 1);
             case FLOAT:
-                DefaultOpExecutioner.validateDataType(DataBuffer.Type.FLOAT, arr);
+                DefaultOpExecutioner.validateDataType(DataType.FLOAT, arr);
                 return sasum(arr.length(), arr, 1);
             case HALF:
-                DefaultOpExecutioner.validateDataType(DataBuffer.Type.HALF, arr);
+                DefaultOpExecutioner.validateDataType(DataType.HALF, arr);
                 return hasum(arr.length(), arr, 1);
             default:
         }
@@ -111,11 +116,6 @@ public abstract class SparseBaseLevel1 extends SparseBaseLevel implements Level1
 
     @Override
     public double asum(long n, DataBuffer x, int offsetX, int incrX) {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public IComplexNumber asum(IComplexNDArray arr) {
         throw new UnsupportedOperationException();
     }
 
@@ -129,13 +129,13 @@ public abstract class SparseBaseLevel1 extends SparseBaseLevel implements Level1
     public int iamax(INDArray arr) {
         switch (arr.data().dataType()) {
             case DOUBLE:
-                DefaultOpExecutioner.validateDataType(DataBuffer.Type.DOUBLE, arr);
+                DefaultOpExecutioner.validateDataType(DataType.DOUBLE, arr);
                 return idamax(arr.length(), arr, 1);
             case FLOAT:
-                DefaultOpExecutioner.validateDataType(DataBuffer.Type.FLOAT, arr);
+                DefaultOpExecutioner.validateDataType(DataType.FLOAT, arr);
                 return isamax(arr.length(), arr, 1);
             case HALF:
-                DefaultOpExecutioner.validateDataType(DataBuffer.Type.HALF, arr);
+                DefaultOpExecutioner.validateDataType(DataType.HALF, arr);
                 return ihamax(arr.length(), arr, 1);
             default:
         }
@@ -152,11 +152,6 @@ public abstract class SparseBaseLevel1 extends SparseBaseLevel implements Level1
         throw new UnsupportedOperationException();
     }
 
-    @Override
-    public int iamax(IComplexNDArray arr) {
-        throw new UnsupportedOperationException();
-    }
-
 
     /**
      * Find the index of the element with maximum absolute value
@@ -168,13 +163,13 @@ public abstract class SparseBaseLevel1 extends SparseBaseLevel implements Level1
     public int iamin(INDArray arr) {
         switch (arr.data().dataType()) {
             case DOUBLE:
-                DefaultOpExecutioner.validateDataType(DataBuffer.Type.DOUBLE, arr);
+                DefaultOpExecutioner.validateDataType(DataType.DOUBLE, arr);
                 return idamin(arr.length(), arr, 1);
             case FLOAT:
-                DefaultOpExecutioner.validateDataType(DataBuffer.Type.FLOAT, arr);
+                DefaultOpExecutioner.validateDataType(DataType.FLOAT, arr);
                 return isamin(arr.length(), arr, 1);
             case HALF:
-                DefaultOpExecutioner.validateDataType(DataBuffer.Type.HALF, arr);
+                DefaultOpExecutioner.validateDataType(DataType.HALF, arr);
                 return ihamin(arr.length(), arr, 1);
             default:
         }
@@ -182,17 +177,7 @@ public abstract class SparseBaseLevel1 extends SparseBaseLevel implements Level1
     }
 
     @Override
-    public int iamin(IComplexNDArray arr) {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
     public void swap(INDArray x, INDArray y) {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public void swap(IComplexNDArray x, IComplexNDArray y) {
         throw new UnsupportedOperationException();
     }
 
@@ -204,11 +189,6 @@ public abstract class SparseBaseLevel1 extends SparseBaseLevel implements Level1
 
     @Override
     public void copy(long n, DataBuffer x, int offsetX, int incrX, DataBuffer y, int offsetY, int incrY) {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public void copy(IComplexNDArray x, IComplexNDArray y) {
         throw new UnsupportedOperationException();
     }
 
@@ -227,18 +207,18 @@ public abstract class SparseBaseLevel1 extends SparseBaseLevel implements Level1
         DataBuffer pointers = sparseX.getVectorCoordinates();
         switch (x.data().dataType()) {
             case DOUBLE:
-                DefaultOpExecutioner.validateDataType(DataBuffer.Type.DOUBLE, x);
-                DefaultOpExecutioner.validateDataType(DataBuffer.Type.DOUBLE, y);
+                DefaultOpExecutioner.validateDataType(DataType.DOUBLE, x);
+                DefaultOpExecutioner.validateDataType(DataType.DOUBLE, y);
                 daxpyi(n, alpha, x, pointers, y);
                 break;
             case FLOAT:
-                DefaultOpExecutioner.validateDataType(DataBuffer.Type.FLOAT, x);
-                DefaultOpExecutioner.validateDataType(DataBuffer.Type.FLOAT, y);
+                DefaultOpExecutioner.validateDataType(DataType.FLOAT, x);
+                DefaultOpExecutioner.validateDataType(DataType.FLOAT, y);
                 saxpyi(n, alpha, x, pointers, y);
                 break;
             case HALF:
-                DefaultOpExecutioner.validateDataType(DataBuffer.Type.HALF, x);
-                DefaultOpExecutioner.validateDataType(DataBuffer.Type.HALF, y);
+                DefaultOpExecutioner.validateDataType(DataType.HALF, x);
+                DefaultOpExecutioner.validateDataType(DataType.HALF, y);
                 haxpyi(n, alpha, x, pointers, y);
                 break;
             default:
@@ -248,11 +228,6 @@ public abstract class SparseBaseLevel1 extends SparseBaseLevel implements Level1
 
     @Override
     public void axpy(long n, double alpha, DataBuffer x, int offsetX, int incrX, DataBuffer y, int offsetY, int incrY) {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public void axpy(long n, IComplexNumber alpha, IComplexNDArray x, IComplexNDArray y) {
         throw new UnsupportedOperationException();
     }
 
@@ -297,18 +272,7 @@ public abstract class SparseBaseLevel1 extends SparseBaseLevel implements Level1
     }
 
     @Override
-    public void rot(long N, IComplexNDArray X, IComplexNDArray Y, IComplexNumber c, IComplexNumber s) {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
     public void rotmg(INDArray d1, INDArray d2, INDArray b1, double b2, INDArray P) {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public void rotmg(IComplexNDArray d1, IComplexNDArray d2, IComplexNDArray b1, IComplexNumber b2,
-                    IComplexNDArray P) {
         throw new UnsupportedOperationException();
     }
 
@@ -335,11 +299,6 @@ public abstract class SparseBaseLevel1 extends SparseBaseLevel implements Level1
                 throw new UnsupportedOperationException();
         }
 
-    }
-
-    @Override
-    public void scal(long N, IComplexNumber alpha, IComplexNDArray X) {
-        throw new UnsupportedOperationException();
     }
 
     @Override

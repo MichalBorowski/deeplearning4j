@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.zoo.model;
 
 import lombok.AllArgsConstructor;
@@ -34,8 +50,8 @@ import static org.deeplearning4j.zoo.model.helper.NASNetHelper.reductionA;
  *
  * <p>This implementation uses 1056 penultimate filters and an input shape of (3, 224, 224). You can change this.</p>
  *
- * <p>Paper: https://arxiv.org/abs/1707.07012</p>
- * <p>ImageNet weights for this model are available and have been converted from https://keras.io/applications/.</p>
+ * <p>Paper: <a href="https://arxiv.org/abs/1707.07012">https://arxiv.org/abs/1707.07012</a></p>
+ * <p>ImageNet weights for this model are available and have been converted from <a href="https://keras.io/applications/">https://keras.io/applications/</a>.</p>
  *
  * @note If using the IMAGENETLARGE weights, the input shape is (3, 331, 331).
  * @author Justin Long (crockpotveggies)
@@ -49,7 +65,6 @@ public class NASNet extends ZooModel {
     @Builder.Default private int[] inputShape = new int[] {3, 224, 224};
     @Builder.Default private int numClasses = 0;
     @Builder.Default private WeightInit weightInit = WeightInit.RELU;
-    @Builder.Default private Distribution weightDistribution = new TruncatedNormalDistribution(0.0, 0.5); // if WeightInit.DISTRIBUTION
     @Builder.Default private IUpdater updater = new AdaDelta();
     @Builder.Default private CacheMode cacheMode = CacheMode.DEVICE;
     @Builder.Default private WorkspaceMode workspaceMode = WorkspaceMode.ENABLED;
@@ -113,7 +128,6 @@ public class NASNet extends ZooModel {
                 .optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT)
                 .updater(updater)
                 .weightInit(weightInit)
-                .dist(weightDistribution)
                 .l2(5e-5)
                 .miniBatch(true)
                 .cacheMode(cacheMode)
@@ -181,8 +195,8 @@ public class NASNet extends ZooModel {
                     .activation(Activation.SOFTMAX).build(), "avg_pool")
 
                 .setOutputs("output")
-                .backprop(true)
-                .pretrain(false);
+
+                ;
 
         return graph;
     }

@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.ui.weights;
 
 import org.deeplearning4j.datasets.iterator.impl.MnistDataSetIterator;
@@ -8,6 +24,7 @@ import org.deeplearning4j.nn.conf.layers.ConvolutionLayer;
 import org.deeplearning4j.nn.conf.layers.DenseLayer;
 import org.deeplearning4j.nn.conf.layers.OutputLayer;
 import org.deeplearning4j.nn.conf.layers.SubsamplingLayer;
+import org.deeplearning4j.nn.graph.ComputationGraph;
 import org.deeplearning4j.nn.multilayer.MultiLayerNetwork;
 import org.deeplearning4j.nn.weights.WeightInit;
 import org.deeplearning4j.optimize.listeners.ScoreIterationListener;
@@ -50,16 +67,24 @@ public class TestConvolutionalListener {
                         .layer(5, new OutputLayer.Builder(LossFunctions.LossFunction.NEGATIVELOGLIKELIHOOD)
                                         .nOut(outputNum).activation(Activation.SOFTMAX).build())
                         .setInputType(InputType.convolutionalFlat(28, 28, 1)) //See note below
-                        .backprop(true).pretrain(false).build();
+                        .build();
 
         MultiLayerNetwork net = new MultiLayerNetwork(conf);
         net.init();
         net.setListeners(new ConvolutionalIterationListener(1), new ScoreIterationListener(1));
 
-        for (int i = 0; i < 50; i++) {
+        for (int i = 0; i < 10; i++) {
             net.fit(mnistTrain.next());
             Thread.sleep(1000);
         }
+
+        ComputationGraph cg = net.toComputationGraph();
+        cg.setListeners(new ConvolutionalIterationListener(1), new ScoreIterationListener(1));
+        for (int i = 0; i < 10; i++) {
+            cg.fit(mnistTrain.next());
+            Thread.sleep(1000);
+        }
+
 
 
         Thread.sleep(100000);

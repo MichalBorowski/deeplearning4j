@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.autodiff.samediff;
 
 import com.google.common.collect.HashBasedTable;
@@ -8,62 +24,58 @@ import com.rits.cloning.Cloner;
 import com.rits.cloning.IFastCloner;
 import lombok.*;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.io.IOUtils;
+import org.apache.commons.io.output.CloseShieldOutputStream;
 import org.apache.commons.lang3.ArrayUtils;
-import org.bytedeco.javacpp.BytePointer;
 import org.nd4j.autodiff.execution.conf.ExecutorConfiguration;
 import org.nd4j.autodiff.execution.conf.OutputMode;
 import org.nd4j.autodiff.functions.DifferentialFunction;
 import org.nd4j.autodiff.functions.DifferentialFunctionFactory;
-import org.nd4j.autodiff.functions.FunctionProperties;
-import org.nd4j.autodiff.samediff.flow.FlowPath;
+import org.nd4j.autodiff.samediff.internal.*;
+import org.nd4j.autodiff.samediff.ops.*;
+import org.nd4j.autodiff.samediff.serde.FlatBuffersMapper;
 import org.nd4j.autodiff.util.cloner.DataBufferFastCloner;
 import org.nd4j.autodiff.util.cloner.INDArrayFastCloner;
 import org.nd4j.base.Preconditions;
+import org.nd4j.evaluation.IEvaluation;
 import org.nd4j.graph.*;
-import org.nd4j.linalg.api.blas.params.MMulTranspose;
-import org.nd4j.linalg.api.buffer.DataBuffer;
+import org.nd4j.jackson.objectmapper.holder.ObjectMapperHolder;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.buffer.factory.DataBufferFactory;
-import org.nd4j.linalg.api.buffer.util.DataTypeUtil;
 import org.nd4j.linalg.api.memory.MemoryWorkspace;
-import org.nd4j.linalg.api.memory.conf.WorkspaceConfiguration;
-import org.nd4j.linalg.api.memory.enums.AllocationPolicy;
-import org.nd4j.linalg.api.memory.enums.LearningPolicy;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.api.ops.*;
 import org.nd4j.linalg.api.ops.executioner.OpExecutioner;
-import org.nd4j.linalg.api.ops.impl.accum.distances.CosineSimilarity;
-import org.nd4j.linalg.api.ops.impl.accum.distances.EuclideanDistance;
-import org.nd4j.linalg.api.ops.impl.accum.distances.ManhattanDistance;
 import org.nd4j.linalg.api.ops.impl.controlflow.If;
 import org.nd4j.linalg.api.ops.impl.controlflow.While;
-import org.nd4j.linalg.api.ops.impl.controlflow.compat.*;
-import org.nd4j.linalg.api.ops.impl.layers.convolution.config.*;
-import org.nd4j.linalg.api.ops.impl.layers.recurrent.GRUCell;
-import org.nd4j.linalg.api.ops.impl.layers.recurrent.LSTMCell;
-import org.nd4j.linalg.api.ops.impl.layers.recurrent.SRU;
-import org.nd4j.linalg.api.ops.impl.layers.recurrent.SRUCell;
-import org.nd4j.linalg.api.ops.impl.layers.recurrent.config.GRUCellConfiguration;
-import org.nd4j.linalg.api.ops.impl.layers.recurrent.config.LSTMCellConfiguration;
-import org.nd4j.linalg.api.ops.impl.layers.recurrent.config.SRUCellConfiguration;
-import org.nd4j.linalg.api.ops.impl.layers.recurrent.config.SRUConfiguration;
-import org.nd4j.linalg.api.ops.impl.shape.Eye;
-import org.nd4j.linalg.api.ops.impl.shape.tensorops.BaseTensorOp;
-import org.nd4j.linalg.api.ops.impl.shape.tensorops.TensorArrayV3;
+import org.nd4j.linalg.api.ops.impl.controlflow.compat.Enter;
+import org.nd4j.linalg.api.ops.impl.controlflow.compat.Switch;
+import org.nd4j.linalg.api.ops.impl.layers.ExternalErrorsFunction;
+import org.nd4j.linalg.api.ops.impl.shape.tensorops.TensorArray;
+import org.nd4j.linalg.api.ops.impl.transforms.Assert;
 import org.nd4j.linalg.api.ops.impl.transforms.gradient.GradientBackwardsMarker;
-import org.nd4j.linalg.api.ops.impl.transforms.temp.ExternalErrorsFunction;
+import org.nd4j.linalg.api.shape.LongShapeDescriptor;
 import org.nd4j.linalg.api.shape.Shape;
 import org.nd4j.linalg.collection.IntArrayKeyMap;
 import org.nd4j.linalg.compression.CompressedDataBuffer;
+import org.nd4j.linalg.dataset.DataSet;
+import org.nd4j.linalg.dataset.adapter.MultiDataSetIteratorAdapter;
+import org.nd4j.linalg.dataset.adapter.SingletonMultiDataSetIterator;
+import org.nd4j.linalg.dataset.api.MultiDataSet;
+import org.nd4j.linalg.dataset.api.iterator.DataSetIterator;
+import org.nd4j.linalg.dataset.api.iterator.MultiDataSetIterator;
 import org.nd4j.linalg.exception.ND4JIllegalArgumentException;
 import org.nd4j.linalg.exception.ND4JIllegalStateException;
 import org.nd4j.linalg.exception.ND4UnresolvedOutputVariables;
 import org.nd4j.linalg.factory.Nd4j;
-import org.nd4j.linalg.indexing.conditions.Condition;
-import org.nd4j.linalg.lossfunctions.impl.*;
+import org.nd4j.linalg.indexing.NDArrayIndex;
+import org.nd4j.linalg.learning.GradientUpdater;
+import org.nd4j.linalg.learning.regularization.Regularization;
 import org.nd4j.linalg.primitives.AtomicBoolean;
 import org.nd4j.linalg.primitives.Pair;
 import org.nd4j.linalg.util.ArrayUtil;
-import org.nd4j.list.compat.TensorList;
+import org.nd4j.linalg.util.DeviceLocalNDArray;
+import org.nd4j.shade.jackson.databind.ObjectMapper;
 import org.nd4j.weightinit.WeightInitScheme;
 import org.nd4j.weightinit.impl.ConstantInitScheme;
 import org.nd4j.weightinit.impl.NDArraySupplierInitScheme;
@@ -72,58 +84,111 @@ import org.nd4j.weightinit.impl.ZeroInitScheme;
 import java.io.*;
 import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
+import java.util.zip.ZipOutputStream;
 
 /**
- * SameDiff is the
- * entrypoint for
- * nd4j's autodiff.
+ * SameDiff is the entrypoint for ND4J's automatic differentiation functionality.
  * <p>
  * You define a graph symbolically.
  * <p>
  * That graph accumulates operations.
  * <p>
- * In order to execute the graph, you run
- * {@link #exec()} to get all the operations
- * {@link #exec(List)} for an already created set of ops
- * {@link #execAndEndResult()} for the end result only
- * {@link #execAndEndResult(List)} for a cached set of ops
+ * In order to execute the graph, you run one of the execution methods, such as {@link #exec(Map, String...)}
  */
 @AllArgsConstructor
 @Builder
 @Slf4j
-public class SameDiff {
-    private Map<String, String[]> incomingArgsReverse;              //Key: DifferentialFunction.getOwnName(). Value: name of SDVariables as inputs to that function
-    private Map<String, String[]> outgoingArgsReverse;              //Key: DifferentialFunction.getOwnName(). Value: name of SDVariables as outputs from that function
-    private Map<String, int[]> permuteOrder;
-    private boolean shouldBootStrap = true;
-    private Set<String> importedVarName;
+public class SameDiff extends SDBaseOps {
+
+    //Fields for graph structure and execution
+    @Getter     //TODO use package private instead of public getters?
+    private final Map<String,Variable> variables = new LinkedHashMap<>();         //Use linked hash map to guarantee iteration order based on order they were added. Used in inputs() and flatbuffers serde
+    @Getter
+    private final Map<String,SameDiffOp> ops = new LinkedHashMap<>();
+    @Getter
+    private final Map<Long,InferenceSession> sessions = new ConcurrentHashMap<>();      //Key: thread ID
+
+    private final Map<String,DeviceLocalNDArray> constantArrays = new ConcurrentHashMap<>();
+    private final Map<String,DeviceLocalNDArray> variablesArrays = new ConcurrentHashMap<>();     //TODO issues with DeviceLocal +  mutable / changed during training?
+    private final Map<Long,Map<String,INDArray>> placeholdersPerThread = new ConcurrentHashMap<>(); //Placeholders for each thread - if the user sets them
+
+    ///////////////////////////////////////
+    //Fields related to training
+    @Getter
+    private TrainingConfig trainingConfig;                          //Configuration for training. Must be set for training/evaluation, but not for other operations
+    @Getter
+    private boolean initializedTraining;                            //True if training setup has been done
+    @Getter
+    private INDArray updaterState;                                  //Updater state array (1d, length equal to number of trainable parameters)
+    @Getter
+    private Map<String,INDArray> updaterViews;                      //Views of updaterState array for each trainable parameter
+    @Getter
+    private Map<String,GradientUpdater> updaterMap;                 //GradientUpdater instance for each trainable parameter
+
+    ////////////////////////////////////////
     //map a function's instance id to a base name, used for propagating variable names
     //for output during import
     private Map<String, String> baseNameForFunctionInstanceId;
 
     private DifferentialFunctionFactory functionFactory;
-    private Map<String, SDVariable> variableMap;                    //Key: SDVariable name. Value: SDVariable
+    @Deprecated //TO BE REMOVED - to ShapeSession
     private Map<String, long[]> variableNameToShape;                //Key: SDVariable name. Value: shape for that variable
-    //gradient information
-    private Map<String, SDVariable> gradients;                      //Key:
+    @Deprecated //TO BE REMOVED - to Variable
     private Map<String, SDVariable> forwardVarForGrad;
 
-    private Map<String, INDArray> variableNameToArr;                //Key: name of SDVariable. Value: Array for that variable
+    // counter for auto-naming variables
+    private int variableId = 0;
 
-    //individual index for variable names
-    private Map<String, List<DifferentialFunction>> functionsArgsFor;   //Key: SDVariable name. Value: all DifferentialFunctions it is an input to
-    private Map<String, List<DifferentialFunction>> functionOutputFor;  //Key: SDVariable name. Value: DifferentialFunctions this variable is an output for (TODO: Why is this a list? Isn't it *always* length 1?)
+    ////////////////////////////////////////
 
-    private Map<String, TensorList> lists = new HashMap<>();    // Key - node name; Value - TensorList
+    /** Op creator object for math operations */
+    public final SDMath math = new SDMath(this);
+    /** Op creator object for random number generation operations */
+    public final SDRandom random = new SDRandom(this);
+    /** Op creator object for general neural network operations */
+    public final SDNN nn = new SDNN(this);
+    /** Op creator object for convolutional neural network operations */
+    public final SDCNN cnn = new SDCNN(this);
+    /** Op creator object for recurrent neural network operations */
+    public final SDRNN rnn = new SDRNN(this);
+    /** Op creator object for loss function operations */
+    public final SDLoss loss = new SDLoss(this);
 
-    // this entity holds runtime information for Switch/Merge/NextIteration etc stuff
-    private transient ThreadLocal<FlowPath> localFlowPath = new ThreadLocal<FlowPath>();
+    /** Op creator object for math operations */
+    public SDMath math(){
+        return math;
+    }
 
-    // here we save String -> Integer conversion to variables
-    private transient Map<String, Integer> reverseMap = null;
+    /** Op creator object for random number generation operations */
+    public SDRandom random(){
+        return random;
+    }
+
+    /** Op creator object for general neural network operations */
+    public SDNN nn(){
+        return nn;
+    }
+
+    /** Op creator object for convolutional neural network operations */
+    public SDCNN cnn(){
+        return cnn;
+    }
+
+    /** Op creator object for recurrent neural network operations */
+    public SDRNN rnn(){
+        return rnn;
+    }
+
+    /** Op creator object for loss function operations */
+    public SDLoss loss(){
+        return loss;
+    }
+
 
 
     /**
@@ -151,19 +216,13 @@ public class SameDiff {
      */
     private Map<String, Map<String, Object>> propertiesForFunction;
 
-
-    private Map<String, List<String[]>> placeHolderMap;
+    @Deprecated //TO BE REMOVED - to Variable
     private Map<String, long[]> placeHolderOriginalShapes;
-    private Set<String> placeHolderVarNames;
-    private IdentityHashMap<INDArray, SDVariable> reverseArrayLookup;
-    private MemoryWorkspace workspace;
     private Map<String, SameDiffFunctionDefinition> sameDiffFunctionDefinitionMap;
     private Map<String, SameDiff> sameDiffFunctionInstances;
     private Set<String> placeHolderFunctions;
     private static Cloner cloner = newCloner();
     private static Map<String, Method> opMethods;
-
-    private Map<String, DifferentialFunction> functionInstancesById;
 
     private Table<String, String, String> fieldVariableResolutionMapping;
 
@@ -182,13 +241,14 @@ public class SameDiff {
     @Setter
     boolean logExecution = true;
 
-
     @Getter
     private SameDiff parent;
 
     @Getter
     private SameDiff child;
 
+    public final static String TRAINING_CONFIG_JSON_ZIP_ENTRY_NAME = "trainingConfig.json";
+    public final static String SAMEDIFF_FILE_ENTRY_NAME = "samediff.fb";
 
     static {
         opMethods = new HashMap<>();
@@ -200,6 +260,9 @@ public class SameDiff {
         }
     }
 
+    /**
+     * @return New cloner object. NOTE: INTENDED FOR DEVELOPER USE ONLY
+     */
     public static Cloner newCloner() {
         Cloner cloner = new Cloner();
 
@@ -208,7 +271,6 @@ public class SameDiff {
         //cloner.registerFastCloner(INDArray.class, new INDArrayFastCloner());  //Does not work due to interface
         IFastCloner fc = new INDArrayFastCloner();
         cloner.registerFastCloner(Nd4j.getBackend().getNDArrayClass(), fc);
-        cloner.registerFastCloner(Nd4j.getBackend().getComplexNDArrayClass(), fc);
 
         //Same thing with DataBuffers: off heap -> cloner library chokes on them, but need to know the concrete
         // buffer classes, not just the interface
@@ -238,33 +300,36 @@ public class SameDiff {
      */
     public void updateVariableName(String varName, String withName) {
         SDVariable oldVarNameRef = getVariable(varName);
-        variableMap.remove(oldVarNameRef.getVarName());
-        val oldVarName = varName;
+        Variable v = variables.remove(varName);
+        String oldVarName = varName;
         oldVarNameRef.setVarName(withName);
-        variableMap.put(withName, oldVarNameRef);
+        v.setName(withName);
+        variables.put(withName, v);
 
+        for(SameDiffOp op : ops.values()){
+            List<String> outputsOfOp = op.getOutputsOfOp();
+            if(outputsOfOp != null && !outputsOfOp.isEmpty()) {
+                for (int i = 0; i < outputsOfOp.size(); i++) {
+                    if (outputsOfOp.get(i).equals(oldVarName)) {
+                        outputsOfOp.set(i, withName);
+                    }
+                }
+            }
 
-        for (val reverseValues : outgoingArgsReverse.entrySet()) {
-            for (int i = 0; i < reverseValues.getValue().length; i++) {
-                if (reverseValues.getValue()[i].equals(oldVarName)) {
-                    reverseValues.getValue()[i] = withName;
+            List<String> inputsToOp = op.getInputsToOp();
+            if(inputsToOp != null && !inputsToOp.isEmpty()) {
+                for (int i = 0; i < inputsToOp.size(); i++) {
+                    if (inputsToOp.get(i).equals(oldVarName)) {
+                        inputsToOp.set(i, withName);
+                    }
                 }
             }
         }
 
-
-        for (val reverseValues : incomingArgsReverse.entrySet()) {
-            for (int i = 0; i < reverseValues.getValue().length; i++) {
-                if (reverseValues.getValue()[i].equals(oldVarName)) {
-                    reverseValues.getValue()[i] = withName;
-                }
-            }
-        }
-
-        if (variableNameToArr.containsKey(oldVarName)) {
-            val arr = variableNameToArr.remove(oldVarName);
-            variableNameToArr.put(withName, arr);
-        }
+//        if (variableNameToArr.containsKey(oldVarName)) {
+//            val arr = variableNameToArr.remove(oldVarName);
+//            variableNameToArr.put(withName, arr);
+//        }
 
 
         if (variableNameToShape.containsKey(oldVarName)) {
@@ -272,26 +337,16 @@ public class SameDiff {
             variableNameToShape.put(withName, shape);
         }
 
-
-        if (gradients.containsKey(oldVarName)) {
-            val grad = gradients.remove(oldVarName);
-            gradients.put(withName, grad);
-        }
-
         if (forwardVarForGrad.containsKey(oldVarName)) {
             val forwardGrad = forwardVarForGrad.remove(oldVarName);
             forwardVarForGrad.put(withName, forwardGrad);
         }
 
-        if (placeHolderMap.containsKey(oldVarName)) {
-            val placeholders = placeHolderMap.remove(oldVarName);
-            placeHolderMap.put(withName, placeholders);
-        }
 
-
-        if (functionsArgsFor.containsKey(oldVarName)) {
-            val funcs = functionsArgsFor.remove(oldVarName);
-            for (val func : funcs) {
+        if (v.getInputsForOp() != null) {
+            List<String> funcNames = v.getInputsForOp();
+            for (String s : funcNames) {
+                DifferentialFunction func = ops.get(s).getOp();
                 if (func instanceof BaseOp) {
                     BaseOp baseOp = (BaseOp) func;
                     if (baseOp.getXVertexId() != null && baseOp.getXVertexId().equals(oldVarName)) {
@@ -308,43 +363,31 @@ public class SameDiff {
 
                 }
             }
-
-            functionsArgsFor.put(withName, funcs);
         }
 
 
-        if (functionOutputFor.containsKey(oldVarName)) {
-            val funcs = functionOutputFor.remove(oldVarName);
-            for (val func : funcs) {
-                if (func instanceof BaseOp) {
-                    BaseOp baseOp = (BaseOp) func;
-                    if (baseOp.getXVertexId() != null && baseOp.getXVertexId().equals(oldVarName)) {
-                        baseOp.setXVertexId(withName);
-                    }
+        if (v.getOutputOfOp() != null) {
+            DifferentialFunction func = ops.get(v.getOutputOfOp()).getOp();
+            if (func instanceof BaseOp) {
+                BaseOp baseOp = (BaseOp) func;
+                if (baseOp.getXVertexId() != null && baseOp.getXVertexId().equals(oldVarName)) {
+                    baseOp.setXVertexId(withName);
+                }
 
-                    if (baseOp.getYVertexId() != null && baseOp.getYVertexId().equals(oldVarName)) {
-                        baseOp.setYVertexId(withName);
-                    }
+                if (baseOp.getYVertexId() != null && baseOp.getYVertexId().equals(oldVarName)) {
+                    baseOp.setYVertexId(withName);
+                }
 
-                    if (baseOp.getZVertexId() != null && baseOp.getZVertexId().equals(oldVarName)) {
-                        baseOp.setZVertexId(withName);
-                    }
-
+                if (baseOp.getZVertexId() != null && baseOp.getZVertexId().equals(oldVarName)) {
+                    baseOp.setZVertexId(withName);
                 }
             }
-
-            functionOutputFor.put(withName, funcs);
         }
-
-        variableMap.remove(oldVarName);
-
-
     }
 
 
     /**
-     * Clears debugging state
-     * and disables debug mode.
+     * Clears debugging state and disables debug mode.
      */
     public SameDiff disableDebugging() {
         debugMode = false;
@@ -360,8 +403,7 @@ public class SameDiff {
     }
 
     /**
-     * Returns this samediff instance's
-     * {@link DifferentialFunctionFactory}
+     * Returns this samediff instance's {@link DifferentialFunctionFactory}
      *
      * @return
      */
@@ -379,9 +421,9 @@ public class SameDiff {
         Map<Integer, Integer> thisVertexIdToNew = new HashMap<>();
         int idx = 1;
         for (val var : variables()) {
-            val clone = cloner.deepCloneDontCloneInstances(var, var.getSameDiff());
-            val newVar = sameDiff.var(clone);
-            if (var.getArr() != null) {
+            SDVariable clone = cloner.deepCloneDontCloneInstances(var, var.getSameDiff());
+            SDVariable newVar = sameDiff.var(clone);
+            if (var.getArr() != null && var.getVariableType() != VariableType.ARRAY) {      //ARRAY type = "activations" - are overwritten anyway
                 sameDiff.associateArrayWithVariable(var.getArr(), newVar);
             }
 
@@ -394,7 +436,8 @@ public class SameDiff {
 
 
         val newFunctions = new LinkedHashMap<String, DifferentialFunction>();
-        for (DifferentialFunction function : functionInstancesById.values()) {
+        for (SameDiffOp op : ops.values()) {
+            DifferentialFunction function = op.getOp();
             if (function instanceof SDVariable) {
                 continue;
             }
@@ -424,11 +467,7 @@ public class SameDiff {
                 output.setSameDiff(sameDiff);
             }
 
-            sameDiff.functionInstancesById.put(function.getOwnName(), function);
-        }
-
-        for (val reverseArrayEntry : reverseArrayLookup.entrySet()) {
-            sameDiff.reverseArrayLookup.put(reverseArrayEntry.getKey(), sameDiff.getVariable(reverseArrayEntry.getValue().getVarName()));
+            sameDiff.ops.put(function.getOwnName(), op);
         }
 
         return sameDiff.variables().get(sameDiff.variables().size() - 1);
@@ -443,9 +482,17 @@ public class SameDiff {
      * @return true if the function id exists, false otherwise
      */
     public boolean functionExists(String id) {
-        return functionInstancesById.containsKey(id);
+        return ops.containsKey(id);
     }
 
+    public DifferentialFunction functionOutputFor(String varName){
+        if(variables.get(varName).getOutputOfOp() == null)
+            return null;
+        String outName = variables.get(varName).getOutputOfOp();
+        if(outName == null)
+            return null;
+        return ops.get(outName).getOp();
+    }
 
     /**
      * Get the function by the {@link DifferentialFunction#getOwnName()}
@@ -453,61 +500,66 @@ public class SameDiff {
      * @param id the id of the function
      * @return the function for the given id if it exists
      */
-    public DifferentialFunction getFunctionById(String id) {
-        if (!functionInstancesById.containsKey(id)) {
+    public DifferentialFunction getFunctionById(@NonNull String id) {
+        if (!ops.containsKey(id)) {
             throw new ND4JIllegalStateException("No function with id " + id + " found!");
         }
-        return functionInstancesById.get(id);
+        return ops.get(id).getOp();
     }
 
 
     /**
-     * Put the function for id
+     * Put the function for the given id
      *
-     * @param id       the id
+     * @param id       the id of the function
      * @param function the function
      */
     public void putFunctionForId(String id, DifferentialFunction function) {
-        if (functionInstancesById.containsKey(id)) {
+        if (ops.containsKey(id) && ops.get(id).getOp() == null) {
             throw new ND4JIllegalStateException("Function by id already exists!");
         } else if (function instanceof SDVariable) {
             throw new ND4JIllegalStateException("Function must not be a variable!");
         }
 
-        functionInstancesById.put(id, function);
+        if(ops.containsKey(id)){
+
+        } else {
+            ops.put(id, SameDiffOp.builder().name(id).op(function).build());
+        }
     }
 
 
     /**
-     * Returns the inputs for the given function
+     * Returns the name(s) of the inputs for the given function
      *
-     * @param function the function to get the
-     *                 inputs for
+     * @param function the function to get the inputs for
      * @return the input ids for a given function
      */
     public String[] getInputsForFunction(DifferentialFunction function) {
-        if (!incomingArgsReverse.containsKey(function.getOwnName()))
+        if (!ops.containsKey(function.getOwnName()))
             throw new ND4JIllegalStateException("Illegal function instance id found " + function.getOwnName());
-        return incomingArgsReverse.get(function.getOwnName());
+        List<String> inputs = ops.get(function.getOwnName()).getInputsToOp();
+        return inputs == null ? null : inputs.toArray(new String[inputs.size()]);
     }
 
     /**
-     * Returns the outputs for the given function
+     * Returns the name(s) of the outputs for the given function
      *
-     * @param function the function to get the
-     *                 inputs for
+     * @param function the function to get the outputs for
      * @return the outputs ids for a given function
      */
     public String[] getOutputsForFunction(DifferentialFunction function) {
-        return outgoingArgsReverse.get(function.getOwnName());
+        if (!ops.containsKey(function.getOwnName()))
+            throw new ND4JIllegalStateException("Illegal function instance id found " + function.getOwnName());
+        List<String> outputs = ops.get(function.getOwnName()).getOutputsOfOp();
+        return outputs == null ? null : outputs.toArray(new String[outputs.size()]);
     }
 
 
     /**
-     * Get the output variables given a set of ids
-     * from {@link #getOutputsForFunction(DifferentialFunction)}
+     * Get the output variable(s) for the specified differential function
      *
-     * @param function the function reference to get the id for
+     * @param function the function reference to get the output variable(s) for
      * @return the output variables for the given function
      */
     public SDVariable[] getOutputVariablesForFunction(DifferentialFunction function) {
@@ -526,11 +578,10 @@ public class SameDiff {
 
 
     /**
-     * Get the input variables given a set of ids
-     * from {@link #getInputVariablesForFunction(DifferentialFunction)}
+     * Get the input variable(s) for the specified differential function
      *
-     * @param function the function reference to get the id for
-     * @return the output variables for the given function
+     * @param function the function reference to get the input variable(s) for
+     * @return the input variables for the given function
      */
     public SDVariable[] getInputVariablesForFunction(DifferentialFunction function) {
         val inputs = getInputsForFunction(function);
@@ -550,106 +601,50 @@ public class SameDiff {
     }
 
 
-    /**
-     * Update the ndarray for the given vertex id.
-     *
-     * @param varName
-     * @param arr
-     * @throws {@link ND4JIllegalStateException} when the array does not exist.
-     */
-    public void updateArrayForVarName(String varName, INDArray arr) {
-        if (!variableNameToArr.containsKey(varName)) {
-            throw new ND4JIllegalStateException("Array for " + varName + " does not exist. Please use putArrayForVertexId instead.");
+    public void setArrayForVariable(@NonNull String varName, @NonNull INDArray arr){
+        Preconditions.checkState(variables.containsKey(varName), "No variable with name \"%s\" exists", varName);
+
+        SDVariable v = getVariable(varName);
+        if(v.isConstant()) {
+            constantArrays.put(varName, new DeviceLocalNDArray(arr));
+        } else if(v.getVariableType() == VariableType.VARIABLE) {
+            variablesArrays.put(varName, new DeviceLocalNDArray(arr));
+        } else if(v.isPlaceHolder()){
+            long tid = Thread.currentThread().getId();
+            if(!placeholdersPerThread.containsKey(tid)){
+                placeholdersPerThread.put(tid, new HashMap<String, INDArray>());
+            }
+            placeholdersPerThread.get(tid).put(varName, arr);
+        } else {
+            throw new UnsupportedOperationException("Cannot set variable of type " + v.getVariableType() + " using this method");
         }
-
-        variableNameToArr.put(varName, arr);
-        reverseArrayLookup.put(arr, getVariable(varName));
-    }
-
-    /**
-     * Adds an ndarray for a given vertex id.
-     * Use {@link #updateArrayForVarName(String, INDArray)}
-     * if the array already exists.
-     *
-     * @param varName the vertex id to add
-     * @param arr     the array to add
-     * @throws {@link ND4JIllegalStateException} when the array already exists.
-     */
-    public void putArrayForVarName(String varName, INDArray arr) {
-        if (varName == null)
-            throw new ND4JIllegalStateException("No null names allowed!");
-
-        if (variableNameToArr.containsKey(varName)) {
-//            throw new ND4JIllegalStateException("Array for " + varName + " already exists!");
-///            return;
-        }
-
-        variableNameToArr.put(varName, arr);
     }
 
 
     /**
      * Get the shape for the given vertex id.
-     * Note that if an array is defined, it will use that shape instead.
+     * Note that if an array is defined, it will use the shape of the array instead.
      * <p>
      * A shape *and* an array should not be defined at the same time.
      * This wastes memory. The internal map used for tracking shapes for particular
      * vertex ids should also delete redundant shapes stored to avoid redundant sources of information.
      *
      * @param varName the vertex id to get the shape for
-     * @return the shape for the given vertex if if any.
+     * @return the shape for the given vertex if any.
      */
     public long[] getShapeForVarName(String varName) {
-        if (variableNameToArr.containsKey(varName)) {
-            return variableNameToArr.get(varName).shape();
+        if (arrayAlreadyExistsForVarName(varName)) {
+            return getVariable(varName).getArr().shape();
         }
-
         return variableNameToShape.get(varName);
     }
 
-
-    /**
-     * Update a vertex id with the given shape.
-     * Note that you should use {@link #putShapeForVarName(String, long[])}
-     * if you want to add a new shape.
-     * Update is meant to be an in place replacement
-     * of the shape for the vertex id *only*.
-     *
-     * @param varName the vertex id to associate
-     * @param shape   the shape to associate with
-     */
-    public void updateShapeForVarName(String varName, long[] shape) {
-        updateShapeForVarName(varName, shape, false);
-    }
-
-    public void updateShapeForVarName(String varName, long[] shape, boolean clearArrayOnShapeMismatch) {
-        if (shape == null) {
-            throw new ND4JIllegalStateException("Null shapes not allowed!");
+    public LongShapeDescriptor getShapeDescriptorForVarName(String varName) {
+        if (getVariable(varName).getArr() != null) {
+            return getVariable(varName).getArr().shapeDescriptor();
         }
-
-        if (variableNameToArr.containsKey(varName) && !Arrays.equals(variableNameToArr.get(varName).shape(), shape)) {
-            if(clearArrayOnShapeMismatch){
-                if(log.isTraceEnabled()){
-                    log.trace("Clearing array for variable {}: array shape {}, new shape {}", varName,
-                            Arrays.toString(variableNameToArr.get(varName).shape()), Arrays.toString(shape));
-                }
-                variableNameToArr.remove(varName);
-            } else {
-                throw new ND4JIllegalStateException("Already found an existing array!");
-            }
-        }
-
-
-        for (int i = 0; i < shape.length; i++) {
-            if (shape[i] < 1) {
-                addAsPlaceHolder(varName);
-                placeHolderOriginalShapes.put(varName, shape);
-                return;
-            }
-        }
-
-
-        variableNameToShape.put(varName, shape);
+        // FIXME: do we really want this Nd4j.dataType() here?
+        return LongShapeDescriptor.fromShape(variableNameToShape.get(varName), Nd4j.dataType());
     }
 
 
@@ -658,7 +653,10 @@ public class SameDiff {
      *
      * @param varName the vertex id to associate
      * @param shape   the shape to associate with
+     * @see #putShapeForVarName(String, long[])
+     * @see #putOrUpdateShapeForVarName(String, long[], boolean)
      */
+    @Deprecated
     public void putShapeForVarName(String varName, long[] shape) {
         if (shape == null) {
             throw new ND4JIllegalStateException("Shape must not be null!");
@@ -668,29 +666,38 @@ public class SameDiff {
             throw new ND4JIllegalStateException("Shape for " + varName + " already exists!");
         }
 
-        for (int i = 0; i < shape.length; i++) {
-            if (shape[i] < 1) {
-                addAsPlaceHolder(varName);
-                placeHolderOriginalShapes.put(varName, shape);
-                return;
-            }
-        }
-
         variableNameToShape.put(varName, shape);
     }
 
-    public void putOrUpdateShapeForVarName(String varName, @NonNull long[] shape, boolean clearArrayOnShapeMismatch){
-        if(variableNameToArr.containsKey(varName)){
-            updateShapeForVarName(varName, shape, clearArrayOnShapeMismatch);
+
+    public void putShapeForVarName(String varName, LongShapeDescriptor shape) {
+        val v = getVariable(varName);
+        putShapeForVarName(varName, shape.getShape());
+        v.setDataType(shape.dataType());
+    }
+
+    /**
+     * Put or update the shape for the given variable name. Optionally supports clearing the specified variable's
+     * INDArray if it's shape does not match the new shape
+     * @param varName                   Variable name
+     * @param shape                     Shape to put
+     * @param clearArrayOnShapeMismatch If false: no change to arrays. If true: if an INDArray is defined for the specified
+     *                                  variable name, it will be removed from the graph (to be later re-generated) if
+     *                                  its shape does not match the specified shape
+     */
+    @Deprecated
+    public void putOrUpdateShapeForVarName(String varName, long[] shape, boolean clearArrayOnShapeMismatch){
+        Preconditions.checkNotNull(shape, "Cannot put null shape for variable: %s", varName);
+        if(variableNameToShape.containsKey(varName)){
+//            updateShapeForVarName(varName, shape, clearArrayOnShapeMismatch);
+            //TODO
         } else {
             putShapeForVarName(varName, shape);
         }
     }
 
-
     /**
-     * Returns true if the given vertex id
-     * and shape already exist.
+     * Returns true if the given vertex id and shape already exist.
      *
      * @param varName the vertex id
      * @return true if the ndarray and vertex id already exist
@@ -701,34 +708,75 @@ public class SameDiff {
 
 
     /**
-     * Returns true if the given vertex id
-     * and {@link INDArray} already exist.
+     * Returns true if the given vertex id and {@link INDArray} already exist.
      *
      * @param varName the vertex id
-     * @return true if the ndarray and vertex id already exist
+     * @return true if a vertex with the given INDArray exists, and it has an INDArray associated with it
      */
     public boolean arrayAlreadyExistsForVarName(String varName) {
-        return variableNameToArr.containsKey(varName);
+        SDVariable var = getVariable(varName);
+        switch(var.getVariableType()){
+            case VARIABLE:
+                return variablesArrays.containsKey(varName);
+            case ARRAY:
+                long tid = Thread.currentThread().getId();
+                return sessions.containsKey(tid) && sessions.get(tid).contains(varName, InferenceSession.OUTER_FRAME, 0, null);
+            case CONSTANT:
+                return constantArrays.containsKey(varName);
+            case PLACEHOLDER:
+                return placeholdersPerThread.containsKey(Thread.currentThread().getId()) &&
+                        placeholdersPerThread.get(Thread.currentThread().getId()).containsKey(varName);
+            default:
+                throw new RuntimeException("Unknown variable type: " + var.getVariableType());
+        }
     }
 
     /**
-     * Get an {@link INDArray}
-     * for a given vertex id
+     * Get an {@link INDArray} for a given vertex id, or null if none exists
      *
-     * @param varName
-     * @return
+     * @param varName Variable name to get the array for
+     * @return Array, or null if none exists
      */
-    public INDArray getArrForVarName(String varName) {
-        return variableNameToArr.get(varName);
+    public INDArray getArrForVarName(@NonNull String varName) {
+        Preconditions.checkState(variables.containsKey(varName), "No variable found with name \"%s\"", varName);
+        SDVariable v = variables.get(varName).getVariable();
+        switch(v.getVariableType()){
+            case VARIABLE:
+                if(!variablesArrays.containsKey(varName)) {
+                    //VARIBALE type arrays should have a parameter initializer...
+                    // we should use this to azy init the array if none is present
+                    v.storeAndAllocateNewArray();
+                }
+                return variablesArrays.get(varName).get();
+            case CONSTANT:
+                if(!constantArrays.containsKey(varName))
+                    return null;
+                return constantArrays.get(varName).get();
+            case ARRAY:
+                //Only stored in inference session...
+                InferenceSession s = sessions.get(Thread.currentThread().getId());
+                if(s == null)
+                    return null;
+                return s.get(varName, InferenceSession.OUTER_FRAME, 0, null, false);
+            case PLACEHOLDER:
+                long tid = Thread.currentThread().getId();
+                if(placeholdersPerThread.get(tid) == null || !placeholdersPerThread.get(tid).containsKey(varName))
+                    return null;
+                return placeholdersPerThread.get(tid).get(varName);
+            default:
+                throw new RuntimeException("Unknown variable type: " + v.getVariableType());
+        }
     }
 
     /**
      * Associate the array with the given variable.
      *
      * @param arr      the array to get the variable for
-     * @param variable the variable to associate
+     * @param variable the name of the variable to associate the array with
      */
     public void associateArrayWithVariable(INDArray arr, @NonNull String variable) {
+    Preconditions.checkState(variables.containsKey(variable), "Cannot associate array with variable \"%s\": " +
+            "variable \"%s\" does not exist in this SameDiff instance", variable, variable);
         associateArrayWithVariable(arr, this.getVariable(variable));
     }
 
@@ -736,33 +784,79 @@ public class SameDiff {
      * Associate the array with the given variable.
      *
      * @param arr      the array to get the variable for
-     * @param variable the variable to associate
+     * @param variable the variable to associate the array with
      */
     public void associateArrayWithVariable(INDArray arr, SDVariable variable) {
         if (variable == null) {
             throw new ND4JIllegalArgumentException("Variable must not be null!");
         }
-
         if (arr == null) {
             throw new ND4JIllegalArgumentException("Array must not be null");
         }
 
-        reverseArrayLookup.put(arr, variable);
-        variableNameToArr.put(variable.getVarName(), arr);
-        if (!shapeAlreadyExistsForVarName(variable.getVarName()))
-            putShapeForVarName(variable.getVarName(), arr.shape());
-        else {
-            updateShapeForVarName(variable.getVarName(), arr.shape());
+        if (variable.dataType() != arr.dataType())
+            arr = arr.castTo(variable.dataType());
+
+        Preconditions.checkState(variable.dataType() == arr.dataType(), "Variable \"%s\" has datatype %s: cannot associate array with type %s with this variable",
+                variable.getVarName(), variable.dataType(), arr.dataType());
+
+        // FIXME: remove this before release
+        if (sessions.get(Thread.currentThread().getId()) == null) {
+            sessions.put(Thread.currentThread().getId(), new InferenceSession(this));
         }
-        // invalidate exec cache
-        exec_cache = null;
+
+        boolean duped = false;
+        if(arr.isAttached()) {
+            arr = arr.detach();
+            duped = true;
+        }
+        if(arr.isView()) {
+            arr = arr.dup();
+            duped = true;
+        }
+
+        if(!duped && variable.getVariableType() == VariableType.VARIABLE) {
+            for (DeviceLocalNDArray otherArr : variablesArrays.values()) {
+                if (otherArr.get() == arr) {    //Check for exact same object, to avoid array reuse (can result in unexpected behaviour)
+                    arr = arr.dup();
+                    break;
+                }
+            }
+        }
+
+        switch(variable.getVariableType()){
+            case VARIABLE:
+                variablesArrays.put(variable.getVarName(), new DeviceLocalNDArray(arr));
+                break;
+            case CONSTANT:
+                constantArrays.put(variable.getVarName(), new DeviceLocalNDArray(arr));
+                break;
+            case ARRAY:
+                // FIXME: remove this before release
+                val session = sessions.get(Thread.currentThread().getId());
+                val varId = session.newVarId(variable.getVarName(), AbstractSession.OUTER_FRAME, 0, null);
+                session.getNodeOutputs().put(varId, arr);
+                //throw new UnsupportedOperationException("Cannot associate array with SDVariable of type ARRAY");
+            case PLACEHOLDER:
+                long tid = Thread.currentThread().getId();
+                if(!placeholdersPerThread.containsKey(tid)){
+                    placeholdersPerThread.put(tid, new HashMap<String, INDArray>());
+                }
+                placeholdersPerThread.get(tid).put(variable.getVarName(), arr);
+                break;
+            default:
+                throw new IllegalStateException("Unknown variable type: " + variable.getVariableType());
+        }
+
+        //putOrUpdateShapeForVarName(variable.getVarName(), arr.shape(), true);
 
         //Also update nested SameDiff instances (such as gradient function)
         if(sameDiffFunctionInstances != null && sameDiffFunctionInstances.size() > 0){
             for(Map.Entry<String,SameDiff> e : sameDiffFunctionInstances.entrySet()){
                 SameDiff sd = e.getValue();
-                if(sd.variableNameToArr != null && sd.variableNameToArr.containsKey(variable.getVarName())){
-                    sd.associateArrayWithVariable(arr, variable);
+                SDVariable v = sd.getVariable(variable.getVarName());
+                if(v != null){
+                    sd.associateArrayWithVariable(arr, v);
                 }
             }
         }
@@ -770,8 +864,7 @@ public class SameDiff {
 
 
     /**
-     * Associate a {@link SameDiff}
-     * namespace as a sub function.
+     * Associate a {@link SameDiff} namespace as a sub function.
      *
      * @param name      the opName of the function
      * @param nameSpace the namespace
@@ -786,12 +879,16 @@ public class SameDiff {
 
 
     /**
-     * Return the internal variable map
+     * Return a copy of the internal variable map
      *
-     * @return
+     * @return Map of variables by name
      */
     public Map<String, SDVariable> variableMap() {
-        return variableMap;
+        Map<String,SDVariable> ret = new LinkedHashMap<>();
+        for(Variable v : variables.values()){
+            ret.put(v.getName(), v.getVariable());
+        }
+        return ret;
     }
 
 
@@ -803,6 +900,7 @@ public class SameDiff {
      * @param y  the second input
      * @return the result variable
      */
+    @Deprecated //TO BE REMOVED - should not be part of public API
     public SDVariable invoke(Op op, SDVariable x, SDVariable y) {
         if (!opMethods.containsKey(op.opName())) {
             throw new ND4JIllegalStateException("Illegal method opName " + op.opName());
@@ -823,43 +921,16 @@ public class SameDiff {
         }
 
         throw new ND4JIllegalStateException("Illegal method opName " + op.opName());
-
     }
 
-
     /**
-     * Get an {@link SDVariable}
-     * for an array reference.
-     * Internally samediff associates array references
-     * with variables. This will typically be a shortcut
-     * for the array associated with {@link SDVariable#getArr()}
+     * The set of defined SameDiff function names. SameDiff function instances should not be confused
+     * with DifferentialFunction ops; an example of a SameDiff function instance is the gradient "grad" function
      *
-     * @param arr the array reference
-     * @return the variable if one exists
-     */
-    public SDVariable getVariableForArray(INDArray arr) {
-        return reverseArrayLookup.get(arr);
-    }
-
-
-    /**
-     * The set of defined function names
-     *
-     * @return
+     * @return Set of defined SameDiff function instance names
      */
     public Collection<String> definedFunctionNames() {
         return this.sameDiffFunctionInstances.keySet();
-    }
-
-
-    /**
-     * Returns the number of bytes
-     * for the graph
-     *
-     * @return
-     */
-    public long memoryForGraph() {
-        return numElements() * DataTypeUtil.lengthForDtype(Nd4j.dataType());
     }
 
     /**
@@ -875,27 +946,14 @@ public class SameDiff {
 
     private SameDiff() {
         functionFactory = new DifferentialFunctionFactory(this);
-        variableMap = new LinkedHashMap<>();
         sameDiffFunctionDefinitionMap = new LinkedHashMap<>();
         sameDiffFunctionInstances = new LinkedHashMap<>();
-        gradients = new LinkedHashMap<>();
         forwardVarForGrad = new LinkedHashMap<>();
         opsForResult = new IntArrayKeyMap<>();
-        reverseArrayLookup = new IdentityHashMap<>();
-        variableNameToArr = new LinkedHashMap<>();
         variableNameToShape = new LinkedHashMap<>();
-        placeHolderMap = new LinkedHashMap<>();
-        placeHolderVarNames = new LinkedHashSet<>();
         placeHolderOriginalShapes = new LinkedHashMap<>();
-        incomingArgsReverse = new LinkedHashMap<>();
-        outgoingArgsReverse = new LinkedHashMap<>();
-        functionInstancesById = new LinkedHashMap<>();
         placeHolderFunctions = new LinkedHashSet<>();
-        functionsArgsFor = new LinkedHashMap<>();
-        functionOutputFor = new LinkedHashMap<>();
         baseNameForFunctionInstanceId = new LinkedHashMap<>();
-        importedVarName = new LinkedHashSet<>();
-        permuteOrder = new LinkedHashMap<>();
         propertiesToResolve = new LinkedHashMap<>();
         propertiesForFunction = new LinkedHashMap<>();
         fieldVariableResolutionMapping = HashBasedTable.create();
@@ -921,7 +979,6 @@ public class SameDiff {
             List<String> newVal = propertiesToResolve.get(forFunction.getOwnName());
             newVal.add(arrayName);
         }
-
     }
 
     /**
@@ -941,8 +998,7 @@ public class SameDiff {
 
 
     /**
-     * Returns true if the given function
-     * has ndarray properties to resolve.
+     * Returns true if the given function has ndarray properties to resolve.
      *
      * @param function the function to check
      * @return true if the function has yet to be resolved properties
@@ -1012,11 +1068,8 @@ public class SameDiff {
 
 
     /**
-     * Adds a field name -> variable name
-     * mapping for a given function.
-     * This is used for model import
-     * where there is an unresolved variable
-     * at the time of calling any
+     * Adds a field name -> variable name mapping for a given function.<br>
+     * This is used for model import where there is an unresolved variable at the time of calling any
      * {@link org.nd4j.imports.graphmapper.GraphMapper#importGraph(File)}
      * .
      * <p>
@@ -1047,30 +1100,6 @@ public class SameDiff {
         return fieldVariableResolutionMapping.get(function.getOwnName(), fieldName);
     }
 
-
-    /**
-     * Returns true if the variable name is imported
-     *
-     * @param variableName the imported variable name
-     * @return true if the name is imported, false otherwise
-     */
-    public boolean isImportVariable(String variableName) {
-        return importedVarName.contains(variableName);
-    }
-
-    /**
-     * Marks a variable name as imported.
-     * This is used in conjunction with model
-     * import to ensure immutability
-     * when referencing graph variables
-     * mapped from an external source.
-     *
-     * @param varName the var name to add.
-     */
-    public void addVarNameForImport(String varName) {
-        importedVarName.add(varName);
-    }
-
     /**
      * Sets a base name for the function id.
      * This is used for when calling {@link #generateOutputVariableForOp(DifferentialFunction, String)}
@@ -1098,21 +1127,14 @@ public class SameDiff {
 
 
     /**
-     * Attempts to insert the {@link DifferentialFunction}
-     * reference in to this {@link SameDiff}
-     * instance.
-     * If the given array field with the given
-     * index already exists, it will do a reference
-     * check to ensure that the 2 array fields are the same.
-     * <p>
-     * If not, an exception is thrown.
-     * If the instances are the same (by semantics, not reference)
-     * then it will just return the original instance.
-     * This is to ensure that instances that are created are unique
-     * and reference checked.
+     * Attempts to insert the {@link DifferentialFunction} reference in to this {@link SameDiff} instance.
+     * If the given array field with the given index already exists, it will do a reference check to ensure that the 2
+     * array fields are the same. If not, an exception is thrown.<br>
+     * If the instances are the same (by semantics, not reference) then it will just return the original instance.
+     * This is to ensure that instances that are created are unique and reference checked.
      *
      * @param function the array field to attempt to create
-     * @return
+     * @return Original instance
      */
     public <X extends SDVariable> X setupFunction(X function) {
         Preconditions.checkNotNull(function, "Passed in function must not be null!");
@@ -1127,10 +1149,11 @@ public class SameDiff {
 
 
     /**
-     * Adds outgoing args to the graph
+     * Adds outgoing arguments to the graph for the specified DifferentialFunction
+     * Also checks for input arguments and updates the graph adding an appropriate edge when the full graph is declared.
      *
-     * @param variables
-     * @param function
+     * @param variables Variables - arguments for the specified differential function
+     * @param function Differential function
      */
     public void addOutgoingFor(SDVariable[] variables, DifferentialFunction function) {
         String[] varNames = new String[variables.length];
@@ -1143,20 +1166,19 @@ public class SameDiff {
 
 
     /**
-     * Adds outgoing arguments to the graph.
-     * Also checks for input arguments
-     * and updates the graph adding an appropriate edge
-     * when the full graph is declared.
+     * Adds outgoing arguments to the graph for the specified DifferentialFunction
+     * Also checks for input arguments and updates the graph adding an appropriate edge when the full graph is declared.
      *
-     * @param varNames
-     * @param function
+     * @param varNames Name of the variables that are outputs of the specified differential function
+     * @param function Differential function
      */
     public void addOutgoingFor(String[] varNames, DifferentialFunction function) {
 
         if (function.getOwnName() == null)
             throw new ND4JIllegalStateException("Instance id can not be null. Function not initialized properly");
 
-        if (outgoingArgsReverse.containsKey(function.getOwnName())) {
+
+        if (ops.get(function.getOwnName()).getOutputsOfOp() != null && !ops.get(function.getOwnName()).getOutputsOfOp().isEmpty()) {
             throw new ND4JIllegalStateException("Outgoing arguments already declared for " + function);
         }
 
@@ -1169,25 +1191,18 @@ public class SameDiff {
                 throw new ND4JIllegalStateException("Variable name elements can not be null!");
         }
 
-        outgoingArgsReverse.put(function.getOwnName(), varNames);
+        ops.get(function.getOwnName()).setOutputsOfOp(Arrays.asList(varNames));
 
-        for (val resultName : varNames) {
-            List<DifferentialFunction> funcs = functionOutputFor.get(resultName);
-            if (funcs == null) {
-                funcs = new ArrayList<>();
-                functionOutputFor.put(resultName, funcs);
-            }
-
-            funcs.add(function);
+        for (String resultName : varNames) {
+            variables.get(resultName).setOutputOfOp(function.getOwnName());
         }
-
     }
 
     /**
-     * Adds incoming args to the graph
+     * Adds incoming arguments for the specified differential function to the graph
      *
-     * @param variables
-     * @param function
+     * @param variables Name of the variables that are arguments (inputs) to the specified function
+     * @param function  Function
      */
     public void addArgsFor(String[] variables, DifferentialFunction function) {
         if (function.getOwnName() == null)
@@ -1200,25 +1215,32 @@ public class SameDiff {
             }
         }
 
-        incomingArgsReverse.put(function.getOwnName(), variables);
-        for (val variableName : variables) {
-            List<DifferentialFunction> funcs = functionsArgsFor.get(variableName);
-            if (funcs == null) {
-                funcs = new ArrayList<>();
-                functionsArgsFor.put(variableName, funcs);
-            }
-
-            funcs.add(function);
+        //Add function if it doesn't exist
+        //TODO could "not existing" be a bug sometimes?
+        if(!ops.containsKey(function.getOwnName())){
+            ops.put(function.getOwnName(), SameDiffOp.builder().name(function.getOwnName()).op(function).build());
         }
 
+        //Update variable 'inputs to op' accounting for repeated inputs (like y = x+x)
+        ops.get(function.getOwnName()).setInputsToOp(Arrays.asList(variables));     //Duplicate variables OK/required here
+
+        for (String variableName : variables) {
+            List<String> funcs = this.variables.get(variableName).getInputsForOp();
+            if (funcs == null) {
+                funcs = new ArrayList<>();
+                this.variables.get(variableName).setInputsForOp(funcs);
+            }
+            if(!funcs.contains(function.getOwnName()))  //Avoid duplicates for function names.
+                funcs.add(function.getOwnName());
+        }
     }
 
 
     /**
-     * Adds incoming args to the graph
+     * Adds incoming arguments for the specified differential function to the graph
      *
-     * @param variables
-     * @param function
+     * @param variables variables that are arguments (inputs) to the specified function
+     * @param function  Function
      */
     public void addArgsFor(SDVariable[] variables, DifferentialFunction function) {
         String[] varNames = new String[variables.length];
@@ -1237,64 +1259,59 @@ public class SameDiff {
      * @return The differential function that this variable is an output of, or null if it is not the output of a function
      */
     public DifferentialFunction getVariableOutputFunction(String variableName) {
-        List<DifferentialFunction> list = functionOutputFor.get(variableName);
-        if (list == null) {
+        Preconditions.checkState(variables.containsKey(variableName), "No variable with name \"%s\" found in graph", variableName);
+        if(variables.get(variableName).getOutputOfOp() == null)
             return null;
-        }
-        return list.get(0);
-    }
-
-    /**
-     * Return a list of differential functions (if any) that this variable is the input argument for
-     *
-     * @param variableName Name of the variable
-     * @return The differential functions that this variable is an input argument for, or null if it is not the input to any function
-     */
-    public List<DifferentialFunction> getVariableArgOfFunctions(String variableName) {
-        return functionsArgsFor.get(variableName);
+        return ops.get(variables.get(variableName).getOutputOfOp()).getOp();
     }
 
 
     /**
-     * Returns true if this function already
-     * has defined arguments
+     * Returns true if this function already has defined arguments
      *
      * @param function the function to check
-     * @return true if the function has args false otherwise
+     * @return true if the function has args, false otherwise
      */
     public boolean hasArgs(DifferentialFunction function) {
-        String[] vertexIdArgs = incomingArgsReverse.get(function.getOwnName());
-        return vertexIdArgs != null && vertexIdArgs.length > 0;
+        List<String> vertexIdArgs = ops.get(function.getOwnName()).getInputsToOp();
+        return vertexIdArgs != null && vertexIdArgs.size() > 0;
     }
 
-
+    /**
+     * Get an array of differential functions that have been defined for this SameDiff instance
+     * @return Array of differential functions
+     */
     public DifferentialFunction[] functions() {
-        val ret = functionInstancesById.values();
-        return ret.toArray(new DifferentialFunction[ret.size()]);
+        List<DifferentialFunction> out = new ArrayList<>(ops.size());
+        for(SameDiffOp op : ops.values()){
+            out.add(op.getOp());
+        }
+        return out.toArray(new DifferentialFunction[out.size()]);
     }
 
 
     @Override
     public int hashCode() {
         int result = super.hashCode();
-        result = 31 * result + (variableMap != null ? variableMap.hashCode() : 0);
+        result = 31 * result + (variables != null ? variables.hashCode() : 0);
         return result;
     }
 
 
     /**
-     * @param originalSameDiff
-     * @return
+     * Create a new SameDiff instance from an existing instance.
+     * Note that state (variables and functions) is shared between the two SameDiff instance
+     *
+     * @param originalSameDiff Original SameDiff instance
+     * @return Copy
      */
     public static SameDiff create(SameDiff originalSameDiff) {
         SameDiff ret = SameDiff.builder()
-                .variableMap(originalSameDiff.variableMap)
                 .sameDiffFunctionInstances(originalSameDiff.sameDiffFunctionInstances)
                 .build();
+        ret.variables.putAll(originalSameDiff.variables);
         //ensuring proper sameDiff reference
-        DifferentialFunctionFactory differentialFunctionFactory =
-                new
-                        DifferentialFunctionFactory(ret);
+        DifferentialFunctionFactory differentialFunctionFactory = new DifferentialFunctionFactory(ret);
         ret.functionFactory = differentialFunctionFactory;
         return ret;
     }
@@ -1306,7 +1323,7 @@ public class SameDiff {
 
         SameDiff sameDiff = (SameDiff) o;
 
-        if (variableMap != null ? !variableMap.equals(sameDiff.variableMap) : sameDiff.variableMap != null)
+        if (variables != null ? !variables.equals(sameDiff.variables) : sameDiff.variables != null)
             return false;
         if (sameDiffFunctionDefinitionMap != null ? !sameDiffFunctionDefinitionMap.equals(sameDiff.sameDiffFunctionDefinitionMap) : sameDiff.sameDiffFunctionDefinitionMap != null)
             return false;
@@ -1314,442 +1331,1050 @@ public class SameDiff {
     }
 
     /**
-     * @return
+     * Create a new (empty) SameDiff instance without any functions or variables
+     * @return New SameDiff instance
      */
     public static SameDiff create() {
         return new SameDiff();
     }
 
-
     /**
-     * Evaluate the given inputs
-     * based on the current graph
-     *
-     * @param inputs the inputs to evaluate
-     * @return
-     */
-    public INDArray[] eval(Map<String, INDArray> inputs) {
-
-        SameDiff execPipeline = dup();
-
-        List<DifferentialFunction> opExecAction = execPipeline.exec().getRight();
-        if (opExecAction.isEmpty())
-            throw new IllegalStateException("No ops found to execute.");
-        INDArray[] ret = new INDArray[opExecAction.size()];
-        for (int i = 0; i < ret.length; i++) {
-            val varName = opExecAction.get(i).outputVariables()[0].getVarName();
-            ret[i] = execPipeline.getArrForVarName(varName);
-        }
-        return ret;
-    }
-
-
-
-
-    /**
-     * @return
+     * Clone/duplicate the SameDiff instance, including arrays etc. The returned SameDiff instance should have no
+     * shared state with the original instance
+     * @return The cloned SameDiff instance
      */
     public SameDiff dup() {
         Cloner cloner = newCloner();
-        val clone = cloner.deepClone(this);
-        //clone.exec_cache = this.exec_cache;
-        //clone.parent = this;
+        SameDiff clone = cloner.deepClone(this);
+        //TODO don't clone sessions in the first place!
+        clone.sessions.clear();
         return clone;
-
     }
 
 
     /**
-     * @return
+     * Count the number of elements in all arrays, according to {@link SDVariable#getShape()}
+     * @return Number of array elements for all variables
      */
     public long numElements() {
         long ret = 0;
         for (SDVariable variable : variables()) {
-            ret += ArrayUtil.prod(variable.getShape());
+            long[] shape = variable.getShape();
+            if(shape != null) {
+                ret += ArrayUtil.prod(shape);
+            }
         }
-
         return ret;
     }
 
-
-    private void initWorkspace() {
-        workspace = Nd4j.getWorkspaceManager().createNewWorkspace(
-                WorkspaceConfiguration.builder()
-                        .initialSize(memoryForGraph())
-                        .policyAllocation(AllocationPolicy.OVERALLOCATE)
-                        .policyLearning(LearningPolicy.FIRST_LOOP)
-                        .build());
-        Nd4j.getWorkspaceManager().setWorkspaceForCurrentThread(workspace);
-
-
+    /**
+     * Returns the inputs (placeholders)
+     * for the samediff graph
+     * @return the inputs for this graph
+     */
+    public List<String> inputs() {
+        List<String> out = new ArrayList<>();
+        for(String s : variables.keySet()){
+            if(isPlaceHolder(s))
+                out.add(s);
+        }
+        return out;
     }
 
+    /**
+     * Outputs are those variables (not placeholders, constants, etc) that are the output of a function that aren't the
+     * input to any other ops.
+     * Usually these are the output of the last function(s) in the SameDiff instance.
+     * @return The (inferred) outputs of the SameDiff instance, in no particular order
+     */
+    public List<String> outputs(){
+        List<String> out = new ArrayList<>();
+        for(Variable v : variables.values()){
+            if(v.getVariable().isConstant() || v.getVariable().isPlaceHolder() ||                   //Exclude constants and placeholders
+                    (v.getInputsForOp() != null && !v.getInputsForOp().isEmpty()) ||                //Exclude variables that are inputs to ops
+                    (v.getControlDepsForOp() != null && !v.getControlDepsForOp().isEmpty()) ||      //Exclude variables that are control dependency inputs to ops
+                    (v.getControlDepsForVar() != null && !v.getControlDepsForVar().isEmpty())) {    //Exclude variables that are control dependency inputs to other variables (mainly for import of cond etc ops)
+                continue;
+            }
+
+            //Also exclude assert etc ops - doesn't make sense to return these "outputs" to user
+            if(v.getOutputOfOp() != null){
+                String opName = v.getOutputOfOp();
+                SameDiffOp o = ops.get(opName);
+                if(o.getOp() instanceof Assert){
+                    continue;
+                }
+
+                //A bit of a hack for TF import: some TF graphs have Switch ops, where the output of one branch isn't consumed
+                // by any ops. Consequently, during execution this "output" might never be available. So we'll exclude the output of execution here
+                if(o.getOp() instanceof Switch){
+                    continue;
+                }
+            }
+
+
+            out.add(v.getName());
+        }
+        return out;
+    }
 
     /**
-     * The list of available
-     * variables in the graph
+     * The list of all variables in the graph
      *
-     * @return
+     * @return All variables in the graph
      */
     public List<SDVariable> variables() {
-        return new ArrayList<>(variableMap.values());
+        return new ArrayList<>(variableMap().values());
     }
 
     /**
-     * Variable initialization
-     * with 1.0
+     * Set the training configuration ({@link TrainingConfig}) for the SameDiff instance.
+     * A TrainingConfig must be set before the SameDiff instance can be trained via the fit methods
+     * @param trainingConfig Training configuration
+     */
+    public void setTrainingConfig(TrainingConfig trainingConfig){
+        this.trainingConfig = trainingConfig;
+    }
+
+    /**
+     * Fit the SameDiff instance based on a single DataSet (i.e., a single minibatch for one iteration).<br>
+     * This method can only be used for singe input, single output SameDiff instances as DataSet only supports a
+     * single input and a single output.<br>
+     * Note that a {@link TrainingConfig} must be set via {@link #setTrainingConfig(TrainingConfig)} before training can
+     * be performed.
      *
-     * @param name  the opName of the variable
+     * @param dataSet The DataSet (single minibatch) to peform training on
+     */
+    public void fit(DataSet dataSet){
+        fit(new SingletonMultiDataSetIterator(dataSet.toMultiDataSet()), 1, false);
+    }
+
+    /**
+     * Fit the SameDiff instance based on DataSetIterator for the specified number of epochs.<br>
+     * This method can only be used for singe input, single output SameDiff instances as DataSet only supports a
+     * single input and a single output.<br>
+     * Note that a {@link TrainingConfig} must be set via {@link #setTrainingConfig(TrainingConfig)} before training can
+     * be performed.
+     *
+     * @param iter      The iterator to train the SameDiff instance with
+     * @param numEpochs The number of epochs for training. Must be > 0
+     */
+    public void fit(DataSetIterator iter, int numEpochs) {
+        fit(new MultiDataSetIteratorAdapter(iter), numEpochs, true);
+    }
+
+    /**
+     * Fit the SameDiff instance based on MultiDataSetIterator for the specified number of epochs.<br>
+     * This method can both singe input, single output and multi-input, multi-output SameDiff instances<br>
+     * Note that a {@link TrainingConfig} must be set via {@link #setTrainingConfig(TrainingConfig)} before training can
+     * be performed.
+     *
+     * @param iter      The iterator to train the SameDiff instance with
+     * @param numEpochs The number of epochs for training. Must be > 0
+     */
+    public void fit(MultiDataSetIterator iter, int numEpochs){
+        fit(iter, numEpochs, true);
+    }
+
+    //Synchronized for thread safety
+    protected synchronized void fit(MultiDataSetIterator iter, int numEpochs, boolean incrementEpochCount){
+        Preconditions.checkNotNull(iter, "Iterator must not be null");
+        Preconditions.checkState(numEpochs > 0, "Number of training epochs must be a positive number. Got: %s", numEpochs);
+        Preconditions.checkState(trainingConfig != null, "No training configuration has been set. A training configuration must " +
+                "be set before training. Use setTrainingConfig(TrainingConfig)");
+        Preconditions.checkState(numEpochs == 1 || iter.resetSupported(), "Cannot train for multiple epochs on an iterator that" +
+                " does not support resetting");
+
+        if(!iter.hasNext() && iter.resetSupported())
+            iter.reset();
+
+        boolean performedValidation = false;
+
+        for(int i = 0; i < numEpochs; i++) {
+            while (iter.hasNext()) {
+                org.nd4j.linalg.dataset.api.MultiDataSet ds = iter.next();
+                if(!performedValidation){
+                    Preconditions.checkState(trainingConfig.getDataSetFeatureMapping().size() == ds.numFeatureArrays(),
+                            "The number of dataset feature mapping variables set in the training configuration (%s) must match" +
+                                    " the number of dataset feature arrays (%s)", trainingConfig.getDataSetFeatureMapping().size(), ds.numFeatureArrays());
+                    List<String> labelMapping = trainingConfig.getDataSetLabelMapping();
+                    int lblSize = labelMapping == null ? 0 : labelMapping.size();
+                    Preconditions.checkState(lblSize == ds.numLabelsArrays(),
+                            "The number of dataset label mapping variables set in the training configuration (%s) must match" +
+                                    " the number of dataset label arrays (%s)", lblSize, ds.numLabelsArrays());
+
+                    performedValidation = true;
+                }
+
+                //Create placeholder variable map
+                Map<String, INDArray> placeholders = toPlaceholderMap(ds);
+
+                Preconditions.checkState(placeholders.size() > 0, "No placeholder variables were set for training");
+                resolveVariablesWith(placeholders);
+
+                //Calculate gradients:
+                execBackwards(placeholders);
+
+
+                //Apply updater:
+                if (!initializedTraining)
+                    initializeTraining();
+
+                int iteration = trainingConfig.getIterationCount();
+                int e = trainingConfig.getEpochCount();
+                for (String s : trainingConfig.getTrainableParams()) {
+                    //TODO fix using inference session
+                    INDArray param = variables.get(s).getVariable().getArr();
+                    INDArray grad = variables.get(s).getVariable().getGradient().getArr();
+                    //Note: don't need to divide by minibatch - that should be handled in loss function and hence loss function gradients,
+                    // which should flow through to here
+
+                    //Pre-apply regularization (L1, L2)
+                    List<Regularization> r = trainingConfig.getRegularization();
+                    int iterCount = trainingConfig.getIterationCount();
+                    int epochCount = trainingConfig.getEpochCount();
+                    double lr = trainingConfig.getUpdater().hasLearningRate() ? trainingConfig.getUpdater().getLearningRate(iteration, epochCount) : 1.0;
+                    if(r != null && r.size() > 0){
+                        for(Regularization reg : r){
+                            if(reg.applyStep() == Regularization.ApplyStep.BEFORE_UPDATER){
+                                reg.apply(param, grad, lr, iterCount, epochCount);
+                            }
+                        }
+                    }
+
+                    //Apply updater. Note that we need to reshape to [1,length] for updater
+                    INDArray reshapedView = Shape.newShapeNoCopy(grad, new long[]{1, grad.length()}, grad.ordering() == 'f');       //TODO make sure we always reshape in same order!
+                    Preconditions.checkState(reshapedView != null, "Error reshaping array for parameter \"%s\": array is a view?", s);
+                    GradientUpdater u = updaterMap.get(s);
+                    try {
+                        u.applyUpdater(reshapedView, iteration, e);
+                    } catch (Throwable t) {
+                        throw new RuntimeException("Error applying updater " + u.getClass().getSimpleName() + " to parameter \"" + s
+                                + "\": either parameter size is inconsistent between iterations, or \"" + s + "\" should not be a trainable parameter?", t);
+                    }
+
+                    //Post-apply regularization (weight decay)
+                    if(r != null && r.size() > 0){
+                        for(Regularization reg : r){
+                            if(reg.applyStep() == Regularization.ApplyStep.POST_UPDATER){
+                                reg.apply(param, grad, lr, iterCount, epochCount);
+                            }
+                        }
+                    }
+
+                    if (trainingConfig.isMinimize()) {
+                        param.subi(grad);
+                    } else {
+                        param.addi(grad);
+                    }
+                }
+
+                trainingConfig.incrementIterationCount();
+            }
+
+            if(i < numEpochs - 1) {
+                iter.reset();
+            }
+
+            if(incrementEpochCount)
+                trainingConfig.incrementEpochCount();
+        }
+    }
+
+    /**
+     * Calculate the regularization (L1, L2 and/or WeightDecay) component of the loss function for the current parameters..
+     * Note that the training configuration must be set (via {@link #setTrainingConfig(TrainingConfig)}) before this
+     * method can be called
+     *
+     * @return The regularization component of the score/loss function
+     */
+    public double calcRegularizationScore() {
+        Preconditions.checkState(trainingConfig != null, "No training configuration has been set. A training configuration must " +
+                "be set before calculating the L2 loss. Use setTrainingConfig(TrainingConfig)");
+
+        if(trainingConfig.getRegularization() == null || trainingConfig.getRegularization().isEmpty()){
+            return 0.0;
+        }
+
+        if(trainingConfig.getTrainableParams() == null || trainingConfig.getTrainableParams().isEmpty())
+            initializeTraining();
+
+        List<Regularization> l = trainingConfig.getRegularization();
+        double loss = 0.0;
+        for (String s : trainingConfig.getTrainableParams()) {
+            for(Regularization r : l){
+                INDArray arr = getVariable(s).getArr();
+                loss += r.score(arr, trainingConfig.getIterationCount(), trainingConfig.getEpochCount());
+            }
+        }
+        return loss;
+    }
+
+    /**
+     * Perform setup for training. Does the following:
+     * 1. Infer the set of trainable parameters - unless specified manually by the user
+     * 2. Set up the updaters
+     */
+    protected void initializeTraining(){
+        if(!initializedTraining) {
+            if(trainingConfig == null) {
+                throw new ND4JIllegalStateException("Please specify a training config with setTrainingConfig");
+            }
+            //First: infer the variables to be optimized if required
+            if(trainingConfig.getTrainableParams() == null || trainingConfig.getTrainableParams().size() == 0) {
+                //Variable is trainable if it's not the output of some function
+                //TODO also - should be floating point type
+                List<String> trainVarList = new ArrayList<>();
+                for(Variable var : variables.values()){
+                    SDVariable v = var.getVariable();
+                    String n = v.getVarName();
+                    if(variables.get(n).getOutputOfOp() == null &&       //Is a leaf (not the output of a function)
+                            !isPlaceHolder(n) &&                                //and not a placeholder
+                            !variables.get(n).getVariable().isConstant() &&     //and not a constant
+                            (trainingConfig.getDataSetFeatureMapping() == null || !trainingConfig.getDataSetFeatureMapping().contains(n))   &&  //and not an input (this really should be a placeholder, but we can't guarantee that...)
+                            (trainingConfig.getDataSetLabelMapping() == null || !trainingConfig.getDataSetLabelMapping().contains(n))   &&      //and not a label (this really should be a placeholder, but we can't guarantee that...)
+                            (trainingConfig.getDataSetFeatureMaskMapping() == null || !trainingConfig.getDataSetFeatureMaskMapping().contains(n))   &&  //and not a feature mask (this really should be a placeholder, but we can't guarantee that...)
+                            (trainingConfig.getDataSetLabelMaskMapping() == null || !trainingConfig.getDataSetLabelMaskMapping().contains(n))){  //and not a label input (this really should be a placeholder, but we can't guarantee that...)
+                        trainVarList.add(n);
+                    }
+                }
+
+                trainingConfig.setTrainableParams(trainVarList);
+                log.info("Inferred trainable variables: {}", trainVarList);
+            }
+
+            //Allocate updater state
+            long numTrainableParams = 0;
+            DataType dt = null;             //TODO support mixed precision variables - https://github.com/deeplearning4j/deeplearning4j/issues/6992
+            for(String s : trainingConfig.getTrainableParams()) {
+                SDVariable v = variables.get(s).getVariable();
+                Preconditions.checkState(v != null, "No variable found for trainable parameter name \"%s\"", s);
+
+                INDArray arr = v.getArr();
+                Preconditions.checkState(arr != null, "No array found for trainable parameter \"%s\"", s);
+                numTrainableParams += arr.length();
+                if(dt == null)
+                    dt = arr.dataType();
+            }
+
+            long updaterStateSize = trainingConfig.getUpdater().stateSize(numTrainableParams);
+
+            if(updaterStateSize > 0) {
+                try(MemoryWorkspace ws = Nd4j.getMemoryManager().scopeOutOfWorkspaces()) {
+                    updaterState = Nd4j.createUninitialized(dt, 1, updaterStateSize);
+                }
+            }
+
+            long viewSoFar = 0;
+            updaterViews = new HashMap<>();
+            updaterMap = new HashMap<>();
+            for(String s : trainingConfig.getTrainableParams()) {
+                long thisSize = trainingConfig.getUpdater().stateSize(variables.get(s).getVariable().getArr().length());
+                INDArray view = (updaterStateSize == 0 || thisSize == 0 ? null :
+                        updaterState.get(NDArrayIndex.interval(0, 1), NDArrayIndex.interval(viewSoFar, viewSoFar + thisSize)));
+
+                updaterViews.put(s, view);
+                updaterMap.put(s, trainingConfig.getUpdater().instantiate(view, true));
+                viewSoFar += thisSize;
+            }
+
+            initializedTraining = true;
+        }
+    }
+
+    /**
+     * Convert the MultiDataSet to a {@code Map<String,INDArray>} based on the TrainingConfig settings.
+     * The key is the placeholder/variable that the value INDArray should be associated with.
+     *
+     * @param ds MultiDataSet - source of the features/labels
+     * @return MultiDataSet converted to a Map, based on TrainingConfig
+     */
+    private Map<String,INDArray> toPlaceholderMap(org.nd4j.linalg.dataset.api.MultiDataSet ds) {
+        Map<String,INDArray> placeholders = new HashMap<>();
+        int count = 0;
+        for(String s : trainingConfig.getDataSetFeatureMapping()){
+            placeholders.put(s, ds.getFeatures(count++));
+        }
+        count = 0;
+        if(trainingConfig.getDataSetLabelMapping() != null) {
+            //Labels may be null in some models (unsupervised etc)
+            for (String s : trainingConfig.getDataSetLabelMapping()) {
+                placeholders.put(s, ds.getLabels(count++));
+            }
+        }
+
+        if(trainingConfig.getDataSetFeatureMaskMapping() != null && trainingConfig.getDataSetFeatureMaskMapping().size() > 0){
+            count = 0;
+            for(String s : trainingConfig.getDataSetFeatureMaskMapping()){
+                if(s == null) {
+                    count++;
+                    continue;
+                }
+                placeholders.put(s, ds.getFeaturesMaskArray(count++));
+            }
+        }
+
+        if(trainingConfig.getDataSetLabelMaskMapping() != null && trainingConfig.getDataSetLabelMaskMapping().size() > 0){
+            count = 0;
+            for(String s : trainingConfig.getDataSetLabelMaskMapping()){
+                if(s == null) {
+                    count++;
+                    continue;
+                }
+                placeholders.put(s, ds.getLabelsMaskArray(count++));
+            }
+        }
+        return placeholders;
+    }
+
+    /**
+     * Evaluate the performance of a single variable's prediction.<br>
+     * For example, if the variable to evaluatate was called "softmax" you would use:
+     * <pre>
+     * {@code Evaluation e = new Evaluation();
+     * sameDiff.evaluate(iterator, "softmax", e);}
+     * </pre>
+     *
+     * @param iterator       Iterator as source of data to evaluate
+     * @param outputVariable The variable to evaluate
+     * @param evaluations    The evaluations to perform
+     */
+    public void evaluate(DataSetIterator iterator, String outputVariable, IEvaluation... evaluations) {
+        Preconditions.checkArgument(evaluations != null && evaluations.length > 0, "No evaluations were passed to the evaluate method");
+        evaluate(new MultiDataSetIteratorAdapter(iterator), Collections.singletonMap(outputVariable, Arrays.asList(evaluations)),
+                Collections.singletonMap(outputVariable, 0));
+    }
+
+    /**
+     * Evaluation for multiple-output networks.<br>
+     * See {@link #evaluate(MultiDataSetIterator, Map, Map)}
+     */
+    public void evaluate(DataSetIterator iterator, Map<String,IEvaluation> variableEvals){
+        Map<String,Integer> map = new HashMap<>();
+        Map<String,List<IEvaluation>> variableEvalsList = new HashMap<>();
+        for(String s : variableEvals.keySet()){
+            map.put(s, 0);  //Only 1 possible output here with DataSetIterator
+            variableEvalsList.put(s, Collections.singletonList(variableEvals.get(s)));
+        }
+        evaluate(new MultiDataSetIteratorAdapter(iterator), variableEvalsList, map);
+    }
+
+    /**
+     * Evaluation for multiple output networks - one ore more
+     * See {@link #evaluate(MultiDataSetIterator, Map, Map)}
+     */
+    public void evaluateMultiple(DataSetIterator iterator, Map<String,List<IEvaluation>> variableEvals){
+        Map<String,Integer> map = new HashMap<>();
+        for(String s : variableEvals.keySet()){
+            map.put(s, 0);  //Only 1 possible output here with DataSetIterator
+        }
+        evaluate(new MultiDataSetIteratorAdapter(iterator), variableEvals, map);
+    }
+
+    /**
+     * Perform evaluation using classes such as {@link org.nd4j.evaluation.classification.Evaluation} for classifier outputs
+     * and {@link org.nd4j.evaluation.regression.RegressionEvaluation} for regression outputs.<br>
+     * <br>
+     * <b>Example: classifier evaluation</b><br>
+     * Predictions variable name: "softmaxOutput"<br>
+     * Evaluations to perform: {@link org.nd4j.evaluation.classification.Evaluation}<br>
+     * Data: single input, single output MultiDataSets<br>
+     * Code:<br>
+     * <pre>
+     * {@code
+     * MultiDataSetIterator data = ...
+     * Map<String,List<IEvaluation>> evals = Collections.singletonMap("softmaxOutput",Collections.singletonList(new Evaluation()));
+     * Map<String,Integer> labelMapping = Collections.singletonMap("softmaxOutput",0);  //Compare: "softmaxOutput" vs. MultiDataSet.getLabels(0)
+     * }
+     * </pre>
+     *
+     * @param iterator               The iterator - the source of the data for evaluation
+     * @param variableEvals          The evaluations to perform. Key: the name of the variable. Value: the evaluations to perform
+     * @param predictionLabelMapping The output/label mapping. Key: the name of the variable.
+     */
+    public void evaluate(MultiDataSetIterator iterator, Map<String,List<IEvaluation>> variableEvals, Map<String,Integer> predictionLabelMapping){
+        Preconditions.checkState(trainingConfig != null, "Training config has not been set");
+
+        Preconditions.checkState(variableEvals.keySet().equals(predictionLabelMapping.keySet()), "Keysets for variable evaluations" +
+                " and for the prediction label mapping must be equal. Keys for variables to evaluate: %s vs. keys for label mapping: %s", variableEvals.keySet(), predictionLabelMapping.keySet());
+
+        if(!iterator.hasNext() && iterator.resetSupported())
+            iterator.reset();
+
+        List<String> reqVars = new ArrayList<>(variableEvals.keySet());
+
+        while(iterator.hasNext()){
+            MultiDataSet ds = iterator.next();
+            Map<String,INDArray> placeholderMap = toPlaceholderMap(ds);
+
+            Map<String,INDArray> m = exec(placeholderMap, reqVars);
+
+            for(Map.Entry<String,List<IEvaluation>> e : variableEvals.entrySet()){
+                INDArray prediction = m.get(e.getKey());
+                for(IEvaluation eval : e.getValue()){
+                    //TODO masking, time series, etc
+
+                    INDArray label = ds.getLabels(predictionLabelMapping.get(e.getKey()));
+                    eval.eval(label, prediction);
+                }
+            }
+        }
+    }
+
+
+    public SDVariable one(String name, int... shape){
+        return one(name, Nd4j.defaultFloatingPointType(), shape);
+    }
+
+    public SDVariable one(String name, long... shape){
+        return one(name, Nd4j.defaultFloatingPointType(), shape);
+    }
+
+
+    /**
+     * Create a new variable with the specified shape, with all values initialized to 1.0
+     *
+     * @param name  the name of the variable to create
      * @param shape the shape of the array to be created
      * @return the created variable
      */
-    public SDVariable one(String name, int[] shape) {
-        return var(name, ArrayUtil.toLongArray(shape), new ConstantInitScheme('f', 1.0));
-    }
-
-    public SDVariable one(String name, long[] shape) {
-        return var(name, shape, new ConstantInitScheme('f', 1.0));
+    public SDVariable one(String name, org.nd4j.linalg.api.buffer.DataType dataType, int... shape) {
+        return var(name, new ConstantInitScheme('f', 1.0), dataType, ArrayUtil.toLongArray(shape));
     }
 
     /**
-     * Return a variable of all 1s, with the same shape as the input
+     * Create a new variable with the specified shape, with all values initialized to 1.0
      *
-     * @param input
-     * @return
-     */
-    public SDVariable onesLike(SDVariable input) {
-        return onesLike(null, input);
-    }
-
-    /**
-     * Return a variable of all 1s, with the same shape as the input
-     *
-     * @param input
-     * @return
-     */
-    public SDVariable onesLike(String name, SDVariable input) {
-        SDVariable ret = f().onesLike(name, input);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-
-    /**
-     * Variable initialization
-     * with 0.0
-     *
-     * @param name  the opName of the variable
+     * @param name  the name of the variable to create
      * @param shape the shape of the array to be created
      * @return the created variable
      */
-    public SDVariable zero(String name, long[] shape) {
-        return var(name, shape, new ZeroInitScheme());
+    public SDVariable one(String name, org.nd4j.linalg.api.buffer.DataType dataType, long... shape) {
+        return var(name, new ConstantInitScheme('f', 1.0), dataType, shape);
     }
 
-    public SDVariable zero(String name, int[] shape) {
-        return var(name, ArrayUtil.toLongArray(shape), new ZeroInitScheme());
+
+
+    public SDVariable zero(String name, long... shape){
+        return zero(name, Nd4j.defaultFloatingPointType(), shape);
     }
 
-    /**
-     * Return a variable of all 0s with the same shape as the input
-     *
-     * @param input
-     * @return
-     */
-    public SDVariable zerosLike(SDVariable input) {
-        return zerosLike(null, input);
+    public SDVariable zero(String name, int... shape){
+        return zero(name, Nd4j.defaultFloatingPointType(), shape);
     }
 
     /**
-     * Return a variable of all 0s, with the same shape as the input
+     * Create a new variable with the specified shape, with all values initialized to 0
      *
-     * @param input
-     * @return
+     * @param name  the name of the variable to create
+     * @param shape the shape of the array to be created
+     * @return the created variable
      */
-    public SDVariable zerosLike(String name, SDVariable input) {
-        SDVariable ret = f().zerosLike(name, input);
-        return updateVariableNameAndReference(ret, name);
+    public SDVariable zero(String name, org.nd4j.linalg.api.buffer.DataType dataType, long... shape) {
+        return var(name, new ZeroInitScheme(), dataType, shape);
     }
 
+    /**
+     * Create a new variable with the specified shape, with all values initialized to 0
+     *
+     * @param name  the name of the variable to create
+     * @param shape the shape of the array to be created
+     * @return the created variable
+     */
+    public SDVariable zero(String name, org.nd4j.linalg.api.buffer.DataType dataType, int... shape) {
+        return var(name, new ZeroInitScheme(), dataType, ArrayUtil.toLongArray(shape));
+    }
+
+    /**
+     * Create an SDVariable with a fixed/constant value, with a generated name
+     * @param constant Value for the constant SDVariable
+     * @return
+     */
+    public SDVariable constant(@NonNull INDArray constant){
+        return constant(getNewVarName(), constant);
+    }
+
+    /**
+     * Create an SDVariable with a fixed/constant value
+     * @param name  Name of the constant SDVariable
+     * @param constant Value for the constant SDVariable
+     * @return
+     */
+    public SDVariable constant(@NonNull String name, @NonNull INDArray constant){
+        Preconditions.checkState(!variables.containsKey(name), "Variable with name \"%s\" already exists", name);
+        SDVariable v = new SDVariable(name, VariableType.CONSTANT, this, constant.shape(), constant.dataType(), null);
+        variables.put(name, Variable.builder().name(name).variable(v).build());
+        constantArrays.put(name, new DeviceLocalNDArray(constant));
+        return v;
+    }
+
+    /**
+     * Return a variable of given shape in which all values have a given constant value.
+     *
+     * @param value constant to set for each value
+     * @param shape shape of the variable as long array
+     * @return A new SDVariable of provided shape with constant value.
+     */
+    @Deprecated
     public SDVariable constant(SDVariable value, long... shape) {
         return constant(null, value, shape);
     }
 
+    /**
+     * Return a variable of given shape in which all values have a given constant value.
+     *
+     * @param name  Name of the new SDVariable
+     * @param value constant to set for each value
+     * @param shape shape of the variable as long array
+     * @return A new SDVariable of provided shape with constant value.
+     */
+    @Deprecated
     public SDVariable constant(String name, SDVariable value, long... shape) {
         SDVariable ret = f().constant(value, shape);
         return updateVariableNameAndReference(ret, name);
     }
 
-    public SDVariable linspace(double start, double stop, long number) {
-        return linspace(null, start, stop, number);
-    }
-
-    public SDVariable linspace(String name, double start, double stop, long number) {
-        SDVariable ret = f().linspace(start, stop, number);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable range(double from, double to, double step){
-        return range(null, from, to, step);
-    }
-
-    public SDVariable range(String name, double from, double to, double step){
-        SDVariable ret = f().range(from, to, step);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable[] meshgrid(SDVariable... inputs){
-        return meshgrid(null, inputs);
-    }
-
-    public SDVariable[] meshgrid(List<String> names, SDVariable... inputs){
-        return meshgrid(names, true, inputs);
-    }
-
-    public SDVariable[] meshgrid(List<String> names, boolean cartesian, SDVariable... inputs){
-        Preconditions.checkState(names == null || names.size() == inputs.length,
-                "Got %s names but %s inputs", (names == null ? 0 : names.size()), inputs.length);
-        SDVariable[] ret = f().meshgrid(cartesian, inputs);
-        for( int i=0; i<ret.length; i++ ){
-            ret[i] = updateVariableNameAndReference(ret[i], names == null ? null : names.get(i));
-        }
+    /**
+     * Create a variable with a place holder
+     * @param name the name of the variable
+     * @param shape the shape of the variable if any
+     * @return
+     */
+    public SDVariable placeHolder(String name, org.nd4j.linalg.api.buffer.DataType dataType, long...shape) {
+        SDVariable ret = new SDVariable(name, VariableType.PLACEHOLDER, this, shape, dataType, null);
+        variables.put(name, Variable.builder().name(name).variable(ret).build());
         return ret;
     }
 
     /**
-     * Variable initialization
-     * with a specified {@link WeightInitScheme}
+     * Variable initialization with a specified {@link WeightInitScheme}
      *
-     * @param name             the opName of the variable
+     * @param name             the name of the variable
      * @param shape            the shape of the array to be created
-     * @param weightInitScheme the weight init scheme
+     * @param weightInitScheme the weight initialization scheme
      * @return the created variable
      */
-    public SDVariable var(String name, long[] shape, WeightInitScheme weightInitScheme) {
-        if (variableMap.containsKey(name) && variableMap.get(name).getArr() != null)
-            throw new IllegalArgumentException("Another variable with the name " + name +
-                    " already exists.");
+    public SDVariable var(@NonNull String name, @NonNull WeightInitScheme weightInitScheme, @NonNull org.nd4j.linalg.api.buffer.DataType dataType, @NonNull long... shape) {
+        return var(name, VariableType.VARIABLE, weightInitScheme, dataType, shape);
+    }
+
+    //TODO only allowing null datatype for TF import (it's fixed in a later step) - don't want this in the public API!
+    public SDVariable var(@NonNull String name, @NonNull VariableType variableType, WeightInitScheme weightInitScheme,
+                             org.nd4j.linalg.api.buffer.DataType dataType, long... shape) {
+        if (variables.containsKey(name) && variables.get(name).getVariable().getArr() != null)
+            throw new IllegalArgumentException("Another variable with the name " + name + " already exists.");
+
+        if (name == null || name.length() < 1)
+            name = getNewVarName();
+
+
+        SDVariable ret = new SDVariable(name, variableType, this, shape, dataType, weightInitScheme);
+        addVariable(ret);
+
+        if(variableType == VariableType.PLACEHOLDER){
+            setOriginalPlaceHolderShape(name, shape);
+            putShapeForVarName(name, shape);
+        }
+        return ret;
+    }
+
+    public SDVariable var(@NonNull String name, @NonNull LongShapeDescriptor shape, WeightInitScheme weightInitScheme) {
+        return var(name, weightInitScheme, shape.dataType(), shape.getShape());
+    }
+
+
+    /**
+     * Creates a {@link SDVariable} with the given shape and name<br>
+     * Any array will be generated with all zeros for the values
+     *
+     * @param name  the name of the variable
+     * @param shape the shape of the variable
+     * @return the created variable
+     */
+    public SDVariable var(String name, org.nd4j.linalg.api.buffer.DataType dataType, long... shape) {
+        Preconditions.checkNotNull(shape != null, "Invalid shape: shape may not be null");
+        if(Shape.isPlaceholderShape(shape)){
+            return placeHolder(name, dataType, shape);
+        }
+        return var(name, new ZeroInitScheme(), dataType, shape);
+    }
+
+    public SDVariable var(String name, LongShapeDescriptor shapeDesc) {
+        Preconditions.checkNotNull(shapeDesc != null, "Invalid shape: shape may not be null");
+        return var(name, shapeDesc, new ZeroInitScheme());
+    }
+
+    public SDVariable var(String name, int... shape){
+        return var(name, Nd4j.defaultFloatingPointType(), shape);
+    }
+
+    public SDVariable var(String name, long... shape){
+        return var(name, Nd4j.defaultFloatingPointType(), shape);
+    }
+
+    /**
+     * Creates a {@link SDVariable} with the given shape and name<br>
+     * Any array will be generated with all zeros for the values
+     *
+     * @param name  the name of the variable
+     * @param shape the shape of the variable
+     * @return the created variable
+     */
+    public SDVariable var(String name, org.nd4j.linalg.api.buffer.DataType dataType, int... shape) {
+        Preconditions.checkNotNull(shape, "Invalid shape: shape may not be null");
+        if(Shape.isPlaceholderShape(shape)){
+            return placeHolder(name, dataType, ArrayUtil.toLongArray(shape));
+        }
+        return var(name, new ZeroInitScheme(), dataType, ArrayUtil.toLongArray(shape));
+    }
+
+
+    /**
+     * Initialize a {@link SDVariable} reference tying this variable to this samediff instance.
+     * <p>
+     * {@link NDArraySupplierInitScheme} is used to ensure that if the array is allocated anywhere
+     * and {@link SameDiff} instance to exist as a copy of the variable.
+     *
+     * @param v Variable
+     * @return
+     */
+    public SDVariable var(@NonNull final SDVariable v) {
+        if (variables.containsKey(v.getVarName()) && variables.get(v.getVarName()).getVariable().getArr() != null)
+            return variables.get(v.getVarName()).getVariable();
+
+        if (v.getVarName() == null || v.getVarName().length() < 1)
+            throw new IllegalArgumentException("Name for variable must be defined");
+
+        VariableType vt = v.getVariableType();
+        NDArraySupplierInitScheme s = null;
+        switch(vt){
+            case VARIABLE:
+                s = new NDArraySupplierInitScheme(v.getArr());
+                //Intentional fallthrough
+            case ARRAY:
+                SDVariable ret = new SDVariable(v.getVarName(), v.getVariableType(), this, v.getShape(), v.dataType(), s);
+                return addVariable(ret);
+            case CONSTANT:
+                return constant(v.getVarName(), v.getArr());
+            case PLACEHOLDER:
+                return placeHolder(v.getVarName(), v.dataType(), v.placeholderShape());
+            default:
+                throw new RuntimeException("Unknown/not supported variable type: " + vt);
+        }
+    }
+
+    private String getNewVarName() {
+        String varName = "sd_var_" + String.valueOf(variableId);
+        while (variables.containsKey(varName)) {
+            variableId++;
+            varName = "sd_var_" + String.valueOf(variableId);
+        }
+        return varName;
+    }
+
+    /**
+     * Creates a {@link SDVariable} with the specified shape and a generated name<br>
+     * Any array will be generated with all zeros for the values
+     *
+     * @param shape the shape of the variable
+     * @return the created variable
+     */
+    public SDVariable var(org.nd4j.linalg.api.buffer.DataType dataType, int... shape) {
+        return var(getNewVarName(), dataType, shape);
+    }
+
+    /**
+     * Creates a {@link SDVariable} with the specified shape and a generated name<br>
+     * Any array will be generated with all zeros for the values
+     *
+     * @param shape the shape of the variable
+     * @return the created variable
+     */
+    public SDVariable var(org.nd4j.linalg.api.buffer.DataType dataType, long... shape) {
+        return var(getNewVarName(), dataType, shape);
+    }
+
+    /**
+     * Creates a {@link SDVariable} with the specified shape and a generated name. The associated array will
+     * then be generated using the specified weight initialization scheme
+     *
+     * @param weightInitScheme The weight initialization scheme to use when generating an INDArray
+     * @param shape            the shape of the variable
+     * @return the created variable
+     */
+    public SDVariable var(WeightInitScheme weightInitScheme, org.nd4j.linalg.api.buffer.DataType dataType, long... shape) {
+        return var(getNewVarName(), weightInitScheme, dataType, shape);
+    }
+
+    /**
+     * Create an {@link SDVariable} with a generated name, and assocate the specified array with it
+     * @param arr Array to associate with the new variable
+     * @return New SDVariable
+     * @see #var(String, INDArray)
+     */
+    public SDVariable var(INDArray arr) {
+        return var(getNewVarName(), arr);
+    }
+
+    /**
+     * Create an {@link SDVariable} with the specified name, and assocate the specified array with it
+     * @param arr Array to associate with the new variable
+     * @return New SDVariable with the specified name and array
+     */
+    public SDVariable var(String name, INDArray arr) {
+        if (variables.containsKey(name) && variables.get(name).getVariable().getArr() != null)
+            throw new IllegalArgumentException("Another variable with the name " + name + " already exists.");
 
 
         if (name == null || name.length() < 1)
             name = getNewVarName();
 
-        if (workspace == null)
-            initWorkspace();
+        if (arr == null)
+            throw new IllegalArgumentException("Array for " + name + " must not be null");
 
+        boolean duped = false;
+        if(arr.isAttached()) {
+            arr = arr.detach();
+            duped = true;
+        }
+        if(arr.isView()) {
+            arr = arr.dup();
+            duped = true;
+        }
 
-        SDVariable ret = SDVariable.builder()
-                .sameDiff(this)
-                .shape(shape).weightInitScheme(weightInitScheme)
-                .varName(name)
-                .build();
+        if(!duped) {
+            for (DeviceLocalNDArray otherArr : variablesArrays.values()) {
+                if (otherArr.get() == arr) {    //Check for exact same object, to avoid array reuse (can result in unexpected behaviour)
+                    arr = arr.dup();
+                    break;
+                }
+            }
+        }
 
+        SDVariable ret = new SDVariable(name, VariableType.VARIABLE, this, arr.shape(), arr.dataType(), new NDArraySupplierInitScheme(arr));
+
+        associateArrayWithVariable(arr, ret);
+        if (ArrayUtil.prod(arr.shape()) == 1) {
+            try(MemoryWorkspace ws = Nd4j.getMemoryManager().scopeOutOfWorkspaces()) {
+                ret.setScalarValue(Nd4j.scalar(arr.getDouble(0)));
+            }
+        }
 
         addVariable(ret);
-        variableMap.put(name, ret);
+        if (getShapeForVarName(name) == null)
+            putShapeForVarName(name, arr.shape());
         return ret;
-
     }
-
 
     /**
-     * Creates a {@link SDVariable}
-     * with the given shape
-     * and a depth of 0.
+     * Convert the specified variable to a constant. This is equivalent to "freezing" a variable so that it's value
+     * won't be changed by further training.<br>
+     * This can only be done for variables and placeholders, not ARRAY type variables (which are usually network activations).
+     * As a constant, this variable will no longer be modified by any subsequent training.
      *
-     * @param name  the opName of the variable
-     * @param shape the shape of the variable
-     * @return the created variable
+     * @param variable Variable to convert to a constant
+     * @return The (now constant) SDVariable
      */
-    public SDVariable var(String name, long... shape) {
-        Preconditions.checkArgument(shape != null && shape.length > 0, "Invalid shape: %s", shape);
-        return var(name, shape, new ZeroInitScheme());
+    public SDVariable convertToConstant(@NonNull SDVariable variable) {
+        convertToConstants(Collections.singletonList(variable));
+        return variable;
     }
-
-    public SDVariable var(String name, int[] shape) {
-        Preconditions.checkArgument(shape != null && shape.length > 0, "Invalid shape: %s", shape);
-        return var(name, ArrayUtil.toLongArray(shape), new ZeroInitScheme());
-    }
-
 
     /**
-     * Initialize a {@link SDVariable}
-     * reference tying this variable to this
-     * samediff instance.
-     * <p>
-     * {@link NDArraySupplierInitScheme} is used
-     * to ensure that if the array is allocated anywhere
-     * and {@link SameDiff} instance to exist as a copy of the variable.
+     * Convert all of the specified variables to constants. This is equivalent to "freezing" the variables so that their values
+     * won't be changed by further training.<br>
+     * This can only be done for variables and placeholders, not ARRAY type variables (which are usually network activations).
+     * As constants, these variables will no longer be modified by any subsequent training.
      *
-     * @param arr
-     * @return
+     * @param variables Variables to convert to constants
+     * @return The (now constant) SDVariables
      */
-    public SDVariable var(final SDVariable arr) {
-        if (variableMap.containsKey(arr.getVarName()) && variableMap.get(arr.getVarName()).getArr() != null)
-            return variableMap.get(arr.getVarName());
-
-        if (arr.getVarName() == null || arr.getVarName().length() < 1)
-            throw new IllegalArgumentException("Name for variable must be defined");
-
-        if (arr == null)
-            throw new IllegalArgumentException("Array for " + arr.getVarName() + " must not be null");
-
-        if (workspace == null)
-            initWorkspace();
-
-        final SDVariable ret = SDVariable.builder()
-                .sameDiff(this)
-                .shape(arr.getShape())
-                .varName(arr.getVarName())
-                .weightInitScheme(new NDArraySupplierInitScheme(new NDArraySupplierInitScheme.NDArraySupplier() {
-                    @Override
-                    public INDArray getArr() {
-                        /**
-                         * Pre allocate the array if it doesn't already exist.
-                         * The reason we do this is to avoid race conditions with
-                         * {@link #allocate()}
-                         */
-                        if (arr.getArr() == null) {
-                            INDArray retArr = arr.getWeightInitScheme().create(arr.getShape());
-                            associateArrayWithVariable(retArr, arr);
-                        }
-                        return arr.getArr();
-                    }
-                }))
-                .build();
-
-
-        variableMap.put(arr.getVarName(), ret);
-        return ret;
-
-    }
-
-    // auto naming
-
-    private int _var_id = 0;
-
-    private String getNewVarName() {
-        String varName = "sd_var_" + String.valueOf(_var_id);
-        while (variableMap.containsKey(varName)) {
-            _var_id++;
-            varName = "sd_var_" + String.valueOf(_var_id);
+    public void convertToConstants(List<SDVariable> variables){
+        if(variables.size() == 0)
+            return;
+        boolean allConst = true;
+        for(SDVariable variable : variables) {
+            if (variable.getVariableType() != VariableType.CONSTANT) {
+                allConst = false;
+                Preconditions.checkState(variable.getVariableType() != VariableType.ARRAY, "Cannot convert variable of type ARRAY to a constant: %s", variable);
+            }
         }
-        return varName;
-    }
+        if(allConst){
+            return; //No op
+        }
 
-    public SDVariable var(int... shape) {
-        return var(getNewVarName(), shape);
-    }
+        //Remove all sessions in case they have any cached arrays/state
+        sessions.clear();
 
-    public SDVariable var(long... shape) {
-        return var(getNewVarName(), shape);
-    }
+        //If gradient function has been defined, remove it (so it will be recreated later)
+        sameDiffFunctionInstances.remove("grad");
 
-    public SDVariable var(WeightInitScheme weightInitScheme, long... shape) {
-        return var(getNewVarName(), shape, weightInitScheme);
-    }
+        for(SDVariable variable : variables ) {
+            String n = variable.getVarName();
+            INDArray arr = variable.getArr();
+            Preconditions.checkNotNull(arr, "Could not get array for variable %s: if this is a placeholder, use SDVariable.setArray before converting", variable);
 
-    public SDVariable var(INDArray arr) {
-        return var(getNewVarName(), arr);
-    }
+            constantArrays.put(n, new DeviceLocalNDArray(arr));
+            variablesArrays.remove(n);
+            if(!placeholdersPerThread.isEmpty()){
+                for(Map<String,INDArray> m : placeholdersPerThread.values()){
+                    m.remove(n);
+                }
+            }
 
+            variable.setVariableType(VariableType.CONSTANT);
+        }
+
+
+        if(trainingConfig != null){
+            Set<String> toRemove = new HashSet<>();
+            boolean anyTrainableParmsModified = false;
+            List<String> origTrainableParams = trainingConfig.getTrainableParams();
+            for(SDVariable v : variables){
+                toRemove.add(v.getVarName());
+                if(!anyTrainableParmsModified && origTrainableParams.contains(v.getVarName())){
+                    anyTrainableParmsModified = true;
+                }
+            }
+
+
+            //Remove updater state for this variable: updaterState, updaterViews, updaterMap
+            if(anyTrainableParmsModified) {
+                List<String> newTrainableParams = new ArrayList<>();
+                for (String s : origTrainableParams) {
+                    if (!toRemove.contains(s)) {
+                        newTrainableParams.add(s);
+                    }
+                }
+                trainingConfig.setTrainableParams(newTrainableParams);
+            }
+
+            if(initializedTraining){
+                List<INDArray> newUpdaterState = new ArrayList<>();
+                for (String s : origTrainableParams) {
+                    INDArray stateArr = updaterViews.get(s);
+                    if (!toRemove.contains(s)) {
+                        newUpdaterState.add(stateArr);
+                    }
+                }
+
+                updaterState = newUpdaterState.isEmpty() ? null : Nd4j.concat(0, newUpdaterState.toArray(new INDArray[newUpdaterState.size()]));
+                //Now, update updaterViews map:
+                long viewSoFar = 0;
+                updaterViews = new HashMap<>();
+                updaterMap = new HashMap<>();
+                for(String s : trainingConfig.getTrainableParams()) {
+                    long thisSize = trainingConfig.getUpdater().stateSize(this.variables.get(s).getVariable().getArr().length());
+                    INDArray view = (updaterState == null || thisSize == 0 ? null :
+                            updaterState.get(NDArrayIndex.interval(0, 1), NDArrayIndex.interval(viewSoFar, viewSoFar + thisSize)));
+
+                    updaterViews.put(s, view);
+                    updaterMap.put(s, trainingConfig.getUpdater().instantiate(view, false));
+                    viewSoFar += thisSize;
+                }
+            }
+        }
+    }
 
     /**
-     * Generate a square identity matrix with the specified number of rows
+     * Convert the specified variable to a VARIABLE type SDVariable.<br>
+     * This can only be done for constants and placeholders, not ARRAY type variables (which are usually network activations).
+     * As a variable, this variable will modified during any subsequent training.
      *
-     * @param rows Number of rows
+     * @return This variable (now a variable type SDVariable)
      */
-    public SDVariable eye(int rows) {
-        return eye(rows, rows);
+    public SDVariable convertToVariable(@NonNull SDVariable constant) {
+        convertToVariables(Collections.singletonList(constant));
+        return constant;
     }
 
     /**
-     * Generate an identity matrix with the specified number of rows and columns
-     *
-     * @param rows Number of rows
+     * Convert the specified variables to VARIABLE type SDVariables.<br>
+     * This can only be done for constants and placeholders, not ARRAY type variables (which are usually network activations).
+     * As variables, this variable will modified during any subsequent training.
      */
-    public SDVariable eye(String name, int rows) {
-        return eye(name, rows, rows);
+    public void convertToVariables(@NonNull List<SDVariable> constants){
+        if(constants.size() == 0)
+            return;
+        boolean allConst = true;
+        for(SDVariable variable : constants) {
+            if (variable.getVariableType() != VariableType.VARIABLE) {
+                allConst = false;
+            }
+            Preconditions.checkState(variable.getVariableType() != VariableType.ARRAY, "Cannot convert variable of type ARRAY to a variable: %s", variable);
+        }
+        if(allConst){
+            return; //No op
+        }
+
+        //Remove all sessions in case they have any cached arrays/state
+        sessions.clear();
+
+        //If gradient function has been defined, remove it (so it will be recreated later)
+        sameDiffFunctionInstances.remove("grad");
+
+        for(SDVariable variable : constants) {
+            String n = variable.getVarName();
+            INDArray arr = variable.getArr();
+            Preconditions.checkNotNull(arr, "Could not get array for variable %s: if this is a placeholder, use SDVariable.setArray before converting", variable);
+
+            variablesArrays.put(n, new DeviceLocalNDArray(arr));
+            constantArrays.remove(n);
+            if(!placeholdersPerThread.isEmpty()){
+                for(Map<String,INDArray> m : placeholdersPerThread.values()){
+                    m.remove(n);
+                }
+            }
+
+            variable.setVariableType(VariableType.VARIABLE);
+        }
+
+
+        //For training: need to add new updater state
+        if(trainingConfig != null){
+            List<String> newTrainableParams = new ArrayList<>(trainingConfig.getTrainableParams());
+            List<String> convertedToVars = new ArrayList<>();
+            for(SDVariable v : constants){
+                newTrainableParams.add(v.getVarName());
+                convertedToVars.add(v.getVarName());
+            }
+            trainingConfig.setTrainableParams(newTrainableParams);
+
+
+            //Add updater state for this variable: updaterState, updaterViews, updaterMap
+            if(initializedTraining){
+                long extraStateSize = 0;
+                for (String s : convertedToVars) {
+                    INDArray arr = getVariable(s).getArr();
+                    long stateSize = trainingConfig.getUpdater().stateSize(arr.length());
+                    extraStateSize += stateSize;
+                }
+                if(extraStateSize > 0) {
+                    INDArray newState = Nd4j.createUninitialized(updaterState.dataType(), 1, extraStateSize);
+
+                    updaterState = (updaterState == null ? newState : Nd4j.concat(1, updaterState, newState));
+                    //Now, update updaterViews map:
+                    long viewSoFar = 0;
+                    updaterViews = new HashMap<>();
+                    updaterMap = new HashMap<>();
+                    for (String s : trainingConfig.getTrainableParams()) {
+                        long thisSize = trainingConfig.getUpdater().stateSize(this.variables.get(s).getVariable().getArr().length());
+                        INDArray view = (updaterState == null || thisSize == 0 ? null :
+                                updaterState.get(NDArrayIndex.interval(0, 1), NDArrayIndex.interval(viewSoFar, viewSoFar + thisSize)));
+
+                        updaterViews.put(s, view);
+                        boolean init = convertedToVars.contains(s); //Only initialize/zero the states for the new variables
+                        updaterMap.put(s, trainingConfig.getUpdater().instantiate(view, init));
+                        viewSoFar += thisSize;
+                    }
+                }
+            }
+        }
     }
+
 
     /**
-     * Generate an identity matrix with the specified number of rows and columns
-     *
-     * @param rows Number of rows
-     * @param cols Number of columns
-     */
-    public SDVariable eye(int rows, int cols) {
-        return eye(null, rows, cols);
-    }
-
-    /**
-     * Generate an identity matrix with the specified number of rows and columns
-     *
-     * @param rows Number of rows
-     * @param cols Number of columns
-     */
-    public SDVariable eye(String name, int rows, int cols) {
-        return eye(name, rows, cols, null);
-    }
-
-    /**
-     * see {@link #eye(String, int, int, int...)}
-     */
-    public SDVariable eye(int rows, int cols, int... batchDimension) {
-        return eye(null, rows, cols, batchDimension);
-    }
-
-    /**
-     * Generate an identity matrix with the specified number of rows and columns, with optional leading dims<br>
-     * Example:<br>
-     * batchShape: [3,3]<br>
-     * numRows: 2<br>
-     * numCols: 4<br>
-     * returns a tensor of shape (3, 3, 2, 4) that consists of 3 * 3 batches of (2,4)-shaped identity matrices:<br>
-     * 1 0 0 0<br>
-     * 0 1 0 0<br>
-     *
-     * @param rows           Number of rows
-     * @param cols           Number of columns
-     * @param batchDimension Batch dimensions. May be null
-     */
-    public SDVariable eye(String name, int rows, int cols, int... batchDimension) {
-        SDVariable eye = new Eye(this, rows, cols, batchDimension).outputVariables()[0];
-        return updateVariableNameAndReference(eye, name);
-    }
-
-    public SDVariable eye(String name, SDVariable rows, SDVariable cols, SDVariable batchDimension){
-        SDVariable eye = new Eye(this, rows, cols, batchDimension).outputVariables()[0];
-        return updateVariableNameAndReference(eye, name);
-    }
-
-    public SDVariable eye(SDVariable rows, SDVariable cols, SDVariable batchDimension){
-        return eye(null, rows, cols, batchDimension);
-    }
-
-
-    public SDVariable eye(String name, SDVariable rows, SDVariable cols){
-        SDVariable eye = new Eye(this, rows, cols).outputVariables()[0];
-        return updateVariableNameAndReference(eye, name);
-    }
-
-    public SDVariable eye(SDVariable rows, SDVariable cols){
-        SDVariable eye = new Eye(this, rows, cols).outputVariables()[0];
-        return updateVariableNameAndReference(eye, null);
-    }
-
-    public SDVariable eye(String name, SDVariable rows){
-        SDVariable eye = new Eye(this, rows).outputVariables()[0];
-        return updateVariableNameAndReference(eye, name);
-    }
-
-    public SDVariable eye(SDVariable rows){
-        SDVariable eye = new Eye(this, rows).outputVariables()[0];
-        return updateVariableNameAndReference(eye, null);
-    }
-
-    /**
-     * Remove an argument for a function. Note that if this function
-     * does not contain the argument, it will just be a no op.
+     * Remove an argument for a function. Note that if this function does not contain the argument, it will just be a no op.
      *
      * @param varName  the variable name to remove
      * @param function the function to remove the argument from
@@ -1764,71 +2389,18 @@ public class SameDiff {
                  * from the arguments we need to  update both
                  * the reverse and forward arguments.
                  */
-                val reverseArgs = incomingArgsReverse.get(function.getOwnName());
-                incomingArgsReverse.remove(function.getOwnName());
+                List<String> reverseArgs = ops.get(function.getOwnName()).getInputsToOp();
                 val newArgs = new ArrayList<String>(args.length - 1);
                 for (int arg = 0; arg < args.length; arg++) {
-                    if (!reverseArgs[arg].equals(varName)) {
-                        newArgs.add(reverseArgs[arg]);
+                    if (!reverseArgs.get(arg).equals(varName)) {
+                        newArgs.add(reverseArgs.get(arg));
                     }
                 }
 
-                val newArgsArr = newArgs.toArray(new String[newArgs.size()]);
-                incomingArgsReverse.put(function.getOwnName(), newArgsArr);
-                //no further need to scan
+                ops.get(function.getOwnName()).setInputsToOp(newArgs);
                 break;
             }
         }
-    }
-
-
-    /**
-     * @param name
-     * @param arr
-     * @return
-     */
-    public SDVariable var(String name, INDArray arr) {
-        if (variableMap.containsKey(name) && variableMap.get(name).getArr() != null)
-            throw new IllegalArgumentException("Another variable with the name " + name +
-                    " already exists.");
-
-
-        if (name == null || name.length() < 1)
-            name = getNewVarName();
-
-        if (arr == null)
-            throw new IllegalArgumentException("Array for " + name + " must not be null");
-
-        if (workspace == null)
-            initWorkspace();
-
-        val arrRef = arr.migrate();
-        SDVariable ret = SDVariable.builder()
-                .sameDiff(this)
-                .shape(arr.shape())
-                .varName(name)
-                .weightInitScheme(new NDArraySupplierInitScheme(new NDArraySupplierInitScheme.NDArraySupplier() {
-                    @Override
-                    public INDArray getArr() {
-                        return arrRef;
-                    }
-                }))
-                .build();
-
-
-        associateArrayWithVariable(arr, ret);
-        if (ArrayUtil.prod(arr.shape()) == 1)
-            ret.setScalarValue(arr.getDouble(0));
-
-        addVariable(ret);
-        if (getShapeForVarName(name) == null)
-            putShapeForVarName(name, arr.shape());
-        //ensure there is a reference to the array in the integer index
-        //this is used later for op creation
-        reverseArrayLookup.put(arr, ret);
-        variableMap.put(name, ret);
-        return ret;
-
     }
 
     /**
@@ -1838,7 +2410,12 @@ public class SameDiff {
      * @return the variabel instance if there is one
      */
     public SDVariable getVariable(String name) {
-        return variableMap.get(name);
+        Variable v = variables.get(name);
+        return v == null ? null : v.getVariable();
+    }
+
+    public boolean hasVariable(String name){
+        return variables.containsKey(name);
     }
 
 
@@ -1852,41 +2429,27 @@ public class SameDiff {
         //TODO 2018/06/26 - Review this?
         //Gradients are being placed in the inner "grad" function SameDiff instance, but not the outer one
         // should they be synced and we just use the map in this instance?
-        if (gradients.containsKey(varName)) {
-            return gradients.get(varName);
-        } else if(sameDiffFunctionInstances.containsKey("grad") && sameDiffFunctionInstances.get("grad").gradients.containsKey(varName)){
-            return sameDiffFunctionInstances.get("grad").gradients.get(varName);
+        if (variables.containsKey(varName) && variables.get(varName).getGradient() != null) {
+            return variables.get(varName).getGradient();
+        } else if(sameDiffFunctionInstances.containsKey("grad") && sameDiffFunctionInstances.get("grad").variables.containsKey(varName)){
+            return sameDiffFunctionInstances.get("grad").variables.get(varName).getGradient();
         }
         return null;
     }
 
 
     /**
-     * Assign a vertex id
-     * to a gradient
+     * Assign a SDVariable to represent the gradient of the SDVariable with the specified name
      *
-     * @param variableName the vertex id
-     *                     to assign
-     * @param variable     the variable
+     * @param variableName the variable name to assign the gradient variable for
+     * @param variable     the gradient variable
      */
     public void setGradientForVariableName(String variableName, SDVariable variable) {
+        Preconditions.checkState(variables.containsKey(variableName), "No variable exists with name \"%s\"", variableName);
         if (variable == null) {
             throw new ND4JIllegalStateException("Unable to set null gradient for variable name " + variableName);
         }
-
-        gradients.put(variableName, variable);
-    }
-
-
-    /**
-     * Get the forward variable for gradient
-     * based on the gradient's vertex id
-     *
-     * @param vertexId the vertex id
-     * @return the gradient for the variable or null
-     */
-    public SDVariable getForwardVariableForVertexId(int vertexId) {
-        return forwardVarForGrad.get(vertexId);
+        variables.get(variableName).setGradient(variable);
     }
 
 
@@ -1899,14 +2462,12 @@ public class SameDiff {
     }
 
     /**
-     * Gradient with respect
-     * to the given variable opName.
-     * Note that in order to run this function,
-     * {@link #execBackwards()} must be executed first.
-     * All gradient functions are obtained within that time.
+     * Get the gradient for the variable with the specified variable name.
+     * Note that in order to run this function, {@link #execBackwards()} must be executed first.
+     * All gradient functions are obtained from the results of the execBackwards call.
      *
-     * @param varName the variable opName to get the gradient for.
-     * @return
+     * @param varName the variable name to get the gradient variable for.
+     * @return The gradient variable for the specified variable
      */
     public SDVariable grad(String varName) {
         if (!sameDiffFunctionInstances.containsKey("grad")) {
@@ -1918,3739 +2479,54 @@ public class SameDiff {
         return getFunction("grad").getGradForVariable(var.getVarName());
     }
 
-    public SDVariable randomUniform(double min, double max, SDVariable shape){
-        return randomUniform(null, min, max, shape);
-    }
-
-    public SDVariable randomUniform(String name, double min, double max, SDVariable shape){
-        SDVariable ret = f().randomUniform(min, max, shape);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable randomUniform(double min, double max, long... shape){
-        return randomUniform(null, min, max, shape);
-    }
-
-    public SDVariable randomUniform(String name, double min, double max, long... shape){
-        SDVariable ret = f().randomUniform(min, max, shape);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable randomNormal(double mean, double stddev, SDVariable shape){
-        return randomNormal(null, mean, stddev, shape);
-    }
-
-    public SDVariable randomNormal(String name, double mean, double stddev, SDVariable shape){
-        SDVariable ret = f().randomNormal(mean, stddev, shape);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable randomNormal(double mean, double stddev, long... shape){
-        return randomNormal(null, mean, stddev, shape);
-    }
-
-    public SDVariable randomNormal(String name, double mean, double stddev, long... shape){
-        SDVariable ret = f().randomNormal(mean, stddev, shape);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable randomLogNormal(double mean, double stddev, long... shape){
-        return randomLogNormal(null, mean, stddev, shape);
-    }
-
-    public SDVariable randomLogNormal(String name, double mean, double stddev, long... shape){
-        SDVariable ret = f().randomLogNormal(mean, stddev, shape);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable randomNormalTruncated(double mean, double stddev, long... shape){
-        return randomNormalTruncated(null, mean, stddev, shape);
-    }
-
-    public SDVariable randomNormalTruncated(String name, double mean, double stddev, long... shape){
-        SDVariable ret = f().randomNormalTruncated(mean, stddev, shape);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable randomBernoulli(double p, SDVariable shape){
-        return randomBernoulli(null, p, shape);
-    }
-
-    public SDVariable randomBernoulli(String name, double p, SDVariable shape){
-        SDVariable ret = f().randomBernoulli(p, shape);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable randomBernoulli(double p, long... shape){
-        return randomBernoulli(null, p, shape);
-    }
-
-    public SDVariable randomBernoulli(String name, double p, long... shape){
-        SDVariable ret = f().randomBernoulli(p, shape);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable randomBinomial(int nTrials, double p, long... shape){
-        return randomBinomial(null, nTrials, p, shape);
-    }
-
-    public SDVariable randomBinomial(String name, int nTrials, double p, long... shape){
-        SDVariable ret = f().randomBinomial(nTrials, p, shape);
-        return updateVariableNameAndReference(ret, name);
-    }
 
     /**
-     * Exponential distribution: P(x) = lambda * exp(-lambda * x)
-     *
-     * @param lambda Must be > 0
-     * @param shape  Shape of the output
-     */
-    public SDVariable randomExponential(double lambda, SDVariable shape) {
-        return randomExponential(null, lambda, shape);
-    }
-
-    /**
-     * Exponential distribution: P(x) = lambda * exp(-lambda * x)
-     *
-     * @param name   Name of the output variable
-     * @param lambda Must be > 0
-     * @param shape  Shape of the output
-     */
-    public SDVariable randomExponential(String name, double lambda, SDVariable shape) {
-        SDVariable ret = f().randomExponential(lambda, shape);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    /**
-     * Upsampling 2d - same scale for both dimensions. NCHW input format.
-     *
-     * @param input Input, in NCHW format
-     * @param scale Scale to upsample in both H and W dimensions
-     * @return Upsampled input
-     */
-    public SDVariable upsampling2d(SDVariable input, int scale) {
-        return upsampling2d(null, input, true, scale, scale);
-    }
-
-    /**
-     * Upsampling 2d - same scale for both dimensions. NCHW input format.
-     *
-     * @param input Input, in NCHW format
-     * @param scale Scale to upsample in both H and W dimensions
-     * @return Upsampled input
-     */
-    public SDVariable upsampling2d(String name, SDVariable input, int scale) {
-        return upsampling2d(name, input, true, scale, scale);
-    }
-
-    /**
-     * Upsampling 2d
-     *
-     * @param input  Input, in NCHW format
-     * @param nchw   If true: input is in NCHW (minibatch, channels, height, width) format. False: NHWC format
-     * @param scaleH Scale to upsample in height dimension
-     * @param scaleW Scale to upsample in width dimension
-     * @return Upsampled input
-     */
-    public SDVariable upsampling2d(SDVariable input, boolean nchw, int scaleH, int scaleW) {
-        return upsampling2d(null, input, nchw, scaleH, scaleW);
-    }
-
-    /**
-     * Upsampling 2d
-     *
-     * @param input  Input, in NCHW format
-     * @param nchw   If true: input is in NCHW (minibatch, channels, height, width) format. False: NHWC format
-     * @param scaleH Scale to upsample in height dimension
-     * @param scaleW Scale to upsample in width dimension
-     * @return Upsampled input
-     */
-    public SDVariable upsampling2d(String name, SDVariable input, boolean nchw, int scaleH, int scaleW) {
-        SDVariable ret = f().upsampling2d(input, nchw, scaleH, scaleW);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    /**
-     * Average pooling 2d operation.
-     *
-     * @param input           the input to average pooling 2d
-     * @param pooling2DConfig the configuration
-     * @return
-     */
-    public SDVariable avgPooling2d(SDVariable input, Pooling2DConfig pooling2DConfig) {
-        return avgPooling2d(null, input, pooling2DConfig);
-    }
-
-    /**
-     * Average pooling 2d operation.
-     *
-     * @param name            name of the operation in SameDiff
-     * @param input           the input to average pooling 2d
-     * @param pooling2DConfig the configuration
-     * @return
-     */
-    public SDVariable avgPooling2d(String name, SDVariable input, Pooling2DConfig pooling2DConfig) {
-        SDVariable ret = f().avgPooling2d(input, pooling2DConfig);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    /**
-     * Max pooling 2d operation.
-     *
-     * @param input           the input to max pooling 2d
-     * @param pooling2DConfig the configuration
-     * @return
-     */
-    public SDVariable maxPooling2d(SDVariable input, Pooling2DConfig pooling2DConfig) {
-        return maxPooling2d(null, input, pooling2DConfig);
-    }
-
-    /**
-     * Max pooling 2d operation.
-     *
-     * @param name            name of the operation in SameDiff
-     * @param input           the input to max pooling 2d
-     * @param pooling2DConfig the configuration
-     * @return
-     */
-    public SDVariable maxPooling2d(String name, SDVariable input, Pooling2DConfig pooling2DConfig) {
-        SDVariable ret = f().maxPooling2d(input, pooling2DConfig);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    /**
-     * Average pooling 3d operation.
-     *
-     * @param input           the input to average pooling 3d
-     * @param pooling3DConfig the configuration
-     * @return
-     */
-    public SDVariable avgPooling3d(SDVariable input, Pooling3DConfig pooling3DConfig) {
-        return avgPooling3d(null, input, pooling3DConfig);
-    }
-
-    /**
-     * Average pooling 3d operation.
-     *
-     * @param name            name of the operation in SameDiff
-     * @param input           the input to average pooling 3d
-     * @param pooling3DConfig the configuration
-     * @return
-     */
-    public SDVariable avgPooling3d(String name, SDVariable input, Pooling3DConfig pooling3DConfig) {
-        SDVariable ret = f().avgPooling3d(input, pooling3DConfig);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    /**
-     * Max pooling 3d operation.
-     *
-     * @param input           the input to max pooling 3d
-     * @param pooling3DConfig the configuration
-     * @return
-     */
-    public SDVariable maxPooling3d(SDVariable input, Pooling3DConfig pooling3DConfig) {
-        return maxPooling3d(null, input, pooling3DConfig);
-    }
-
-    /**
-     * Max pooling 3d operation.
-     *
-     * @param name            name of the operation in SameDiff
-     * @param input           the inputs to max pooling 3d
-     * @param pooling3DConfig the configuration
-     * @return
-     */
-    public SDVariable maxPooling3d(String name, SDVariable input, Pooling3DConfig pooling3DConfig) {
-        SDVariable ret = f().maxPooling3d(input, pooling3DConfig);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    /**
-     * Conv1d operation.
-     *
-     * @param input        the input array to conv1d op
-     * @param weights      weights for conv1d op
-     * @param conv1DConfig the configuration
-     * @return
-     */
-    public SDVariable conv1d(SDVariable input, SDVariable weights, Conv1DConfig conv1DConfig) {
-        return conv1d(null, input, weights, conv1DConfig);
-    }
-
-    /**
-     * Conv1d operation.
-     *
-     * @param name         name of the operation in SameDiff
-     * @param input        the inputs to conv1d
-     * @param weights      weights for conv1d op
-     * @param conv1DConfig the configuration
-     * @return
-     */
-    public SDVariable conv1d(String name, SDVariable input, SDVariable weights, Conv1DConfig conv1DConfig) {
-        SDVariable ret = f().conv1d(input, weights, conv1DConfig);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-
-    /**
-     * Local response normalization operation.
-     *
-     * @param inputs    the inputs to lrn
-     * @param lrnConfig the configuration
-     * @return
-     */
-    public SDVariable localResponseNormalization(SDVariable inputs, LocalResponseNormalizationConfig lrnConfig) {
-        return localResponseNormalization(null, inputs, lrnConfig);
-    }
-
-    /**
-     * Local response normalization operation.
-     *
-     * @param name      name of the operation in SameDiff
-     * @param input    the inputs to lrn
-     * @param lrnConfig the configuration
-     * @return
-     */
-    public SDVariable localResponseNormalization(String name, SDVariable input,
-                                                 LocalResponseNormalizationConfig lrnConfig) {
-        SDVariable ret = f().localResponseNormalization(input, lrnConfig);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    /**
-     * 2D convolution operation
-     *
-     * @param layerInput input tensor to conv 2D op
-     * @param weights conv 2D weights
-     * @param config Conv2DConfig configuration
-     * @return result of conv2d op
-     */
-    public SDVariable conv2d(SDVariable layerInput, SDVariable weights, Conv2DConfig config) {
-        return conv2d(layerInput, weights, null, config);
-    }
-
-
-    /**
-     * 2D convolution operation
-     *
-     * @param layerInput input tensor to conv 2D op
-     * @param weights conv 2D weights
-     * @param bias conv 2D bias
-     * @param config Conv2DConfig configuration
-     * @return result of conv2d op
-     */
-    public SDVariable conv2d(SDVariable layerInput, SDVariable weights, SDVariable bias, Conv2DConfig config) {
-        SDVariable[] arr = new SDVariable[bias == null ? 2 : 3];
-        arr[0] = layerInput;
-        arr[1] = weights;
-        if (bias != null)
-            arr[2] = bias;
-        return conv2d(arr, config);
-    }
-
-    /**
-     * Conv2d operation.
-     *
-     * @param inputs       the inputs to conv2d
-     * @param conv2DConfig the configuration
-     * @return
-     */
-    public SDVariable conv2d(SDVariable[] inputs, Conv2DConfig conv2DConfig) {
-        return conv2d(null, inputs, conv2DConfig);
-    }
-
-    /**
-     * Conv2d operation.
-     *
-     * @param name         name of the operation in SameDiff
-     * @param inputs       the inputs to conv2d
-     * @param conv2DConfig the configuration
-     * @return
-     */
-    public SDVariable conv2d(String name, SDVariable[] inputs, Conv2DConfig conv2DConfig) {
-        SDVariable ret = f().conv2d(inputs, conv2DConfig);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    /**
-     * Depth-wise 2D convolution operation
-     *
-     * @param layerInput input tensor to conv 2D op
-     * @param depthWeights depth-wise conv 2D weights
-     * @param config Conv2DConfig configuration
-     * @return result of conv2d op
-     */
-    public SDVariable depthWiseConv2d(SDVariable layerInput, SDVariable depthWeights, Conv2DConfig config) {
-        return depthWiseConv2d(layerInput, depthWeights, null, config);
-    }
-
-
-    /**
-     * Depth-wise 2D convolution operation
-     *
-     * @param layerInput input tensor to conv 2D op
-     * @param depthWeights depth-wise conv 2D weights
-     * @param bias conv 2D bias
-     * @param config Conv2DConfig configuration
-     * @return result of conv2d op
-     */
-    public SDVariable depthWiseConv2d(SDVariable layerInput, SDVariable depthWeights, SDVariable bias, Conv2DConfig config) {
-        SDVariable[] arr = new SDVariable[bias == null ? 2 : 3];
-        arr[0] = layerInput;
-        arr[1] = depthWeights;
-        if (bias != null)
-            arr[2] = bias;
-        return depthWiseConv2d(arr, config);
-    }
-
-
-    /**
-     * Depth-wise Conv2d operation.
-     *
-     * @param inputs            the inputs to depth-wise conv2d
-     * @param depthConv2DConfig the configuration
-     * @return
-     */
-    public SDVariable depthWiseConv2d(SDVariable[] inputs, Conv2DConfig depthConv2DConfig) {
-        return depthWiseConv2d(null, inputs, depthConv2DConfig);
-    }
-
-
-    /**
-     * Depth-wise Conv2d operation.
-     *
-     * @param name              name of the operation in SameDiff
-     * @param inputs            the inputs to sconv2d
-     * @param depthConv2DConfig the configuration
-     * @return
-     */
-    public SDVariable depthWiseConv2d(String name, SDVariable[] inputs, Conv2DConfig depthConv2DConfig) {
-        SDVariable ret = f().depthWiseConv2d(inputs, depthConv2DConfig);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-
-    /**
-     * Separable 2D convolution operation
-     *
-     * @param layerInput input tensor to conv 2D op
-     * @param depthWeights conv 2D weights
-     * @param config Conv2DConfig configuration
-     * @return result of conv2d op
-     */
-    public SDVariable separableConv2d(SDVariable layerInput, SDVariable depthWeights, SDVariable pointWeights,
-                                      Conv2DConfig config) {
-        return separableConv2d(layerInput, depthWeights, pointWeights, null, config);
-    }
-
-
-    /**
-     * Separable 2D convolution operation
-     *
-     * @param layerInput input tensor to conv 2D op
-     * @param depthWeights depth-wise conv 2D weights
-     * @param pointWeights point-wise conv 2D weights
-     * @param bias conv 2D bias
-     * @param config Conv2DConfig configuration
-     * @return result of conv2d op
-     */
-    public SDVariable separableConv2d(SDVariable layerInput, SDVariable depthWeights, SDVariable pointWeights,
-                                      SDVariable bias, Conv2DConfig config) {
-        SDVariable[] arr = new SDVariable[bias == null ? 3 : 4];
-        arr[0] = layerInput;
-        arr[1] = depthWeights;
-        arr[2] = pointWeights;
-        if (bias != null)
-            arr[3] = bias;
-        return sconv2d(arr, config);
-    }
-
-    /**
-     * Separable Conv2d operation.
-     *
-     * @param inputs       the inputs to conv2d
-     * @param conv2DConfig the configuration
-     * @return
-     */
-    public SDVariable sconv2d(SDVariable[] inputs, Conv2DConfig conv2DConfig) {
-        return sconv2d(null, inputs, conv2DConfig);
-    }
-
-
-    /**
-     * Separable Conv2d operation.
-     *
-     * @param name         name of the operation in SameDiff
-     * @param inputs       the inputs to sconv2d
-     * @param conv2DConfig the configuration
-     * @return
-     */
-    public SDVariable sconv2d(String name, SDVariable[] inputs, Conv2DConfig conv2DConfig) {
-        SDVariable ret = f().sconv2d(inputs, conv2DConfig);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-
-    /**
-     * 2D deconvolution operation
-     *
-     * @param layerInput input tensor to conv 2D op
-     * @param weights conv 2D weights
-     * @param deconv2DConfig DeConv2DConfig configuration
-     * @return result of deconv2d op
-     */
-    public SDVariable deconv2d(SDVariable layerInput, SDVariable weights, DeConv2DConfig deconv2DConfig) {
-        return deconv2d(layerInput, weights, null, deconv2DConfig);
-    }
-
-
-    /**
-     * 2D deconvolution operation
-     *
-     * @param layerInput input tensor to conv 2D op
-     * @param weights conv 2D weights
-     * @param bias conv 2D bias
-     * @param deconv2DConfig DeConv2DConfig configuration
-     * @return result of deconv2d op
-     */
-    public SDVariable deconv2d(SDVariable layerInput, SDVariable weights, SDVariable bias, DeConv2DConfig deconv2DConfig) {
-        SDVariable[] arr = new SDVariable[bias == null ? 2 : 3];
-        arr[0] = layerInput;
-        arr[1] = weights;
-        if (bias != null)
-            arr[2] = bias;
-        return deconv2d(arr, deconv2DConfig);
-    }
-
-    /**
-     * Deconv2d operation.
-     *
-     * @param inputs         the inputs to sconv2d
-     * @param deconv2DConfig the configuration
-     * @return
-     */
-    public SDVariable deconv2d(SDVariable[] inputs, DeConv2DConfig deconv2DConfig) {
-        return deconv2d(null, inputs, deconv2DConfig);
-    }
-
-
-    /**
-     * Deconv2d operation.
-     *
-     * @param name           name of the operation in SameDiff
-     * @param inputs         the inputs to sconv2d
-     * @param deconv2DConfig the configuration
-     * @return
-     */
-    public SDVariable deconv2d(String name, SDVariable[] inputs, DeConv2DConfig deconv2DConfig) {
-        SDVariable ret = f().deconv2d(inputs, deconv2DConfig);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-
-    /**
-     * Conv3d operation.
-     *
-     * @param input        the input activations to conv3d
-     * @param weights      Weights for conv3d
-     * @param conv3DConfig the configuration
-     * @return Conv3d output variable
-     */
-    public SDVariable conv3d(SDVariable input, SDVariable weights, Conv3DConfig conv3DConfig) {
-        return conv3d(null, input, weights, null, conv3DConfig);
-    }
-
-    /**
-     * Conv3d operation.
-     *
-     * @param input        the input activations to conv3d
-     * @param weights      Weights for conv3d
-     * @param bias         bias for the Conv3d op. May be null if not present/used
-     * @param conv3DConfig the configuration
-     * @return Conv3d output variable
-     */
-    public SDVariable conv3d(SDVariable input, SDVariable weights, SDVariable bias, Conv3DConfig conv3DConfig) {
-        return conv3d(null, input, weights, bias, conv3DConfig);
-    }
-
-    /**
-     * Conv3d operation.
-     *
-     * @param name         name of the operation in SameDiff
-     * @param input        the input activations to conv3d
-     * @param weights      Weights for conv3d
-     * @param conv3DConfig the configuration
-     * @return Conv3d output variable
-     */
-    public SDVariable conv3d(String name, SDVariable input, SDVariable weights, Conv3DConfig conv3DConfig) {
-        return conv3d(null, input, weights, null, conv3DConfig);
-    }
-
-    /**
-     * Conv3d operation.
-     *
-     * @param name         name of the operation in SameDiff
-     * @param input        the input activations to conv3d
-     * @param weights      Weights for conv3d
-     * @param bias         bias for the Conv3d op. May be null if not present/used
-     * @param conv3DConfig the configuration
-     * @return Conv3d output variable
-     */
-    public SDVariable conv3d(String name, SDVariable input, SDVariable weights, SDVariable bias, Conv3DConfig conv3DConfig) {
-        SDVariable[] args;
-        if (bias == null) {
-            args = new SDVariable[]{input, weights};
-        } else {
-            args = new SDVariable[]{input, weights, bias};
-        }
-        SDVariable ret = f().conv3d(args, conv3DConfig);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    /**
-     * Batch norm operation.
-     */
-    public SDVariable batchNorm(SDVariable input, SDVariable mean,
-                                SDVariable variance, SDVariable gamma,
-                                SDVariable beta,
-                                boolean applyGamma, boolean applyBeta, double epsilon) {
-        return batchNorm(null, input, mean, variance, gamma, beta, applyGamma, applyBeta, epsilon);
-    }
-
-    /**
-     * Batch norm operation.
-     */
-    public SDVariable batchNorm(String name, SDVariable input, SDVariable mean,
-                                SDVariable variance, SDVariable gamma,
-                                SDVariable beta,
-                                boolean applyGamma, boolean applyBeta, double epsilon) {
-        SDVariable res = f().batchNorm(input, mean, variance, gamma, beta, applyGamma, applyBeta, epsilon);
-        return updateVariableNameAndReference(res, name);
-    }
-
-    public SDVariable im2Col(SDVariable in, Conv2DConfig config) {
-        return im2Col(null, in, config);
-    }
-
-    public SDVariable im2Col(String name, SDVariable in, Conv2DConfig config) {
-        SDVariable ret = f().im2Col(in, config);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable col2Im(SDVariable in, Conv2DConfig config) {
-        return col2Im(null, in, config);
-    }
-
-    public SDVariable col2Im(String name, SDVariable in, Conv2DConfig config) {
-        SDVariable ret = f().col2Im(in, config);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    /**
-     * @param name
-     * @param value
-     * @return
+     * Create a new scalar (rank 0) SDVariable with the specified value
+     * @param name  Name of the SDVariable
+     * @param value Value to initialize the variable with
+     * @return SDVariable
      */
     public SDVariable scalar(String name, double value) {
-        return var(name, Nd4j.scalar(value));
+        try(MemoryWorkspace ws = Nd4j.getMemoryManager().scopeOutOfWorkspaces()) {
+            return var(name, Nd4j.scalar(value));
+        }
     }
 
 
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable gte(SDVariable iX, double iy) {
-        return gte(null, iX, iy);
-
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable lte(SDVariable iX, double iy) {
-        return lte(null, iX, iy);
-    }
-
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable gt(SDVariable iX, double iy) {
-        return gt(null, iX, iy);
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable lt(SDVariable iX, double iy) {
-        return lt(null, iX, iy);
-    }
-
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable neq(SDVariable iX, double iy) {
-        return neq(null, iX, iy);
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable eq(SDVariable iX, double iy) {
-        return eq(null, iX, iy);
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable gte(SDVariable iX, SDVariable iy) {
-        return gte(null, iX, iy);
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable lte(SDVariable iX, SDVariable iy) {
-        return lte(null, iX, iy);
-    }
-
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable gt(SDVariable iX, SDVariable iy) {
-        return gt(null, iX, iy);
-
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable lt(SDVariable iX, SDVariable iy) {
-        return lt(null, iX, iy);
-    }
-
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable neq(SDVariable iX, SDVariable iy) {
-        return neq(null, iX, iy);
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable eq(SDVariable iX, SDVariable iy) {
-        return eq(null, iX, iy);
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable or(SDVariable iX, SDVariable iy) {
-        return or(null, iX, iy);
-    }
-
-    public SDVariable and(SDVariable iX, SDVariable iY) {
-        return and(null, iX, iY);
-    }
-
-    public SDVariable and(String name, SDVariable ix, SDVariable iy) {
-        SDVariable result = f().and(ix, iy);
-        return updateVariableNameAndReference(result, name);
-    }
-
-    public SDVariable xor(SDVariable ix, SDVariable iy) {
-        return xor(null, ix, iy);
-    }
-
-    public SDVariable xor(String name, SDVariable ix, SDVariable iy) {
-        SDVariable result = f().xor(ix, iy);
-        return updateVariableNameAndReference(result, name);
-    }
-
-    public SDVariable abs(SDVariable ix) {
-        return abs(null, ix);
-    }
-
-    public SDVariable abs(String name, SDVariable ix) {
-        SDVariable result = f().abs(ix);
-        return updateVariableNameAndReference(result, name);
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable neg(SDVariable iX) {
-        return neg(null, iX);
-    }
-
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable cos(SDVariable iX) {
-        return cos(null, iX);
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable sin(SDVariable iX) {
-        return sin(null, iX);
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable tan(SDVariable iX) {
-        return tan(null, iX);
-    }
-
-    public SDVariable identity(SDVariable input) {
-        return identity(null, input);
-    }
-
-    public SDVariable identity(String name, SDVariable input) {
-        SDVariable s = f().identity(input);
-        return updateVariableNameAndReference(s, name);
-    }
-
-    public SDVariable invertPermutation(SDVariable input) {
-        return invertPermutation(null, input);
-    }
-
-    public SDVariable invertPermutation(String name, SDVariable input) {
-        SDVariable ret = f().invertPermutation(input, false);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable acos(SDVariable iX) {
-        return acos(null, iX);
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-
-    public SDVariable asin(SDVariable iX) {
-        return asin(null, iX);
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable atan(SDVariable iX) {
-        return atan(null, iX);
-    }
-
-    public SDVariable atan2(SDVariable y, SDVariable x) {
-        return atan2(null, y, x);
-    }
-
-    public SDVariable atan2(String name, SDVariable y, SDVariable x) {
-        SDVariable ret = f().atan2(y, x);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable cosh(SDVariable iX) {
-        return cosh(null, iX);
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable sinh(SDVariable iX) {
-        return sinh(null, iX);
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable tanh(SDVariable iX) {
-        return tanh(null, iX);
-    }
-
-    public SDVariable step(SDVariable in, double cutoff) {
-        return step(null, in, cutoff);
-    }
-
-    public SDVariable step(String name, SDVariable in, double cutoff) {
-        SDVariable ret = f().step(in, cutoff);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable acosh(SDVariable iX) {
-        return acosh(null, iX);
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable asinh(SDVariable iX) {
-        return asinh(null, iX);
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable atanh(SDVariable iX) {
-        return atanh(null, iX);
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable exp(SDVariable iX) {
-        return exp(null, iX);
-    }
-
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable rsqrt(SDVariable iX) {
-        return rsqrt(null, iX);
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable expm1(SDVariable iX) {
-        return expm1(null, iX);
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable log1p(SDVariable iX) {
-        return log1p(null, iX);
-    }
-
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable isInfinite(SDVariable iX) {
-        return isInfinite(null, iX);
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable isNaN(SDVariable iX) {
-        return isNaN(null, iX);
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable round(SDVariable iX) {
-        return round(null, iX);
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable isFinite(SDVariable iX) {
-        return isFinite(null, iX);
-    }
-
-    public SDVariable isMax(SDVariable ix) {
-        return isMax(null, ix);
-    }
-
-    public SDVariable isMax(String name, SDVariable ix) {
-        SDVariable ret = f().isMax(ix);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable replaceWhere(SDVariable update, SDVariable from, Condition condition) {
-        return replaceWhere(null, update, from, condition);
-    }
-
-    public SDVariable replaceWhere(String name, SDVariable update, SDVariable from, Condition condition) {
-        SDVariable ret = f().replaceWhere(update, from, condition);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable replaceWhere(SDVariable update, Number value, Condition condition) {
-        return replaceWhere(null, update, value, condition);
-    }
-
-    public SDVariable replaceWhere(String name, SDVariable to, Number value, Condition condition) {
-        SDVariable ret = f().replaceWhere(to, value, condition);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable log(SDVariable iX) {
-        return log(null, iX);
-    }
-
-    public SDVariable log(SDVariable in, double base) {
-        return log(null, in, base);
-    }
-
-    public SDVariable log(String name, SDVariable in, double base) {
-        SDVariable ret = f().log(in, base);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable logSumExp(SDVariable input, int... dimensions) {
-        return logSumExp(null, input, dimensions);
-    }
-
-    public SDVariable logSumExp(String name, SDVariable input, int... dimensions) {
-        SDVariable ret = f().logSumExp(input, dimensions);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable cube(SDVariable iX) {
-        return cube(null, iX);
-    }
-
-
-    /**
-     * @param iX
-     * @param value
-     * @return
-     */
-    public SDVariable pow(SDVariable iX, double value) {
-        return pow(null, iX, value);
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable sqrt(SDVariable iX) {
-        return sqrt(null, iX);
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable square(SDVariable iX) {
-        return square(null, iX);
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable floor(SDVariable iX) {
-        return floor(null, iX);
-    }
-
-    public SDVariable ceil(SDVariable x) {
-        return ceil(null, x);
-    }
-
-    public SDVariable ceil(String name, SDVariable x) {
-        SDVariable ret = f().ceil(x);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable clipByValue(SDVariable x, double clipValueMin, double clipValueMax) {
-        return clipByValue(null, x, clipValueMin, clipValueMax);
-    }
-
-    public SDVariable clipByValue(String name, SDVariable x, double clipValueMin, double clipValueMax) {
-        SDVariable ret = f().clipByValue(x, clipValueMin, clipValueMax);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable clipByNorm(SDVariable x, double clipValue) {
-        return clipByNorm(null, x, clipValue);
-    }
-
-    public SDVariable clipByNorm(String name, SDVariable x, double clipValue) {
-        SDVariable ret = f().clipByNorm(x, clipValue);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable clipByNorm(SDVariable x, double clipValue, int... dimensions) {
-        return clipByNorm(null, x, clipValue, dimensions);
-    }
-
-    public SDVariable clipByNorm(String name, SDVariable x, double clipValue, int... dimensions) {
-        SDVariable ret = f().clipByNorm(x, clipValue, dimensions);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable relu(SDVariable iX, double cutoff) {
-        return relu(null, iX, cutoff);
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable relu6(SDVariable iX, double cutoff) {
-        return relu6(null, iX, cutoff);
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable softmax(SDVariable iX) {
-        return softmax(null, iX);
-    }
-
-    public SDVariable logSoftmax(SDVariable iX) {
-        return logSoftmax(null, iX);
-    }
-
-    public SDVariable logSoftmax(String name, SDVariable iX) {
-        SDVariable ret = f().logSoftmax(iX);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable selu(SDVariable iX) {
-        return selu(null, iX);
-    }
-
-    public SDVariable selu(String name, SDVariable iX) {
-        SDVariable ret = f().selu(iX);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable mergeAdd(SDVariable... iX) {
-        return mergeAdd(null, iX);
-    }
-
-    public SDVariable mergeAdd(String name, SDVariable... inputs) {
-        SDVariable ret = f().mergeAdd(inputs);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable mergeMax(SDVariable... iX) {
-        return mergeMax(null, iX);
-    }
-
-    public SDVariable mergeMax(String name, SDVariable... inputs) {
-        SDVariable ret = f().mergeMax(inputs);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable mergeAvg(SDVariable... inputs) {
-        return mergeAvg(null, inputs);
-    }
-
-    public SDVariable mergeAvg(String name, SDVariable... inputs) {
-        SDVariable ret = f().mergeAvg(inputs);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable batchToSpace(SDVariable iX, int[] blocks, int[][] crops) {
-        return batchToSpace(null, iX, blocks, crops);
-    }
-
-    public SDVariable batchToSpace(String name, SDVariable iX, int[] blocks, int[][] crops) {
-        SDVariable ret = f().batchToSpace(iX, blocks, crops);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-
-    public SDVariable depthToSpace(SDVariable iX, int blockSize, String dataFormat) {
-        return depthToSpace(null, iX, blockSize, dataFormat);
-    }
-
-    public SDVariable depthToSpace(String name, SDVariable iX, int blockSize, String dataFormat) {
-        SDVariable ret = f().depthToSpace(iX, blockSize, dataFormat);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable spaceToBatch(SDVariable iX, int[] blocks, int[][] padding) {
-        return spaceToBatch(null, iX, blocks, padding);
-    }
-
-    public SDVariable spaceToBatch(String name, SDVariable iX, int[] blocks, int[][] padding) {
-        SDVariable ret = f().spaceToBatch(iX, blocks, padding);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable spaceToDepth(SDVariable iX, int blockSize, String dataFormat) {
-        return spaceToDepth(null, iX, blockSize, dataFormat);
-    }
-
-    public SDVariable spaceToDepth(String name, SDVariable iX, int blockSize, String dataFormat) {
-        SDVariable ret = f().spaceToDepth(iX, blockSize, dataFormat);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-
-    public SDVariable[] dynamicPartition(SDVariable iX, SDVariable partitions, int numPartitions) {
-        return dynamicPartition(null, iX, partitions, numPartitions);
-    }
-
-    public SDVariable[] dynamicPartition(String[] name, SDVariable iX, SDVariable partitions, int numPartitions) {
-        SDVariable[] ret = f().dynamicPartition(iX, partitions, numPartitions);
-        return updateVariableNamesAndReferences(ret, name);
-    }
-
-    public SDVariable dynamicStitch(SDVariable[] indices, SDVariable[] iX) {
-        return dynamicStitch(null, indices, iX);
-    }
-
-    public SDVariable dynamicStitch(String name, SDVariable[] indices, SDVariable[] iX) {
-        SDVariable ret = f().dynamicStitch(indices, iX);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable dilation2D(SDVariable df, SDVariable weights, int[] strides,
-                                 int[] rates, boolean isSameMode) {
-        return dilation2D(null, df, weights, strides, rates, isSameMode);
-    }
-
-    public SDVariable dilation2D(String name, SDVariable df, SDVariable weights, int[] strides,
-                                 int[] rates, boolean isSameMode) {
-        SDVariable ret = f().dilation2D(df, weights, strides, rates, isSameMode);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable shape(SDVariable df) {
-        return shape(null, df);
-    }
-
-    public SDVariable shape(String name, SDVariable df) {
-        SDVariable ret = f().shape(df);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable size(SDVariable in){
-        return size(null, in);
-    }
-
-    public SDVariable size(String name, SDVariable in){
-        SDVariable ret = f().size(in);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable rank(SDVariable in) {
-        return rank(null, in);
-    }
-
-    public SDVariable rank(String name, SDVariable in) {
-        SDVariable ret = f().rank(in);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-
-    public SDVariable cross(SDVariable a, SDVariable b) {
-        return cross(null, a, b);
-    }
-
-    public SDVariable cross(String name, SDVariable a, SDVariable b) {
-        SDVariable ret = f().cross(a, b);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable gather(SDVariable df, int[] indices, int axis) {
-        return gather(null, df, indices, axis);
-    }
-
-    public SDVariable gather(String name, SDVariable df, int[] indices, int axis) {
-        SDVariable ret = f().gather(df, indices, axis);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable gather(SDVariable df, SDVariable indices, int axis) {
-        return gather(null, df, indices, axis);
-    }
-
-    public SDVariable gather(String name, SDVariable df, SDVariable indices, int axis) {
-        SDVariable ret = f().gather(df, indices, axis);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable gatherNd(SDVariable df, SDVariable indices) {
-        return gatherNd(null, df, indices);
-    }
-
-    public SDVariable gatherNd(String name, SDVariable df, SDVariable indices) {
-        SDVariable ret = f().gatherNd(df, indices);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable repeat(SDVariable df, int axis) {
-        return repeat(null, df, axis);
-    }
-
-
-    public SDVariable repeat(String name, SDVariable df, int axis) {
-        SDVariable ret = f().repeat(df, axis);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable stack(int axis, SDVariable... values) {
-        return stack(null, axis, values);
-    }
-
-    public SDVariable stack(String name, int axis, SDVariable... values) {
-        SDVariable ret = f().stack(values, axis);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable parallel_stack(SDVariable[] values) {
-        return parallel_stack(null, values);
-    }
-
-    public SDVariable parallel_stack(String name, SDVariable[] values) {
-        SDVariable ret = f().parallel_stack(values);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable[] unstack(SDVariable value, int axis) {
-        return unstack(null, value, axis);
-    }
-
-    public SDVariable[] unstack(String[] names, SDVariable value, int axis) {
-        SDVariable[] ret = f().unstack(value, axis);
-        return updateVariableNamesAndReferences(ret, names);
-    }
-
-    public SDVariable[] unstack(SDVariable value, int axis, int num) {
-        return unstack(null, value, axis, num);
-    }
-
-    public SDVariable[] unstack(String[] names, SDVariable value, int axis, int num) {
-        SDVariable[] ret = f().unstack(value, axis, num);
-        return updateVariableNamesAndReferences(ret, names);
-    }
-
-    public SDVariable erf(SDVariable iX) {
-        return erf(null, iX);
-    }
-
-    public SDVariable erf(String name, SDVariable iX) {
-        SDVariable ret = f().erf(iX);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-
-    public SDVariable erfc(SDVariable iX) {
-        return erfc(null, iX);
-    }
-
-    public SDVariable erfc(String name, SDVariable iX) {
-        SDVariable ret = f().erfc(iX);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable diag(SDVariable iX) {
-        return diag(null, iX);
-    }
-
-    public SDVariable diag(String name, SDVariable iX) {
-        SDVariable ret = f().diag(iX);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable diagPart(SDVariable iX) {
-        return diagPart(null, iX);
-    }
-
-    public SDVariable diagPart(String name, SDVariable iX) {
-        SDVariable ret = f().diagPart(iX);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable setDiag(SDVariable in, SDVariable diag) {
-        return setDiag(null, in, diag);
-    }
-
-    public SDVariable setDiag(String name, SDVariable in, SDVariable diag) {
-        SDVariable ret = f().setDiag(in, diag);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable oneHot(SDVariable indices, int depth) {
-        return oneHot(null, indices, depth, -1, 1.00, 0.00);
-    }
-
-    public SDVariable oneHot(SDVariable indices, int depth, int axis, double on, double off) {
-        return oneHot(null, indices, depth, axis, on, off);
-    }
-
-    public SDVariable oneHot(String name, SDVariable indices, int depth) {
-        return oneHot(name, indices, depth, -1, 1.00, 0.00);
-    }
-
-    public SDVariable oneHot(String name, SDVariable indices, int depth, int axis, double on, double off) {
-        SDVariable ret = f().onehot(indices, depth, axis, on, off);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable reciprocal(SDVariable a) {
-        return reciprocal(null, a);
-    }
-
-    public SDVariable reciprocal(String name, SDVariable a) {
-        SDVariable ret = f().reciprocal(a);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable gradientBackwardsMarker(SDVariable iX) {
-        return gradientBackwardsMarker(generateNewVarName(new GradientBackwardsMarker().opName(), 0), iX);
-    }
-
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable hardTanh(SDVariable iX) {
-        return hardTanh(null, iX);
-    }
-
-    public SDVariable hardSigmoid(SDVariable in) {
-        return hardSigmoid(null, in);
-    }
-
-    public SDVariable hardSigmoid(String name, SDVariable in) {
-        SDVariable ret = f().hardSigmoid(in);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable hardTanhDerivative(SDVariable iX) {
-        return hardTanhDerivative(null, iX);
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable sigmoid(SDVariable iX) {
-        return sigmoid(null, iX);
-    }
-
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable sigmoidDerivative(SDVariable iX, SDVariable wrt) {
-        return sigmoidDerivative(null, iX, wrt);
-    }
-
-    public SDVariable logSigmoid(SDVariable iX) {
-        return logSigmoid(null, iX);
-    }
-
-    public SDVariable logSigmoid(String name, SDVariable iX) {
-        SDVariable ret = f().logSigmoid(iX);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable sign(SDVariable iX) {
-        return sign(null, iX);
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable softsign(SDVariable iX) {
-        return softsign(null, iX);
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable softsignDerivative(SDVariable iX) {
-        return softsignDerivative(null, iX);
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable softplus(SDVariable iX) {
-        return softplus(null, iX);
-    }
-
-    public SDVariable swish(SDVariable iX) {
-        return swish(null, iX);
-    }
-
-    public SDVariable swish(String name, SDVariable iX) {
-        SDVariable ret = f().swish(iX);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable elu(SDVariable iX) {
-        return elu(null, iX);
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable eluDerivative(SDVariable iX) {
-        return eluDerivative(null, iX);
-    }
-
-    /**
-     * @param iX
-     * @param cutoff
-     * @return
-     */
-    public SDVariable leakyRelu(SDVariable iX, double cutoff) {
-        return leakyRelu(null, iX, cutoff);
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable mean(SDVariable iX) {
-        return mean(null, iX);
-    }
-
-
-    /**
-     * @param iX
-     * @param dimension
-     * @return
-     */
-    public SDVariable mean(SDVariable iX, int... dimension) {
-        return mean(null, iX, dimension);
-    }
-
-    /**
-     * @param iX
-     * @param biasCorrected
-     * @param dimensions
-     * @return
-     */
-    public SDVariable standardDeviation(SDVariable iX,
-                                        boolean biasCorrected,
-                                        int... dimensions) {
-        return standardDeviation(null, iX, biasCorrected, dimensions);
-    }
-
-    /**
-     * @param iX
-     * @param biasCorrected
-     * @param dimensions
-     * @return
-     */
-    public SDVariable variance(SDVariable iX,
-                               boolean biasCorrected,
-                               int... dimensions) {
-        return variance(null, iX, biasCorrected, dimensions);
-    }
-
-    /**
-     * Entropy reduction: -sum(x * log(x))
-     *
-     * @param in         Input
-     * @param dimensions Dimensions to reduce on (null for full array)
-     * @return Output variable
-     */
-    public SDVariable entropy(SDVariable in, int... dimensions) {
-        return entropy(null, in, dimensions);
-    }
-
-    /**
-     * Entropy reduction: -sum(x * log(x))
-     *
-     * @param in         Input
-     * @param dimensions Dimensions to reduce on (null for full array)
-     * @return Output variable
-     */
-    public SDVariable entropy(String name, SDVariable in, int... dimensions) {
-        SDVariable ret = f().entropy(in, dimensions);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    /**
-     * Log entropy reduction: log(-sum(x * log(x)))
-     *
-     * @param in         Input
-     * @param dimensions Dimensions to reduce on (null for full array)
-     * @return Output variable
-     */
-    public SDVariable logEntropy(SDVariable in, int... dimensions) {
-        return logEntropy(null, in, dimensions);
-    }
-
-    /**
-     * Log entropy reduction: log(-sum(x * log(x)))
-     *
-     * @param in         Input
-     * @param dimensions Dimensions to reduce on (null for full array)
-     * @return Output variable
-     */
-    public SDVariable logEntropy(String name, SDVariable in, int... dimensions) {
-        SDVariable ret = f().logEntropy(in, dimensions);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    /**
-     * @param iX
-     * @param dimensions
-     * @return
-     */
-    public SDVariable sum(SDVariable iX, int... dimensions) {
-        return sum(null, iX, dimensions);
-    }
-
-    public SDVariable sum(SDVariable iX, boolean keepDims, int... dimensions) {
-        return sum(null, iX, keepDims, dimensions);
-    }
-
-
-
-    /**
-     * @param iX
-     * @param dimensions
-     * @return
-     */
-    public SDVariable prod(SDVariable iX, int... dimensions) {
-        return prod(null, iX, dimensions);
-    }
-
-
-    public SDVariable scalarMax(SDVariable in, Number value) {
-        return scalarMax(null, in, value);
-    }
-
-    public SDVariable scalarMax(String name, SDVariable in, Number value) {
-        SDVariable ret = f().scalarMax(in, value);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable scalarMin(SDVariable in, Number value) {
-        return scalarMin(null, in, value);
-    }
-
-    public SDVariable scalarMin(String name, SDVariable in, Number value) {
-        SDVariable ret = f().scalarMin(in, value);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable scalarFloorMod(SDVariable in, Number value) {
-        return scalarFloorMod(null, in, value);
-    }
-
-    public SDVariable scalarFloorMod(String name, SDVariable in, Number value) {
-        SDVariable ret = f().scalarFloorMod(in, value);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable scalarSet(SDVariable in, Number set) {
-        return scalarSet(null, in, set);
-    }
-
-    public SDVariable scalarSet(String name, SDVariable in, Number set) {
-        SDVariable ret = f().scalarSet(in, set);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-
-    /**
-     * @param iX
-     * @param dimensions
-     * @return
-     */
-    public SDVariable max(SDVariable iX, int... dimensions) {
-        return max(null, iX, dimensions);
-    }
-
-    public SDVariable max(SDVariable first, SDVariable second) {
-        return max(null, first, second);
-    }
-
-    public SDVariable max(String name, SDVariable first, SDVariable second) {
-        SDVariable result = f().max(first, second);
-        return updateVariableNameAndReference(result, name);
-    }
-
-    public SDVariable amax(SDVariable in, int... dimensions) {
-        return amax(null, in, dimensions);
-    }
-
-    public SDVariable amax(String name, SDVariable in, int... dimensions) {
-        SDVariable ret = f().amax(in, dimensions);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable amin(SDVariable in, int... dimensions) {
-        return amin(null, in, dimensions);
-    }
-
-    public SDVariable amin(String name, SDVariable in, int... dimensions) {
-        SDVariable ret = f().amin(in, dimensions);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable amean(SDVariable in, int... dimensions) {
-        return amean(null, in, dimensions);
-    }
-
-    public SDVariable amean(String name, SDVariable in, int... dimensions) {
-        SDVariable ret = f().amean(in, dimensions);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable asum(SDVariable in, int... dimensions) {
-        return asum(null, in, dimensions);
-    }
-
-    public SDVariable asum(String name, SDVariable in, int... dimensions) {
-        SDVariable ret = f().asum(in, dimensions);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable countZero(SDVariable input, int... dimensions) {
-        return countZero(null, input, dimensions);
-    }
-
-    public SDVariable countZero(String name, SDVariable input, int... dimensions) {
-        SDVariable res = f().countZero(input, dimensions);
-        return updateVariableNameAndReference(res, name);
-    }
-
-    public SDVariable zeroFraction(SDVariable input) {
-        return zeroFraction(null, input);
-    }
-
-    public SDVariable zeroFraction(String name, SDVariable input) {
-        SDVariable res = f().zeroFraction(input);
-        return updateVariableNameAndReference(res, name);
-    }
-
-    public SDVariable countNonZero(SDVariable input, int... dimensions) {
-        return countNonZero(null, input, dimensions);
-    }
-
-    public SDVariable countNonZero(String name, SDVariable input, int... dimensions) {
-        SDVariable res = f().countNonZero(input, dimensions);
-        return updateVariableNameAndReference(res, name);
-    }
-
-    /**
-     * @param iX
-     * @param dimensions
-     * @return
-     */
-    public SDVariable min(SDVariable iX, int... dimensions) {
-        return min(null, iX, dimensions);
-    }
-
-    public SDVariable min(SDVariable first, SDVariable second) {
-        return min(null, first, second);
-    }
-
-    public SDVariable min(String name, SDVariable first, SDVariable second) {
-        SDVariable result = f().min(first, second);
-        return updateVariableNameAndReference(result, name);
-    }
-
-    public SDVariable argmax(SDVariable in, int... dimensions) {
-        return argmax(null, in, false, dimensions);
-    }
-
-    public SDVariable argmax(SDVariable in, boolean keepDims, int... dimensions) {
-        return argmax(null, in, dimensions);
-    }
-
-    public SDVariable argmax(String name, SDVariable in, int... dimensions) {
-        return argmax(name, in, false, dimensions);
-    }
-
-    public SDVariable argmax(String name, SDVariable in, boolean keepDims, int... dimensions) {
-        SDVariable ret = f().argmax(in, keepDims, dimensions);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable argmin(SDVariable in, int... dimensions) {
-        return argmin(null, in, dimensions);
-    }
-
-    public SDVariable argmin(SDVariable in, boolean keepDims, int... dimensions) {
-        return argmin(null, in, keepDims, dimensions);
-    }
-
-    public SDVariable argmin(String name, SDVariable in, int... dimensions) {
-        return argmin(name, in, false, dimensions);
-    }
-
-    public SDVariable argmin(String name, SDVariable in, boolean keepDims, int... dimensions) {
-        SDVariable ret = f().argmin(in, keepDims, dimensions);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable iamax(SDVariable in, int... dimensions) {
-        return iamax(null, in, dimensions);
-    }
-
-    public SDVariable iamax(SDVariable in, boolean keepDims, int... dimensions) {
-        return iamax(null, in, keepDims, dimensions);
-    }
-
-    public SDVariable iamax(String name, SDVariable in, int... dimensions) {
-        return iamax(name, in, false, dimensions);
-    }
-
-    public SDVariable iamax(String name, SDVariable in, boolean keepDims, int... dimensions) {
-        SDVariable ret = f().iamax(in, keepDims, dimensions);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable iamin(SDVariable in, int... dimensions) {
-        return iamin(null, in, dimensions);
-    }
-
-    public SDVariable iamin(SDVariable in, boolean keepDims, int... dimensions) {
-        return iamin(null, in, keepDims, dimensions);
-    }
-
-    public SDVariable iamin(String name, SDVariable in, int... dimensions) {
-        return iamin(name, in, false, dimensions);
-    }
-
-    public SDVariable iamin(String name, SDVariable in, boolean keepDims, int... dimensions) {
-        SDVariable ret = f().iamin(in, keepDims, dimensions);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable firstIndex(SDVariable in, Condition condition, int... dimensions) {
-        return firstIndex(null, in, condition, dimensions);
-    }
-
-    public SDVariable firstIndex(SDVariable in, Condition condition, boolean keepDims, int... dimensions){
-        return firstIndex(null, in, condition, keepDims, dimensions);
-    }
-
-    public SDVariable firstIndex(String name, SDVariable in, Condition condition, int... dimensions) {
-        return firstIndex(name, in, condition, false, dimensions);
-    }
-
-    public SDVariable firstIndex(String name, SDVariable in, Condition condition, boolean keepDims, int... dimensions){
-        SDVariable ret = f().firstIndex(in, condition, keepDims, dimensions);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable lastIndex(SDVariable in, Condition condition, int... dimensions) {
-        return lastIndex(null, in, condition, dimensions);
-    }
-
-    public SDVariable lastIndex(SDVariable in, Condition condition, boolean keepDims, int... dimensions){
-        return lastIndex(null, in, condition, keepDims, dimensions);
-    }
-
-    public SDVariable lastIndex(String name, SDVariable in, Condition condition, int... dimensions) {
-        return lastIndex(name, in, condition, false, dimensions);
-    }
-
-    public SDVariable lastIndex(String name, SDVariable in, Condition condition, boolean keepDims, int... dimensions){
-        SDVariable ret = f().lastIndex(in, condition, keepDims, dimensions);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    /**
-     * Returns a count of the number of elements that satisfy the condition
-     * @param in        Input
-     * @param condition Condition
-     * @return          Number of elements that the condition is satisfied for
-     */
-    public SDVariable matchConditionCount(SDVariable in, Condition condition) {
-        return matchConditionCount(null, in, condition);
-    }
-
-    /**
-     * Returns a count of the number of elements that satisfy the condition
-     * @param in        Input
-     * @param condition Condition
-     * @return          Number of elements that the condition is satisfied for
-     */
-    public SDVariable matchConditionCount(String name, SDVariable in, Condition condition) {
-        return matchConditionCount(name, in, condition, false);
-    }
-
-    /**
-     * Returns a count of the number of elements that satisfy the condition
-     * @param in        Input
-     * @param condition Condition
-     * @return          Number of elements that the condition is satisfied for
-     */
-    public SDVariable matchConditionCount(String name, SDVariable in, Condition condition, boolean keepDim, int... dimensions) {
-        SDVariable ret = f().matchConditionCount(in, condition, keepDim, dimensions);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    /**
-     * Returns a boolean mask of equal shape to the input, where the condition is satisfied
-     * @param in        Input
-     * @param condition Condition
-     * @return          Boolean mask
-     */
-    public SDVariable matchCondition(SDVariable in, Condition condition){
-        return matchCondition(null, in, condition);
-    }
-
-    /**
-     * Returns a boolean mask of equal shape to the input, where the condition is satisfied
-     * @param in        Input
-     * @param condition Condition
-     * @return          Boolean mask
-     */
-    public SDVariable matchCondition(String name, SDVariable in, Condition condition){
-        SDVariable ret = f().matchCondition(in, condition);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable cumsum(SDVariable in, SDVariable axis, boolean exclusive, boolean reverse) {
-        return cumsum(null, in, axis, exclusive, reverse);
-    }
-
-    public SDVariable cumsum(String name, SDVariable in, SDVariable axis, boolean exclusive, boolean reverse) {
-        SDVariable ret = f().cumsum(in, axis, exclusive, reverse);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable cumprod(SDVariable in, SDVariable axis, boolean exclusive, boolean reverse) {
-        return cumprod(null, in, axis, exclusive, reverse);
-    }
-
-    public SDVariable cumprod(String name, SDVariable in, SDVariable axis, boolean exclusive, boolean reverse) {
-        SDVariable ret = f().cumprod(in, axis, exclusive, reverse);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable biasAdd(SDVariable input, SDVariable bias) {
-        return biasAdd(null, input, bias);
-    }
-
-    public SDVariable biasAdd(String name, SDVariable input, SDVariable bias) {
-        SDVariable ret = f().biasAdd(input, bias);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    /**
-     * @param iX
-     * @param shape
-     * @return
-     */
-    public SDVariable reshape(SDVariable iX, int... shape) {
-        return reshape(null, iX, shape);
-    }
-
-    public SDVariable reshape(SDVariable iX, SDVariable shape) {
-        return reshape(null, iX, shape);
-    }
-
-
-    /**
-     * @param x
-     * @param dimensions
-     * @return
-     */
-    public SDVariable reverse(SDVariable x, int... dimensions) {
-        return reverse(null, x, dimensions);
-    }
-
-    /**
-     * @param x
-     * @param dimensions
-     * @return
-     */
-    public SDVariable reverse(String name, SDVariable x, int... dimensions) {
-        SDVariable ret = f().reverse(x, dimensions);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable reverseSequence(String name, SDVariable x, SDVariable seq_lengths, int seqDim, int batchDim) {
-        SDVariable ret = f().reverseSequence(x, seq_lengths, seqDim, batchDim);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable reverseSequence(String name, SDVariable x, SDVariable seq_lengths) {
-        SDVariable ret = f().reverseSequence(x, seq_lengths);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable reverseSequence(SDVariable x, SDVariable seq_lengths, int seqDim, int batchDim) {
-        return reverseSequence(null, x, seq_lengths, seqDim, batchDim);
-    }
-
-    public SDVariable reverseSequence(SDVariable x, SDVariable seq_lengths) {
-        return reverseSequence(null, x, seq_lengths);
-    }
-
-    public SDVariable sequenceMask(String name, SDVariable lengths, SDVariable maxLen) {
-        SDVariable ret = f().sequenceMask(lengths, maxLen);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable sequenceMask(SDVariable lengths, SDVariable maxLen) {
-        return sequenceMask(null, lengths, maxLen);
-    }
-
-    public SDVariable sequenceMask(String name, SDVariable lengths, int maxLen) {
-        SDVariable ret = f().sequenceMask(lengths, maxLen);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable sequenceMask(SDVariable lengths, int maxLen) {
-        return sequenceMask(null, lengths, maxLen);
-    }
-
-    public SDVariable sequenceMask(String name, SDVariable lengths) {
-        SDVariable ret = f().sequenceMask(lengths);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable sequenceMask(SDVariable lengths) {
-        SDVariable ret = f().sequenceMask(lengths);
-        return updateVariableNameAndReference(ret, null);
-    }
-
-    public SDVariable assign(SDVariable x, SDVariable y) {
-        return assign(null, x, y);
-    }
-
-    public SDVariable assign(String name, SDVariable x, SDVariable y) {
-        SDVariable ret = f().assign(x, y);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable assign(SDVariable in, Number value) {
-        return assign(null, in, value);
-    }
-
-    public SDVariable assign(String name, SDVariable in, Number value) {
-        SDVariable ret = f().assign(in, value);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable transpose(SDVariable iX) {
-        return transpose(null, iX);
-    }
-
-    /**
-     * @param iX
-     * @param dimensions
-     * @return
-     */
-    public SDVariable permute(SDVariable iX, int... dimensions) {
-        return permute(null, iX, dimensions);
-    }
-
-    /**
-     * @param x
-     * @param axis
-     * @return
-     */
-    public SDVariable rollAxis(SDVariable x, int axis) {
-        return rollAxis(null, x, axis);
-    }
-
-    /**
-     * @param dimension
-     * @param inputs
-     * @return
-     */
-    public SDVariable concat(int dimension, SDVariable... inputs) {
-        return concat(null, dimension, inputs);
-    }
-
-    public SDVariable[] moments(SDVariable input, int... axes) {
-        return moments(null, input, axes);
-    }
-
-    public SDVariable[] moments(String[] name, SDVariable input, int... axes) {
-        SDVariable[] res = f().moments(input, axes);
-        return updateVariableNamesAndReferences(res, name);
-    }
-
-    public SDVariable[] normalizeMoments(SDVariable counts, SDVariable means, SDVariable variances, double shift) {
-        return normalizeMoments(null, counts, means, variances, shift);
-    }
-
-    public SDVariable[] normalizeMoments(String[] name, SDVariable counts, SDVariable means, SDVariable variances,
-                                         double shift) {
-        SDVariable[] res = f().normalizeMoments(counts, means, variances, shift);
-        return updateVariableNamesAndReferences(res, name);
-    }
-
-    /**
-     * @param iX
-     * @param repeat
-     * @return
-     */
-    public SDVariable tile(SDVariable iX, int[] repeat) {
-        return tile(null, iX, repeat);
-    }
-
-    public SDVariable fill(SDVariable shape, double value) {
-        return fill(null, shape, value);
-    }
-
-
-    /**
-     *
-     * @param input                  Input
-     * @param inputRetainProbability Probability of retaining an input (set to 0 with probability 1-p)
-     * @return
-     */
-    public SDVariable dropout(SDVariable input, double inputRetainProbability) {
-        return dropout(null, input, inputRetainProbability);
-    }
-
-    /**
-     *
-     * @param input                  Input
-     * @param inputRetainProbability Probability of retaining an input (set to 0 with probability 1-p)
-     * @return
-     */
-    public SDVariable dropout(String name, SDVariable input, double inputRetainProbability) {
-        SDVariable res = f().dropout(input, inputRetainProbability);
-        return updateVariableNameAndReference(res, name);
-    }
-
-
-    public SDVariable xwPlusB(SDVariable input, SDVariable weights, SDVariable bias) {
-        return xwPlusB(null, input, weights, bias);
-    }
-
-    public SDVariable xwPlusB(String name, SDVariable input, SDVariable weights, SDVariable bias) {
-        SDVariable res = f().xwPlusB(input, weights, bias);
-        return updateVariableNameAndReference(res, name);
-    }
-
-
-    public SDVariable reluLayer(SDVariable input, SDVariable weights, SDVariable bias) {
-        return reluLayer(null, input, weights, bias);
-    }
-
-    public SDVariable reluLayer(String name, SDVariable input, SDVariable weights, SDVariable bias) {
-        SDVariable res = f().reluLayer(input, weights, bias);
-        return updateVariableNameAndReference(res, name);
-    }
-
-    /**
-     * @param x
-     * @param y
-     * @param transpose
-     * @return
-     */
-    public SDVariable mmul(SDVariable x, SDVariable y, MMulTranspose transpose) {
-        return mmul(null, x, y, transpose);
-
-    }
-
-    /**
-     * @param x
-     * @param y
-     * @return
-     */
-    public SDVariable mmul(SDVariable x, SDVariable y) {
-        return mmul(null, x, y);
-    }
-
-
-
-    /**
-     * Matrix multiply a batch of matrices. matricesA and matricesB have to be arrays of same
-     * length and each pair taken from these sets has to have dimensions (M, N) and (N, K),
-     * respectively. If transposeA is true, matrices from matricesA will have shape (N, M) instead.
-     * Likewise, if transposeB is true, matrices from matricesB will have shape (K, N).
-     *
-     *
-     * The result of this operation will be a batch of multiplied matrices. The
-     * result has the same length as both input batches and each output matrix is of shape (M, K).
-     *
-     * @param matricesA First array of input matrices, all of shape (M, N) or (N, M)
-     * @param matricesB Second array of input matrices, all of shape (N, K) or (K, N)
-     * @param transposeA whether first batch of matrices is transposed.
-     * @param transposeB whether second batch of matrices is transposed.
-     * @param names names for all provided SDVariables
-     *
-     * @return Array of multiplied SDVariables of shape (M, K)
-     */
-    public SDVariable[] batchMmul(String[] names, SDVariable[] matricesA, SDVariable[] matricesB,
-                                boolean transposeA, boolean transposeB) {
-        SDVariable[] result = functionFactory.batchMmul(matricesA, matricesB, transposeA, transposeB);
-        return updateVariableNamesAndReferences(result, names);
-    }
-
-
-    /**
-     * Matrix multiply a batch of matrices. matricesA and matricesB have to be arrays of same
-     * length and each pair taken from these sets has to have dimensions (M, N) and (N, K),
-     * respectively. If transposeA is true, matrices from matricesA will have shape (N, M) instead.
-     * Likewise, if transposeB is true, matrices from matricesB will have shape (K, N).
-     *
-     *
-     * The result of this operation will be a batch of multiplied matrices. The
-     * result has the same length as both input batches and each output matrix is of shape (M, K).
-     *
-     * @param matricesA First array of input matrices, all of shape (M, N) or (N, M)
-     * @param matricesB Second array of input matrices, all of shape (N, K) or (K, N)
-     * @param transposeA whether first batch of matrices is transposed.
-     * @param transposeB whether second batch of matrices is transposed.
-     *
-     * @return Array of multiplied SDVariables of shape (M, K)
-     */
-    public SDVariable[] batchMmul(SDVariable[] matricesA, SDVariable[] matricesB,
-                                  boolean transposeA, boolean transposeB) {
-        return batchMmul(null, matricesA, matricesB, transposeA, transposeB);
-    }
-
-    /**
-     * Matrix multiply a batch of matrices. matricesA and matricesB have to be arrays of same
-     * length and each pair taken from these sets has to have dimensions (M, N) and (N, K),
-     * respectively. The result of this operation will be a batch of multiplied matrices. The
-     * result has the same length as both input batches and each output matrix is of shape (M, K).
-     *
-     * @param matricesA First array of input matrices, all of shape (M, N)
-     * @param matricesB Second array of input matrices, all of shape (N, K)
-     * @return Array of multiplied SDVariables of shape (M, K)
-     */
-    public SDVariable[] batchMmul(SDVariable[] matricesA, SDVariable[] matricesB) {
-        return batchMmul(null, matricesA, matricesB, false, false);
-    }
-
-
-    /**
-     * @param x
-     * @param y
-     * @param dimensions
-     * @return
-     */
-    public SDVariable tensorMmul(SDVariable x,
-                                 SDVariable y,
-                                 int[][] dimensions) {
-        return tensorMmul(null, x, y, dimensions);
-    }
-
-
-    public SDVariable dot(SDVariable x, SDVariable y, int... dimensions) {
-        return dot(null, x, y, dimensions);
-    }
-
-    public SDVariable dot(String name, SDVariable x, SDVariable y, int... dimensions) {
-        SDVariable ret = f().dot(x, y, dimensions);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    /**
-     * @param iX
-     * @param i_y
-     * @param dimensions
-     * @return
-     */
-    public SDVariable cosineSimilarity(SDVariable iX, SDVariable i_y, int... dimensions) {
-        return cosineSimilarity(generateNewVarName(CosineSimilarity.OP_NAME, 0), iX, i_y, dimensions);
-    }
-
-    /**
-     * @param iX
-     * @param i_y
-     * @param dimensions
-     * @return
-     */
-    public SDVariable euclideanDistance(SDVariable iX, SDVariable i_y, int... dimensions) {
-        return euclideanDistance(generateNewVarName(EuclideanDistance.OP_NAME, 0), iX, i_y, dimensions);
-    }
-
-    /**
-     * @param iX
-     * @param i_y
-     * @param dimensions
-     * @return
-     */
-    public SDVariable manhattanDistance(SDVariable iX, SDVariable i_y, int... dimensions) {
-        return manhattanDistance(generateNewVarName(ManhattanDistance.OP_NAME, 0), iX, i_y, dimensions);
-    }
-
-    public SDVariable cosineDistance(SDVariable ix, SDVariable iy, int... dimensions) {
-        return cosineDistance(null, ix, iy, dimensions);
-    }
-
-    public SDVariable cosineDistance(String name, SDVariable ix, SDVariable iy, int... dimensions) {
-        SDVariable result = functionFactory.cosineDistance(ix, iy, dimensions);
-        return updateVariableNameAndReference(result, name);
-    }
-
-    public SDVariable hammingDistance(SDVariable ix, SDVariable iy, int... dimensions) {
-        return hammingDistance(null, ix, iy, dimensions);
-    }
-
-    public SDVariable hammingDistance(String name, SDVariable ix, SDVariable iy, int... dimensions) {
-        SDVariable result = functionFactory.hammingDistance(ix, iy, dimensions);
-        return updateVariableNameAndReference(result, name);
-    }
-
-    public SDVariable jaccardDistance(SDVariable ix, SDVariable iy, int... dimensions) {
-        return jaccardDistance(null, ix, iy, dimensions);
-    }
-
-    public SDVariable jaccardDistance(String name, SDVariable ix, SDVariable iy, int... dimensions) {
-        SDVariable result = functionFactory.jaccardDistance(ix, iy, dimensions);
-        return updateVariableNameAndReference(result, name);
-    }
-
-    /**
-     * @param iX
-     * @param i_y
-     * @param dimensions
-     * @return
-     */
-    public SDVariable lossBinaryXENT(SDVariable iX, SDVariable i_y, int... dimensions) {
-        return lossBinaryXENT(generateNewVarName(new LossBinaryXENT().opName(), 0), iX, i_y, dimensions);
-    }
-
-    /**
-     * @param iX
-     * @param i_y
-     * @param dimensions
-     * @return
-     */
-    public SDVariable lossCosineSimilarity(SDVariable iX, SDVariable i_y, int... dimensions) {
-        return lossCosineSimilarity(generateNewVarName(new LossCosineProximity().opName(), 0), iX, i_y, dimensions);
-    }
-
-    /**
-     * @param iX
-     * @param i_y
-     * @param dimensions
-     * @return
-     */
-    public SDVariable lossHinge(SDVariable iX, SDVariable i_y, int... dimensions) {
-        return lossHinge(generateNewVarName(new LossHinge().opName(), 0), iX, i_y, dimensions);
-
-    }
-
-    /**
-     * @param iX
-     * @param i_y
-     * @param dimensions
-     * @return
-     */
-    public SDVariable lossKLD(SDVariable iX, SDVariable i_y, int... dimensions) {
-        return lossKLD(generateNewVarName(new LossKLD().opName(), 0), iX, i_y, dimensions);
-
-    }
-
-    /**
-     * @param iX
-     * @param i_y
-     * @param dimensions
-     * @return
-     */
-    public SDVariable lossL1(SDVariable iX, SDVariable i_y, int... dimensions) {
-        return lossL1(generateNewVarName(new LossL1().opName(), 0), iX, i_y, dimensions);
-
-    }
-
-    /**
-     * @param iX
-     * @param i_y
-     * @param dimensions
-     * @return
-     */
-    public SDVariable lossL2(SDVariable iX, SDVariable i_y, int... dimensions) {
-        return lossL2(generateNewVarName(new LossL2().opName(), 0), iX, i_y, dimensions);
-
-    }
-
-    /**
-     * @param iX
-     * @param i_y
-     * @param dimensions
-     * @return
-     */
-    public SDVariable lossMAE(SDVariable iX, SDVariable i_y, int... dimensions) {
-        return lossMAE(generateNewVarName(new LossMAE().opName(), 0), iX, i_y, dimensions);
-
-    }
-
-    /**
-     * @param iX
-     * @param i_y
-     * @param dimensions
-     * @return
-     */
-    public SDVariable lossMSE(SDVariable iX, SDVariable i_y, int... dimensions) {
-        return lossMSE(generateNewVarName(new LossMSE().opName(), 0), iX, i_y, dimensions);
-
-    }
-
-    /**
-     * @param iX
-     * @param i_y
-     * @param dimensions
-     * @return
-     */
-    public SDVariable lossMCXENT(SDVariable iX, SDVariable i_y, int... dimensions) {
-        return lossMCXENT(generateNewVarName(new LossMCXENT().opName(), 0), iX, i_y, dimensions);
-
-    }
-
-    /**
-     * @param iX
-     * @param i_y
-     * @param dimensions
-     * @return
-     */
-    public SDVariable lossMSLE(SDVariable iX, SDVariable i_y, int... dimensions) {
-        return lossMSLE(generateNewVarName(new LossMSLE().opName(), 0), iX, i_y, dimensions);
-
-    }
-
-    /**
-     * @param iX
-     * @param i_y
-     * @param dimensions
-     * @return
-     */
-    public SDVariable lossNegativeLogLikelihood(SDVariable iX, SDVariable i_y, int... dimensions) {
-        return lossNegativeLogLikelihood(generateNewVarName(new LossNegativeLogLikelihood().opName(), 0), iX, i_y, dimensions);
-
-    }
-
-    /**
-     * @param iX
-     * @param i_y
-     * @param dimensions
-     * @return
-     */
-    public SDVariable lossPoisson(SDVariable iX, SDVariable i_y, int... dimensions) {
-        return lossPoisson(generateNewVarName(new LossPoisson().opName(), 0), iX, i_y, dimensions);
-
-    }
-
-
-    /**
-     * @param iX
-     * @param i_y
-     * @param dimensions
-     * @return
-     */
-    public SDVariable lossSquaredHinge(SDVariable iX, SDVariable i_y, int... dimensions) {
-        return lossSquaredHinge(generateNewVarName(new LossSquaredHinge().opName(), 0), iX, i_y, dimensions);
-    }
-
-
-    /**
-     * @param name
-     * @param iX
-     * @return
-     */
-    public SDVariable gradientBackwardsMarker(String name, SDVariable iX) {
-        SDVariable result = functionFactory.gradientBackwardsMarker(iX);
-        return updateVariableNameAndReference(result, name);
-    }
-
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable neq(String name, SDVariable iX, double iy) {
-        SDVariable result = functionFactory.neq(iX, iy);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable eq(String name, SDVariable iX, double iy) {
-        SDVariable result = functionFactory.eq(iX, iy);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable gte(String name, SDVariable iX, double iy) {
-        SDVariable result = functionFactory.gte(iX, iy);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable lte(String name, SDVariable iX, double iy) {
-        SDVariable result = functionFactory.lte(iX, iy);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable gt(String name, SDVariable iX, double iy) {
-        SDVariable result = functionFactory.gt(iX, iy);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable lt(String name, SDVariable iX, double iy) {
-        SDVariable result = functionFactory.lt(iX, iy);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable neq(String name, SDVariable iX, SDVariable iy) {
-        SDVariable result = functionFactory.neq(iX, iy);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable eq(String name, SDVariable iX, SDVariable iy) {
-        SDVariable result = functionFactory.eq(iX, iy);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable gte(String name, SDVariable iX, SDVariable iy) {
-        SDVariable result = functionFactory.gte(iX, iy);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable lte(String name, SDVariable iX, SDVariable iy) {
-        SDVariable result = functionFactory.lte(iX, iy);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable gt(String name, SDVariable iX, SDVariable iy) {
-        SDVariable result = functionFactory.gt(iX, iy);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable lt(String name, SDVariable iX, SDVariable iy) {
-        SDVariable result = functionFactory.lt(iX, iy);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable or(String name, SDVariable iX, SDVariable iy) {
-        SDVariable result = functionFactory.or(iX, iy);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable neg(String name, SDVariable iX) {
-        SDVariable result = functionFactory.neg(iX);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable isNonDecreasing(SDVariable iX) {
-        return isNonDecreasing(null, iX);
-
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable isNonDecreasing(String name, SDVariable iX) {
-        SDVariable result = functionFactory.isNonDecreasing(iX);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable isStrictlyIncreasing(SDVariable iX) {
-        return isStrictlyIncreasing(null, iX);
-
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable isStrictlyIncreasing(String name, SDVariable iX) {
-        SDVariable result = functionFactory.isStrictlyIncreasing(iX);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-    /**
-     * @param
-     * @return
-     */
-    public SDVariable isNumericTensor(SDVariable iX) {
-        return isNumericTensor(null, iX);
-
-    }
-
-    /**
-     * @param
-     * @return
-     */
-    public SDVariable isNumericTensor(String name, SDVariable iX) {
-        SDVariable result = functionFactory.isNumericTensor(iX);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable cos(String name, SDVariable iX) {
-        SDVariable result = functionFactory.cos(iX);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable sin(String name, SDVariable iX) {
-        SDVariable result = functionFactory.sin(iX);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable tan(String name, SDVariable iX) {
-        SDVariable result = functionFactory.tan(iX);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable acos(String name, SDVariable iX) {
-        SDVariable result = functionFactory.acos(iX);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-
-    public SDVariable asin(String name, SDVariable iX) {
-        SDVariable result = functionFactory.asin(iX);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable atan(String name, SDVariable iX) {
-        SDVariable result = functionFactory.atan(iX);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable cosh(String name, SDVariable iX) {
-        SDVariable result = functionFactory.cosh(iX);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable sinh(String name, SDVariable iX) {
-        SDVariable result = functionFactory.sinh(iX);
-        return updateVariableNameAndReference(result, name);
-
-
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable tanh(String name, SDVariable iX) {
-        SDVariable
-                result = functionFactory.tanh(iX);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable acosh(String name, SDVariable iX) {
-        SDVariable result = functionFactory.acosh(iX);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable asinh(String name, SDVariable iX) {
-        SDVariable result = functionFactory.asinh(iX);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable atanh(String name, SDVariable iX) {
-        SDVariable result = functionFactory.atanh(iX);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable exp(String name, SDVariable iX) {
-        SDVariable result = functionFactory.exp(iX);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable expm1(String name, SDVariable iX) {
-        SDVariable result = functionFactory.expm1(iX);
-        return updateVariableNameAndReference(result, name);
-    }
-
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable rsqrt(String name, SDVariable iX) {
-        SDVariable result = functionFactory.rsqrt(iX);
-        return updateVariableNameAndReference(result, name);
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable log(String name, SDVariable iX) {
-        SDVariable result = functionFactory.log(iX);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable log1p(String name, SDVariable iX) {
-        SDVariable result = functionFactory.log1p(iX);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable isFinite(String name, SDVariable iX) {
-        SDVariable result = functionFactory.isFinite(iX);
-        return updateVariableNameAndReference(result, name);
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable isInfinite(String name, SDVariable iX) {
-        SDVariable result = functionFactory.isInfinite(iX);
-        return updateVariableNameAndReference(result, name);
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable isNaN(String name, SDVariable iX) {
-        SDVariable result = functionFactory.isNaN(iX);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable round(String name, SDVariable iX) {
-        SDVariable result = functionFactory.round(iX);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-    /**
-     * @param iX
-     * @param value
-     * @return
-     */
-    public SDVariable pow(String name, SDVariable iX, double value) {
-        SDVariable result = functionFactory.pow(iX, value);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable cube(String name, SDVariable iX) {
-        SDVariable result = functionFactory.cube(iX);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable sqrt(String name, SDVariable iX) {
-        SDVariable result = functionFactory.sqrt(iX);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable square(String name, SDVariable iX) {
-        SDVariable result = functionFactory.square(iX);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable floor(String name, SDVariable iX) {
-        SDVariable result = functionFactory.floor(iX);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable relu(String name, SDVariable iX, double cutoff) {
-        SDVariable result = functionFactory.relu(iX, cutoff);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable relu6(String name, SDVariable iX, double cutoff) {
-        SDVariable result = functionFactory.relu6(iX, cutoff);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable softmax(String name, SDVariable iX) {
-        SDVariable result = functionFactory.softmax(iX);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable softmaxDerivative(String name, SDVariable iX, SDVariable wrt) {
-        SDVariable result = functionFactory.softmaxDerivative(iX, wrt);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable hardTanh(String name, SDVariable iX) {
-        SDVariable result = functionFactory.hardTanh(iX);
-        return updateVariableNameAndReference(result, name);
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable hardTanhDerivative(String name, SDVariable iX) {
-        SDVariable result = functionFactory.hardTanhDerivative(iX);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable sigmoid(String name, SDVariable iX) {
-        SDVariable result = functionFactory.sigmoid(iX);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable sigmoidDerivative(String name, SDVariable iX, SDVariable wrt) {
-        SDVariable result = functionFactory
-                .sigmoidDerivative(iX, wrt);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable sign(String name, SDVariable iX) {
-        SDVariable result = functionFactory
-                .sign(iX);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable softsign(String name, SDVariable iX) {
-        SDVariable result = functionFactory.softsign(iX);
-        return updateVariableNameAndReference(result, name);
 
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable softsignDerivative(String name, SDVariable iX) {
-        SDVariable result = functionFactory.softsignDerivative(iX);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable softplus(String name, SDVariable iX) {
-        SDVariable result = functionFactory.softplus(iX);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable elu(String name, SDVariable iX) {
-        SDVariable result = functionFactory.elu(iX);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable eluDerivative(String name, SDVariable iX) {
-        SDVariable result = functionFactory.eluDerivative(iX);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-    /**
-     * @param iX
-     * @param alpha
-     * @return
-     */
-    public SDVariable leakyRelu(String name, SDVariable iX, double alpha) {
-        SDVariable result = functionFactory.leakyRelu(iX, alpha);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-    /**
-     * @param iX
-     * @param alpha
-     * @return
-     */
-    public SDVariable leakyReluDerivative(String name, SDVariable iX, double alpha) {
-        SDVariable result = functionFactory.leakyReluDerivative(iX, alpha);
-        return updateVariableNameAndReference(result, name);
-    }
-
-    public SDVariable mean(String name, SDVariable iX, int... dimension) {
-        return mean(name, iX, false, dimension);
-    }
-
-    public SDVariable mean(String name, SDVariable iX, boolean keepDims, int... dimension) {
-        SDVariable result = functionFactory.mean(iX, keepDims, dimension);
-        return updateVariableNameAndReference(result, name);
-    }
-
-    /**
-     * @param iX
-     * @param biasCorrected
-     * @param dimensions
-     * @return
-     */
-    public SDVariable standardDeviation(String name, SDVariable iX,
-                                        boolean biasCorrected,
-                                        int... dimensions) {
-        return standardDeviation(name, iX, biasCorrected, false, dimensions);
-    }
-
-    public SDVariable standardDeviation(String name, SDVariable iX,
-                                        boolean biasCorrected,
-                                        boolean keepDims,
-                                        int... dimensions) {
-        SDVariable result = functionFactory.std(
-                iX,
-                biasCorrected,
-                keepDims,
-                dimensions);
-        return updateVariableNameAndReference(result, name);
-    }
-
-    /**
-     * @param iX
-     * @param biasCorrected
-     * @param dimensions
-     * @return
-     */
-    public SDVariable variance(String name, SDVariable iX, boolean biasCorrected, int... dimensions) {
-        return variance(name, iX, biasCorrected, false, dimensions);
-    }
-
-    public SDVariable variance(String name, SDVariable iX, boolean biasCorrected, boolean keepDims, int... dimensions) {
-        SDVariable result = functionFactory.variance(iX, biasCorrected, keepDims, dimensions);
-        return updateVariableNameAndReference(result, name);
-    }
-
-    /**
-     * @param iX
-     * @param dimensions
-     * @return
-     */
-    public SDVariable sum(String name, SDVariable iX, int... dimensions) {
-        return sum(name, iX, false, dimensions);
-    }
-
-    public SDVariable sum(String name, SDVariable iX, boolean keepDims, int... dimensions) {
-        SDVariable result = functionFactory.sum(iX, keepDims, dimensions);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-    /**
-     * @param iX
-     * @param dimensions
-     * @return
-     */
-    public SDVariable prod(String name, SDVariable iX, int... dimensions) {
-        return prod(name, iX, false, dimensions);
-    }
-
-    public SDVariable prod(String name, SDVariable iX, boolean keepDims, int... dimensions) {
-        SDVariable result = functionFactory.prod(iX, keepDims, dimensions);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-
-    /**
-     * @param iX
-     * @param dimensions
-     * @return
-     */
-    public SDVariable max(String name, SDVariable iX, int... dimensions) {
-        return max(name, iX, false, dimensions);
-    }
-
-    public SDVariable max(String name, SDVariable iX, boolean keepDims, int... dimensions) {
-        SDVariable result = functionFactory.max(iX, keepDims, dimensions);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-
-    /**
-     * @param iX
-     * @param dimensions
-     * @return
-     */
-    public SDVariable min(String name, SDVariable iX, int... dimensions) {
-        return min(name, iX, false, dimensions);
-    }
-
-    public SDVariable min(String name, SDVariable iX, boolean keepDims, int... dimensions) {
-        SDVariable result = functionFactory.min(iX, keepDims, dimensions);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-    public SDVariable norm1(String name, SDVariable ix, int... dimensions) {
-        return norm1(name, ix, false, dimensions);
-    }
-
-    public SDVariable norm1(String name, SDVariable ix, boolean keepDims, int... dimensions) {
-        SDVariable result = f().norm1(ix, keepDims, dimensions);
-        return updateVariableNameAndReference(result, name);
-    }
-
-    public SDVariable norm2(String name, SDVariable ix, int... dimensions) {
-        return norm2(name, ix, false, dimensions);
-    }
-
-    public SDVariable norm2(String name, SDVariable ix, boolean keepDims, int... dimensions) {
-        SDVariable result = f().norm2(ix, keepDims, dimensions);
-        return updateVariableNameAndReference(result, name);
-    }
-
-    public SDVariable squaredNorm(SDVariable ix, int... dimensions) {
-        return squaredNorm(null, ix, false, dimensions);
-    }
-
-    public SDVariable squaredNorm(String name, SDVariable ix, int... dimensions) {
-        return squaredNorm(name, ix, false, dimensions);
-    }
-
-    public SDVariable squaredNorm(SDVariable ix, boolean keepDims, int... dimensions) {
-        return squaredNorm(null, ix, keepDims, dimensions);
-    }
-
-    public SDVariable squaredNorm(String name, SDVariable ix, boolean keepDims, int... dimensions) {
-        SDVariable result = f().squaredNorm(ix, keepDims, dimensions);
-        return updateVariableNameAndReference(result, name);
-    }
-
-    public SDVariable normmax(String name, SDVariable ix, int... dimensions) {
-        return normmax(name, ix, false, dimensions);
-    }
-
-    public SDVariable normmax(String name, SDVariable ix, boolean keepDims, int... dimensions) {
-        SDVariable result = f().normmax(ix, keepDims, dimensions);
-        return updateVariableNameAndReference(result, name);
-    }
-
-
-    /**
-     * @param iX
-     * @param shape
-     * @return
-     */
-    public SDVariable reshape(String name, SDVariable iX,
-                              int... shape) {
-        SDVariable result = functionFactory
-                .reshape(iX, shape);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-    public SDVariable reshape(String name, SDVariable iX,
-                              SDVariable shape) {
-        SDVariable result = functionFactory
-                .reshape(iX, shape);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-    /**
-     * @param iX
-     * @return
-     */
-    public SDVariable transpose(String name, SDVariable iX) {
-        SDVariable result = functionFactory.transpose(iX);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-    /**
-     * @param iX
-     * @param dimensions
-     * @return
-     */
-    public SDVariable permute(String name, SDVariable iX, int... dimensions) {
-        SDVariable result = functionFactory.permute(iX, dimensions);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-
-    /**
-     * @param x
-     * @param axis
-     * @return
-     */
-    public SDVariable rollAxis(String name, SDVariable x, int axis) {
-        SDVariable result = functionFactory.rollAxis(x, axis);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-    /**
-     * @param shape
-     * @param value
-     * @return
-     */
-    public SDVariable fill(String name, SDVariable shape, double value) {
-        SDVariable result = functionFactory.fill(shape, value);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-
-    /**
-     * @param dimension
-     * @param inputs
-     * @return
-     */
-    public SDVariable concat(String name, int dimension, SDVariable... inputs) {
-        SDVariable result = functionFactory.concat(dimension, inputs);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-    /**
-     * @param iX
-     * @param repeat
-     * @return
-     */
-    public SDVariable tile(String name, SDVariable iX, int[] repeat) {
-        SDVariable result = functionFactory.tile(iX, repeat);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-
-    /**
-     * @param x
-     * @param y
-     * @param transpose
-     * @return
-     */
-    public SDVariable mmul(String name, SDVariable x, SDVariable y, MMulTranspose transpose) {
-        SDVariable result = functionFactory.mmul(x, y, transpose);
-        return updateVariableNameAndReference(result, name);
-
-    }
-
-    /**
-     * @param x
-     * @param y
-     * @return
-     */
-    public SDVariable mmul(String name, SDVariable x, SDVariable y) {
-        return mmul(name, x, y, MMulTranspose.allFalse());
-    }
-
-    /**
-     * @param x
-     * @param y
-     * @param dimensions
-     * @return
-     */
-    public SDVariable tensorMmul(String name,
-                                 SDVariable x,
-                                 SDVariable y,
-                                 int[][] dimensions) {
-        SDVariable result = functionFactory.tensorMmul(x, y, dimensions);
-        return updateVariableNameAndReference(result, name);
-    }
-
-
-    /**
-     * @param iX
-     * @param i_y
-     * @param dimensions
-     * @return
-     */
-    public SDVariable cosineSimilarity(String name, SDVariable iX, SDVariable i_y, int... dimensions) {
-        SDVariable cosim = functionFactory.cosineSimilarity(
-                iX,
-                i_y,
-                dimensions);
-        return updateVariableNameAndReference(cosim, name);
-    }
-
-    /**
-     * @param iX
-     * @param i_y
-     * @param dimensions
-     * @return
-     */
-    public SDVariable euclideanDistance(String name, SDVariable iX, SDVariable i_y, int... dimensions) {
-        SDVariable result = functionFactory.euclideanDistance(iX, i_y, dimensions);
-        return updateVariableNameAndReference(result, name);
-    }
-
-    /**
-     * @param iX
-     * @param i_y
-     * @param dimensions
-     * @return
-     */
-    public SDVariable manhattanDistance(String name, SDVariable iX, SDVariable i_y, int... dimensions) {
-        SDVariable result = functionFactory.manhattanDistance(iX, i_y, dimensions);
-        return updateVariableNameAndReference(result, name);
-    }
-
-    public SDVariable sigmoidCrossEntropyWithLogits(SDVariable logits, SDVariable weights, SDVariable labels,
-                                                    int reductionMode, double labelSmoothing) {
-        return sigmoidCrossEntropyWithLogits(null, logits, weights, labels, reductionMode, labelSmoothing);
-    }
-
-    public SDVariable sigmoidCrossEntropyWithLogits(String name, SDVariable logits, SDVariable weights, SDVariable labels,
-                                                    int reductionMode, double labelSmoothing) {
-        SDVariable res = f().sigmoidCrossEntropyWithLogits(logits, weights, labels, reductionMode, labelSmoothing);
-        return updateVariableNameAndReference(res, name);
-    }
-
-    public SDVariable softmaxCrossEntropyWithLogits(SDVariable logits, SDVariable weights, SDVariable labels,
-                                                    int reductionMode, double labelSmoothing) {
-        return softmaxCrossEntropyWithLogits(null, logits, weights, labels, reductionMode, labelSmoothing);
-    }
-
-    public SDVariable softmaxCrossEntropyWithLogits(String name, SDVariable logits, SDVariable weights, SDVariable labels,
-                                                    int reductionMode, double labelSmoothing) {
-        SDVariable res = f().softmaxCrossEntropyWithLogits(logits, weights, labels, reductionMode, labelSmoothing);
-        return updateVariableNameAndReference(res, name);
-    }
-
-    public SDVariable weightedCrossEntropyWithLogits(SDVariable targets, SDVariable inputs,
-                                                     SDVariable weights) {
-        return weightedCrossEntropyWithLogits(null, targets, inputs, weights);
-    }
-
-    public SDVariable weightedCrossEntropyWithLogits(String name, SDVariable targets, SDVariable inputs,
-                                                     SDVariable weights) {
-        SDVariable res = f().weightedCrossEntropyWithLogits(targets, inputs, weights);
-        return updateVariableNameAndReference(res, name);
-    }
-
-    /**
-     * @param iX
-     * @param i_y
-     * @param dimensions
-     * @return
-     */
-    public SDVariable lossBinaryXENT(String name, SDVariable iX, SDVariable i_y, int... dimensions) {
-        SDVariable result = functionFactory.lossBinaryXENT(iX, i_y, dimensions);
-        return updateVariableNameAndReference(result, name);
-    }
-
-    /**
-     * @param iX
-     * @param i_y
-     * @param dimensions
-     * @return
-     */
-    public SDVariable lossCosineSimilarity(String name, SDVariable iX, SDVariable i_y, int... dimensions) {
-        SDVariable result = functionFactory.lossCosineSimilarity(iX, i_y, dimensions);
-        return updateVariableNameAndReference(result, name);
-    }
-
-    /**
-     * @param iX
-     * @param i_y
-     * @param dimensions
-     * @return
-     */
-    public SDVariable lossHinge(String name, SDVariable iX, SDVariable i_y, int... dimensions) {
-        SDVariable result = functionFactory.lossHinge(iX, i_y, dimensions);
-        return updateVariableNameAndReference(result, name);
-    }
-
-    /**
-     * @param iX
-     * @param i_y
-     * @param dimensions
-     * @return
-     */
-    public SDVariable lossKLD(String name, SDVariable iX, SDVariable i_y, int... dimensions) {
-        SDVariable result = functionFactory.lossKLD(iX, i_y, dimensions);
-        return updateVariableNameAndReference(result, name);
-    }
 
-    /**
-     * @param iX
-     * @param i_y
-     * @param dimensions
-     * @return
-     */
-    public SDVariable lossL1(String name, SDVariable iX, SDVariable i_y, int... dimensions) {
-        SDVariable result = functionFactory.lossL1(iX, i_y, dimensions);
-        return updateVariableNameAndReference(result, name);
-    }
-
-    /**
-     * @param iX
-     * @param i_y
-     * @param dimensions
-     * @return
-     */
-    public SDVariable lossL2(String name, SDVariable iX, SDVariable i_y, int... dimensions) {
-        SDVariable result = functionFactory.lossL2(iX, i_y, dimensions);
-        return updateVariableNameAndReference(result, name);
-    }
-
-    /**
-     * @param iX
-     * @param i_y
-     * @param dimensions
-     * @return
-     */
-    public SDVariable lossMAE(String name, SDVariable iX, SDVariable i_y, int... dimensions) {
-        SDVariable result = functionFactory.lossMAE(iX, i_y, dimensions);
-        return updateVariableNameAndReference(result, name);
-    }
-
-
-    /**
-     * @param iX
-     * @param i_y
-     * @param dimensions
-     * @return
-     */
-    public SDVariable lossMSE(String name, SDVariable iX, SDVariable i_y, int... dimensions) {
-        SDVariable result = functionFactory.lossMSE(iX, i_y, dimensions);
-        return updateVariableNameAndReference(result, name);
-    }
-
-    /**
-     * @param iX
-     * @param i_y
-     * @param dimensions
-     * @return
-     */
-    public SDVariable lossMCXENT(String name, SDVariable iX, SDVariable i_y, int... dimensions) {
-        SDVariable result = functionFactory.lossMCXENT(iX, i_y, dimensions);
-        return updateVariableNameAndReference(result, name);
-    }
-
-    /**
-     * @param iX
-     * @param i_y
-     * @param dimensions
-     * @return
-     */
-    public SDVariable lossMSLE(String name, SDVariable iX, SDVariable i_y, int... dimensions) {
-        SDVariable result = functionFactory.lossMSLE(iX, i_y, dimensions);
-        return updateVariableNameAndReference(result, name);
-    }
-
-    /**
-     * @param iX
-     * @param i_y
-     * @param dimensions
-     * @return
-     */
-    public SDVariable lossNegativeLogLikelihood(String name, SDVariable iX, SDVariable i_y, int... dimensions) {
-        SDVariable result = functionFactory.lossNegativeLogLikelihood(iX, i_y, dimensions);
-        return updateVariableNameAndReference(result, name);
-    }
-
-    /**
-     * @param iX
-     * @param i_y
-     * @param dimensions
-     * @return
-     */
-    public SDVariable lossPoisson(String name, SDVariable iX, SDVariable i_y, int... dimensions) {
-        SDVariable result = functionFactory.lossPoisson(iX, i_y, dimensions);
-        return updateVariableNameAndReference(result, name);
-    }
 
-
-    /**
-     * @param iX
-     * @param i_y
-     * @param dimensions
-     * @return
-     */
-    public SDVariable lossSquaredHinge(String name, SDVariable iX, SDVariable i_y, int... dimensions) {
-        SDVariable result = functionFactory.lossSquaredHinge(iX, i_y, dimensions);
-        return updateVariableNameAndReference(result, name);
-    }
-
-
-    public SDVariable expandDims(SDVariable ix, int axis) {
-        return expandDims(null, ix, axis);
-    }
-
-    public SDVariable expandDims(String name, SDVariable ix, int axis) {
-        SDVariable result = f().expandDims(ix, axis);
-        return updateVariableNameAndReference(result, name);
-    }
-
-    public SDVariable squeeze(SDVariable ix, int axis) {
-        return squeeze(null, ix, axis);
-    }
-
-    public SDVariable squeeze(String name, SDVariable ix, int axis) {
-        SDVariable result = f().squeeze(ix, axis);
-        return updateVariableNameAndReference(result, name);
-    }
-
-    public SDVariable confusionMatrix(SDVariable labels, SDVariable predictions) {
-        return confusionMatrix((String) null, labels, predictions);
-    }
-
-    public SDVariable confusionMatrix(String name, SDVariable labels, SDVariable pred) {
-        SDVariable result = f().confusionMatrix(labels, pred);
-        return updateVariableNameAndReference(result, name);
-    }
-
-
-    public SDVariable confusionMatrix(SDVariable labels, SDVariable pred, Integer numClasses) {
-        return confusionMatrix(null, labels, pred, numClasses);
-    }
-
-    public SDVariable confusionMatrix(String name, SDVariable labels, SDVariable pred, Integer numClasses) {
-        SDVariable result = f().confusionMatrix(labels, pred, numClasses);
-        return updateVariableNameAndReference(result, name);
-    }
-
-    public SDVariable confusionMatrix(SDVariable labels, SDVariable pred, SDVariable weights) {
-        return confusionMatrix(null, labels, pred, weights);
-    }
-
-    public SDVariable confusionMatrix(String name, SDVariable labels, SDVariable pred, SDVariable weights) {
-        SDVariable result = f().confusionMatrix(labels, pred, weights);
-        return updateVariableNameAndReference(result, name);
-    }
-
-
-    public SDVariable confusionMatrix(SDVariable labels, SDVariable pred, Integer numClasses, SDVariable weights) {
-        return confusionMatrix(null, labels, pred, numClasses, weights);
-    }
-
-    public SDVariable confusionMatrix(String name, SDVariable labels, SDVariable pred, Integer numClasses, SDVariable weights) {
-        SDVariable result = f().confusionMatrix(labels, pred, numClasses, weights);
-        return updateVariableNameAndReference(result, name);
-    }
-
     /**
-     * @param variable
+     * Add the specified variable to this SameDiff instance
+     * @param variable Variable to add
      */
-    public void addVariable(SDVariable variable) {
-        if (variableMap == null)
-            variableMap = new HashMap<>();
-
+    public SDVariable addVariable(SDVariable variable) {
         Preconditions.checkState(variable.getSameDiff() == this, "Samediff instance must be the same.");
 
-
-        /**
-         * Of note here:
-         * We don't validate base don vertex id
-         * because more than one input can have the same
-         * vertex id as a result.
-         *
-         * We validate based on variable opName instead
-         * which takes in to account function names as well
-         * as input ids
-         */
-        if (variableMap.containsKey(variable.getVarName()) && !variableMap.get(variable.getVarName()).equals(variable)) {
+        if (variables.containsKey(variable.getVarName()) && !variables.get(variable.getVarName()).getVariable().equals(variable)) {
             throw new IllegalArgumentException("Variable already found with variable opName " + variable.getVarName());
         }
 
         Preconditions.checkState(variable.getSameDiff() == this, "Same diff instance for variable must be the same!");
-        variableMap.put(variable.getVarName(), variable);
-
+        variables.put(variable.getVarName(), Variable.builder().name(variable.getVarName()).variable(variable).build());
+        return variable;
     }
 
 
     /**
-     * Generate a new variable name
-     * based on the uniqueness
-     * of thebase name and arg index
+     * Generate a new variable name based on the uniqueness of the base name and arg index<br>
+     * For example, if baseName = "X" will return:<br>
+     * "X" if "X" does not already exist, or "X:argIndex" if argIndex > 0<br>
+     * "X_1" if "X" already exists, or "X_1:argIndex" if argIndex > 0<br>
+     * "X_2" if "X" and "X_1" already exists, or "X_2:argIndex" if argIndex > 0<br>
+     * And so on, until an unused name is found
      *
      * @param baseName the base name to use (use function.opName() where function is a {@link DifferentialFunction}
      * @param argIndex the arg index
      * @return the new generated name
      */
     public String generateNewVarName(String baseName, int argIndex) {
-        if (getVariable(baseName) == null && argIndex == 0) {
+        if (!variables.containsKey(baseName) && argIndex == 0) {
             return baseName;
         }
 
@@ -5664,181 +2540,7 @@ public class SameDiff {
         if (getVariable(name) != null) {
             throw new ND4JIllegalStateException("Converged on already generated variable!");
         }
-
         return name;
-    }
-
-
-    /**
-     * LSTM unit
-     *
-     * @param baseName      the base name for outputs
-     * @param configuration the configuration to use
-     * @return
-     */
-    public SDVariable lstm(String baseName, LSTMCellConfiguration configuration) {
-        return new LSTMCell(this, configuration).outputVariables(baseName)[0];
-    }
-
-
-    /**
-     * An sru cell
-     *
-     * @param configuration the configuration for the sru cell
-     * @return
-     */
-    public SDVariable sruCell(SRUCellConfiguration configuration) {
-        return new SRUCell(this, configuration).outputVariables()[0];
-    }
-
-
-    /**
-     * Simple recurrent  unit
-     *
-     * @param configuration the configuration for the sru
-     * @return
-     */
-    public SDVariable sru(SRUConfiguration configuration) {
-        return new SRU(this, configuration).outputVariables()[0];
-    }
-
-    /**
-     * The gru cell
-     *
-     * @param configuration teh configuration to use
-     * @return
-     */
-    public SDVariable gru(GRUCellConfiguration configuration) {
-        return new GRUCell(this, configuration).outputVariables()[0];
-    }
-
-
-    /**
-     * An sru cell
-     *
-     * @param baseName      the base name to  use for the output variables
-     * @param configuration the configuration for the sru cell
-     * @return
-     */
-    public SDVariable sruCell(String baseName, SRUCellConfiguration configuration) {
-        return new SRUCell(this, configuration).outputVariables(baseName)[0];
-    }
-
-
-    /**
-     * Simiple recurrent  unit
-     *
-     * @param baseName      the base name to use for output variables
-     * @param configuration the configuration for the sru
-     * @return
-     */
-    public SDVariable sru(String baseName, SRUConfiguration configuration) {
-        return new SRU(this, configuration).outputVariables(baseName)[0];
-    }
-
-    /**
-     * The gru cell
-     *
-     * @param baseName      the base name for the gru cell
-     * @param configuration teh configuration to use
-     * @return
-     */
-    public SDVariable gru(String baseName, GRUCellConfiguration configuration) {
-        return new GRUCell(this, configuration).outputVariables(baseName)[0];
-    }
-
-
-    public SDVariable slice(SDVariable input, int[] begin, int[] size) {
-        return slice(null, input, begin, size);
-    }
-
-    public SDVariable slice(String name, SDVariable input, int[] begin, int[] size) {
-        SDVariable ret = f().slice(input, begin, size);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable stridedSlice(SDVariable input, int[] begin, int[] end, int[] strides) {
-        return stridedSlice(null, input, begin, end, strides);
-    }
-
-    public SDVariable stridedSlice(String name, SDVariable input, int[] begin, int[] end, int[] strides) {
-        return stridedSlice(name, input, begin, end, strides, 0, 0, 0, 0, 0);
-    }
-
-    public SDVariable stridedSlice(SDVariable input, long[] begin, long[] end, long[] strides) {
-        return stridedSlice(null, input, begin, end, strides);
-    }
-
-    public SDVariable stridedSlice(String name, SDVariable input, long[] begin, long[] end, long[] strides) {
-        return stridedSlice(name, input, begin, end, strides, 0, 0, 0, 0, 0);
-    }
-
-    public SDVariable stridedSlice(SDVariable in, int[] begin, int[] end, int[] strides, int beginMask,
-                                   int endMask, int ellipsisMask, int newAxisMask, int shrinkAxisMask) {
-        return stridedSlice(null, in, begin, end, strides, beginMask, endMask, ellipsisMask, newAxisMask, shrinkAxisMask);
-    }
-
-    public SDVariable stridedSlice(String name, SDVariable in, int[] begin, int[] end, int[] strides, int beginMask,
-                                   int endMask, int ellipsisMask, int newAxisMask, int shrinkAxisMask) {
-        SDVariable ret = f().stridedSlice(in, begin, end, strides, beginMask, endMask, ellipsisMask, newAxisMask, shrinkAxisMask);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable stridedSlice(SDVariable in, long[] begin, long[] end, long[] strides, int beginMask,
-                                   int endMask, int ellipsisMask, int newAxisMask, int shrinkAxisMask) {
-        return stridedSlice(null, in, begin, end, strides, beginMask, endMask, ellipsisMask, newAxisMask, shrinkAxisMask);
-    }
-
-    public SDVariable stridedSlice(String name, SDVariable in, long[] begin, long[] end, long[] strides, int beginMask,
-                                   int endMask, int ellipsisMask, int newAxisMask, int shrinkAxisMask) {
-        SDVariable ret = f().stridedSlice(in, begin, end, strides, beginMask, endMask, ellipsisMask, newAxisMask, shrinkAxisMask);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable scatterAdd(String name, SDVariable ref, SDVariable indices, SDVariable updates) {
-        SDVariable ret = f().scatterAdd(ref, indices, updates);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable scatterMul(String name, SDVariable ref, SDVariable indices, SDVariable updates) {
-        SDVariable ret = f().scatterMul(ref, indices, updates);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable scatterSub(String name, SDVariable ref, SDVariable indices, SDVariable updates) {
-        SDVariable ret = f().scatterSub(ref, indices, updates);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable scatterDiv(String name, SDVariable ref, SDVariable indices, SDVariable updates) {
-        SDVariable ret = f().scatterDiv(ref, indices, updates);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-    public SDVariable scatterUpdate(SDVariable ref, SDVariable indices, SDVariable updates) {
-        return scatterUpdate(null, ref, indices, updates);
-    }
-
-    public SDVariable scatterUpdate(String name, SDVariable ref, SDVariable indices, SDVariable updates) {
-        SDVariable ret = f().scatterUpdate(ref, indices, updates);
-        return updateVariableNameAndReference(ret, name);
-    }
-
-
-    public SDVariable scatterAdd(SDVariable ref, SDVariable indices, SDVariable updates) {
-        return scatterAdd(null, ref, indices, updates);
-    }
-
-    public SDVariable scatterMul(SDVariable ref, SDVariable indices, SDVariable updates) {
-        return scatterMul(null, ref, indices, updates);
-    }
-
-    public SDVariable scatterSub(SDVariable ref, SDVariable indices, SDVariable updates) {
-        return scatterSub(null, ref, indices, updates);
-    }
-
-    public SDVariable scatterDiv(SDVariable ref, SDVariable indices, SDVariable updates) {
-        return scatterDiv(null, ref, indices, updates);
     }
 
 
@@ -5849,7 +2551,7 @@ public class SameDiff {
      *                 variable names for
      * @return the set of names generated for each output of the function.
      */
-    public SDVariable[] generateOutputVariableForOp(DifferentialFunction function, String baseName) {
+    public SDVariable[] generateOutputVariableForOp(DifferentialFunction function, String baseName, boolean isImport) {
         //xyz ops only have 1 output
         //if there is already a base name defined, use that
         if (baseName == null || baseName.isEmpty() && getBaseNameForFunction(function) != null)
@@ -5857,6 +2559,21 @@ public class SameDiff {
 
         if (baseName == null)
             baseName = function.opName();
+
+        //First: calculate output data types. We can always calculate output data types, even if the input arrays
+        //are not available - *except for sometimes during import, until all ops/variables have been added*
+        List<org.nd4j.linalg.api.buffer.DataType> outputDataTypes = null;
+
+        if(!isImport) {
+            List<org.nd4j.linalg.api.buffer.DataType> inputDataTypes = new ArrayList<>();
+            List<String> fnInputs = ops.get(function.getOwnName()).getInputsToOp();
+            if (fnInputs != null) {
+                for (String var : fnInputs) {
+                    inputDataTypes.add(variables.get(var).getVariable().dataType());
+                }
+            }
+            outputDataTypes = function.calculateOutputDataTypes(inputDataTypes);
+        }
 
         val outputShape = function.calculateOutputShape();
         if (outputShape == null || outputShape.isEmpty()) {
@@ -5882,14 +2599,21 @@ public class SameDiff {
                 }
                 SDVariable[] ret = new SDVariable[num_outputs];
 
+                //Infer the output types: we can always determine datatype but not always shapes
+                Preconditions.checkState(isImport || num_outputs == 0 || (outputDataTypes != null && outputDataTypes.size() == num_outputs),
+                        "Incorrect number of output datatypes: got %s but expected datatypes for %s outputs - %s (op: %s)",
+                        (outputDataTypes == null ? null : outputDataTypes.size()), num_outputs, outputDataTypes, function.getClass().getSimpleName());
+
                 //dynamic shapes
-                //When importing from TF: convention seem to be names like "unstack", "unstack:1", "unstack:2", ...
-                //TODO validate this!
+                //When importing from TF: convention is "unstack", "unstack:1", "unstack:2", ...
                 for (int i = 0; i < ret.length; i++) {
                     SDVariable var = (i == 0 ? getVariable(baseName) : getVariable(baseName + ":" + i));
                     if (var == null) {
                         //Generate new variable name if one with the specified name doesn't exist
-                        var = var(generateNewVarName(baseName, i), null, new ZeroInitScheme(ordering));
+                        //Note: output of an op is ARRAY type - activations, not a trainable parameter. Thus has no weight init scheme
+
+                        org.nd4j.linalg.api.buffer.DataType dataType  = isImport ? null : outputDataTypes.get(i);
+                        var = var(generateNewVarName(baseName, i), VariableType.ARRAY, null, dataType, (long[])null);
                     }
                     var.setOutputIndex(i);
                     var.setCreator(function);
@@ -5913,16 +2637,15 @@ public class SameDiff {
                     ordering = function.args()[0].getArr().ordering();
                 }
                 if (checkGet == null) {
-                    checkGet = var(baseName, null, new ZeroInitScheme(ordering));
-                } else if (!importedVarName.contains(baseName)) {
-                    //need to find a new name
-                    String newName = generateNewVarName(baseName, 0);
-                    checkGet = var(newName, null, new ZeroInitScheme(ordering));
+                    //Note: output of an op is ARRAY type - activations, not a trainable parameter. Thus has no weight init scheme
+                    org.nd4j.linalg.api.buffer.DataType dataType  = outputDataTypes.get(0);
+                    checkGet = var(baseName, VariableType.ARRAY, null, dataType, (long[])null);
                 }
 
-
                 if (checkGet == null) {
-                    checkGet = var(baseName, null, new ZeroInitScheme(ordering));
+                    //Note: output of an op is ARRAY type - activations, not a trainable parameter. Thus has no weight init scheme
+                    org.nd4j.linalg.api.buffer.DataType dataType  = outputDataTypes.get(0);
+                    checkGet = var(baseName, VariableType.ARRAY, null, dataType, (long[])null);
                 }
 
                 checkGet.setOutputIndex(0);
@@ -5935,10 +2658,18 @@ public class SameDiff {
                     addOutgoingFor(ret, function);
 
                 return ret;
-
             }
         }
 
+        //Check that output shapes and output dtypes actually match (they should)
+        if(!isImport) {
+            for (int i = 0; i < outputShape.size(); i++) {
+                org.nd4j.linalg.api.buffer.DataType shapeDataType = outputShape.get(i).dataType();
+                org.nd4j.linalg.api.buffer.DataType calcType = outputDataTypes.get(i);
+                Preconditions.checkState(calcType == shapeDataType, "Calculated output data types do not match for shape calculation vs. datatype calculation:" +
+                        " %s vs %s for op %s output %s", shapeDataType, calcType, function.getClass().getName(), i);
+            }
+        }
 
         char ordering = 'c';
         if (function.args() != null && function.args().length > 0 && function.args()[0].getArr() != null) {
@@ -5951,13 +2682,16 @@ public class SameDiff {
         val ownName = function.getOwnName();
         val rootName = baseName;
         for (int i = 0; i < ret.length; i++) {
-            val shape = outputShape.get(i);
+            LongShapeDescriptor shape = outputShape.get(i);
             // it should be: rootName:index. i.e.: split:1, split:2, split:3, split:4 etc
             baseName = rootName + (i > 0 ? ":" + i : "");
             SDVariable checkGet = getVariable(baseName);
             if (checkGet == null) {
                 // obviously - there's no such var, just add it
-                checkGet = var(baseName, shape, new ZeroInitScheme(ordering));
+                //Note: output of an op is ARRAY type - activations, not a trainable parameter. Thus has no weight init scheme
+
+
+                checkGet = var(baseName, VariableType.ARRAY, null, shape.dataType(), shape.getShape());
             } else if (shape != null && !shapeAlreadyExistsForVarName(checkGet.getVarName())) {
                 // var exists, let's update its shape
                 putShapeForVarName(checkGet.getVarName(), shape);
@@ -5965,33 +2699,17 @@ public class SameDiff {
                 // no-op.
                 // TODO: maybe we should check shapes equality here?
                 // it's either var that already exist, or something bad happening
-            } else if (!importedVarName.contains(baseName)) {
-                // FIXME: dead end.  it's impossible to get here with null as shape
-                //need to find a new name
-                int count = 1;
-                String name = baseName + "_" + count + (i > 0 ? ":" + i : "");
-                while (getVariable(name) != null) {
-                    count++;
-                    name = baseName + "_" + count + (i > 0 ? ":" + i : "");
-                }
-
-                if (getVariable(name) != null) {
-                    throw new ND4JIllegalStateException("Converged on already generated variable!");
-                }
-
-
-                checkGet = var(name, shape, new ZeroInitScheme(ordering));
             }
 
             if (checkGet == null) {
-                checkGet = var(baseName + (i > 0 ? ":" + i : ""), shape, new ZeroInitScheme(ordering));
+                org.nd4j.linalg.api.buffer.DataType dataType = org.nd4j.linalg.api.buffer.DataType.FLOAT;     //TODO FIX THIS
+                checkGet = var(baseName + (i > 0 ? ":" + i : ""), new ZeroInitScheme(ordering), dataType, shape.getShape());
             }
 
             checkGet.setOutputIndex(i);
             checkGet.setCreator(function);
             ret[i] = checkGet;
         }
-
 
         return ret;
     }
@@ -6005,145 +2723,17 @@ public class SameDiff {
      * @return the set of names generated for each output of the function.
      */
     public SDVariable[] generateOutputVariableForOp(DifferentialFunction function) {
-        return generateOutputVariableForOp(function, function.opName());
+        return generateOutputVariableForOp(function, function.opName(), false);
     }
 
-
     /**
-     * Get a function instance
-     * given the opName
+     * Get a SameDiff function instance given the name of the function
      *
-     * @param functionName the opName of the function
-     * @return the same diff function instance
-     * defined for the given opName
+     * @param functionName the name of the function
+     * @return the same diff function instance defined for the given name
      */
     public SameDiff getFunction(String functionName) {
         return sameDiffFunctionInstances.get(functionName);
-    }
-
-
-    /**
-     * u
-     *
-     * @return
-     */
-    public INDArray execAndEndResult(List<DifferentialFunction> ops) {
-        List<DifferentialFunction> exec = exec(ops);
-        Op op = (Op) exec.get(exec.size() - 1);
-        return op.z();
-    }
-
-    /**
-     * @return
-     */
-    public INDArray execAndEndResult() {
-        List<DifferentialFunction> exec = exec().getRight();
-        val finalOp = exec.get(exec.size() - 1);
-        val output = finalOp.outputVariables();
-        if (output.length > 1) {
-            throw new ND4JIllegalStateException(finalOp.opName() + " has multiple outputs. Use execAndEndResults instead.");
-        }
-        return output[0].getArr();
-    }
-
-    public INDArray[] execAndEndResults() {
-        List<DifferentialFunction> exec = exec().getRight();
-        val finalOp = exec.get(exec.size() - 1);
-        val output = finalOp.outputVariables();
-        INDArray outArrays[] = new INDArray[output.length];
-        for (int i = 0; i < outArrays.length; i++) {
-            outArrays[i] = output[i].getArr();
-        }
-        return outArrays;
-    }
-
-    public INDArray execAndEndResult(int outputIndex) {
-        List<DifferentialFunction> exec = exec().getRight();
-        val output = exec.get(exec.size() - 1).outputVariables()[outputIndex];
-        return output.getArr();
-    }
-
-
-    public INDArray yetAnotherExecMethod(@NonNull Map<String, INDArray> inputs) {
-        if (!wasRegistered.get()) {
-            synchronized (this) {
-                if (!wasRegistered.get()) {
-                    val bb = asFlatBuffers();
-                    val ptr = new BytePointer(bb);
-
-                    Nd4j.getExecutioner().registerGraph(this.hashCode(), ptr);
-
-                    wasRegistered.set(true);
-                }
-            }
-        }
-
-        val newMap = new LinkedHashMap<String, INDArray>();
-        val keySet = inputs.keySet();
-
-        for (val key : keySet) {
-            val vx = variableMap.get(key);
-            newMap.put(vx.getVarName(), inputs.get(key));
-        }
-
-        val result = Nd4j.getExecutioner().executeGraph(this.hashCode(), newMap, this.reverseMap);
-        if (result.size() == 0)
-            throw new ND4JIllegalStateException("Execution failed");
-
-        val list = new ArrayList<INDArray>(result.values());
-
-        return list.get(list.size() - 1);
-    }
-
-
-    /**
-     * Executes the list of operations.
-     * This exec method is for
-     * only invoking operations
-     * rather than creating them
-     *
-     * @param ops the list of already created ops
-     * @return the passes in list
-     */
-    public List<DifferentialFunction> exec(List<DifferentialFunction> ops) {
-        for (int i = 0; i < ops.size(); i++) {
-            Op op = (Op) ops.get(i);
-            Nd4j.getExecutioner().exec(op);
-        }
-        return ops;
-    }
-
-    public TensorList getListByName(@NonNull String name) {
-        return lists.get(name);
-    }
-
-    public void putListByName(@NonNull String name, TensorList list) {
-        lists.put(name, list);
-    }
-
-    /**
-     * An interface for representing a conditional statement
-     */
-    public interface SameDiffConditional {
-
-
-        /**
-         * @param context
-         * @param body
-         * @return
-         */
-        SDVariable eval(SameDiff context, SameDiffFunctionDefinition body, SDVariable[] inputVars);
-
-    }
-
-    public static class DefaultSameDiffConditional implements SameDiffConditional {
-
-        @Override
-        public SDVariable eval(SameDiff context, SameDiff.SameDiffFunctionDefinition body, SDVariable[] inputVars) {
-            context.defineFunction("eval", body, inputVars);
-            context.invokeFunctionOn("eval", context);
-            return new ArrayList<>(context.functionInstancesById.values()).get(context.functionInstancesById.size() - 1).outputVariables()[0];
-        }
     }
 
 
@@ -6156,7 +2746,7 @@ public class SameDiff {
      */
     public While whileStatement(SameDiffConditional sameDiffConditional,
                                 SameDiffFunctionDefinition conditionBody,
-                                SameDiff.SameDiffFunctionDefinition loopBody
+                                SameDiffFunctionDefinition loopBody
             , SDVariable[] inputVars) {
         return While.builder()
                 .inputVars(inputVars)
@@ -6191,22 +2781,10 @@ public class SameDiff {
     }
 
 
-    public TensorArrayV3 tensorArray() {
-        return new TensorArrayV3(this);
-    }
-
-    /**
-     * A function definition for
-     * samediff
-     */
-    public interface SameDiffFunctionDefinition {
-
-        /**
-         * @param inputs
-         * @param variableInputs
-         * @return
-         */
-        SDVariable[] define(SameDiff sameDiff, Map<String, INDArray> inputs, SDVariable[] variableInputs);
+    public TensorArray tensorArray(DataType dataType) {
+        TensorArray ta = new TensorArray(this, dataType);
+        SDVariable[] outVars = ta.outputVariables();
+        return ta;
     }
 
     /**
@@ -6228,7 +2806,6 @@ public class SameDiff {
     public SameDiff defineFunction(String function, SameDiffFunctionDefinition functionDefinition, SDVariable[] variables) {
         if (!sameDiffFunctionInstances.containsKey(function)) {
             SameDiff sub = SameDiff.create();
-            sub.workspace = (workspace);
             this.child = sub;
             sub.parent = this;
             //setup subgraph
@@ -6238,9 +2815,7 @@ public class SameDiff {
                 ret[i] = sub.var(variables[i]);
             }
 
-            sub.inputs = ret;
-            sub.outputs = functionDefinition.define(sub, null, ret);
-
+            functionDefinition.define(sub, null, ret);
             sameDiffFunctionInstances.put(function, sub);
         }
         this.child = null;
@@ -6265,7 +2840,6 @@ public class SameDiff {
                                Map<String, INDArray> inputs) {
         if (!sameDiffFunctionInstances.containsKey(function)) {
             SameDiff sub = SameDiff.create();
-            sub.workspace = (workspace);
             //setup subgraph
             //re execute to populate subgraph
             functionDefinition.define(sub, inputs, null);
@@ -6275,84 +2849,110 @@ public class SameDiff {
 
     }
 
-
-    /**
-     * Exec a given function
-     *
-     * @param functionName the opName of the function
-     *                     to invoke
-     * @return
-     */
-    public INDArray execAndEndResult(String functionName) {
-        return sameDiffFunctionInstances.get(functionName).execAndEndResult();
-    }
-
-
-    /**
-     * Exec a given function
-     *
-     * @param functionName the opName of the function
-     *                     to invoke
-     * @return
-     */
-    public Pair<Map<SDVariable, DifferentialFunction>, List<DifferentialFunction>> exec(String functionName) {
-        Pair<Map<SDVariable, DifferentialFunction>, List<DifferentialFunction>> ret;
-        if (debugMode) {
-            ret = sameDiffFunctionInstances.get(functionName).enableDebugMode().exec();
-        } else
-            ret = sameDiffFunctionInstances.get(functionName).exec();
-
-        //Ensure all variables are associated with this SameDiff instance after possible execBackwards() etc
-        associateSameDiffWithOpsAndVariables();
-
-        return ret;
+    @Deprecated
+    public INDArray execAndEndResult(){
+        List<String> outputs = outputs();
+        Preconditions.checkState(outputs.size() == 1, "Method can only be used with SameDiff instances with a single output");
+        long tid = Thread.currentThread().getId();
+        Map<String,INDArray> placeholders = placeholdersPerThread.get(tid);
+        return execSingle(placeholders, outputs.get(0));
     }
 
     /**
-     * Exec the given function
-     * given the ops
+     * Create (if required) and then calculate the variable gradients (backward pass) for this graph.<br>
+     * After execution, the gradient arrays can be accessed using {@code myVariable.getGradient().getArr()}<br>
+     * <b>Note</b>: This method by default calculates VARIABLE type SDVariable gradients only (as well as any other
+     * gradients needed to calculate the variable gradients). That is, placeholder, constant, etc gradients are not
+     * calculated. If these gradients are required, they can be calculated using {@link #execBackwards(Map, List)} instead,
+     * which allows specifying the set of SDVariables to calculate the gradients for. For example,
+     * {@code execBackwards(placeholders, Arrays.asList(myPlaceholder.gradient().getVarName())}. In some cases,
+     * {@link #createGradFunction()} may need to be called first
      *
-     * @param functionName the opName of the function to
-     *                     exec
-     * @param cachedOps    the cached operations
-     * @return
+     * @param placeholders Values for the placeholder variables in the graph. For graphs without placeholders, use null or an empty map
      */
-    public List<DifferentialFunction> exec(String functionName, List<DifferentialFunction> cachedOps) {
-        return sameDiffFunctionInstances.get(functionName).exec(cachedOps);
-    }
-
-
-    /**
-     * Builds a backwards graph
-     * and executes the operations
-     * on that graph.
-     *
-     * @return
-     */
-    public Pair<Map<SDVariable, DifferentialFunction>, List<DifferentialFunction>> execBackwards() {
+    public void execBackwards(Map<String,INDArray> placeholders){
         if (getFunction("grad") == null) {
             createGradFunction();
         }
 
-
-        if (log.isTraceEnabled()) {
-            log.trace("About to execute backward function");
-        }
-        Pair<Map<SDVariable, DifferentialFunction>, List<DifferentialFunction>> forward = exec("grad");
-        SameDiff grad = getFunction("grad");
-        if (grad.isDebugMode()) {
-            //ensure all gradients are present for all variables
-            for (SDVariable sdVariable : grad.variables()) {
-                sdVariable.gradient();
+        //Collect (unique) list of gradient names...
+        Set<String> varGradNames = new HashSet<>();
+        for(Variable v : variables.values()){
+            if(v.getVariable().getVariableType() == VariableType.VARIABLE){
+                SDVariable g = v.getVariable().gradient();
+                varGradNames.add(g.getVarName());
             }
         }
 
-        return forward;
+        //Edge case: if no variables, no variable gradients to calculate...
+        if(varGradNames.isEmpty()){
+            log.warn("Skipping gradient execution (backward pass) - no variables to be calculated (graph does not contain any VARIABLE type SDVariables).\n" +
+                    "If gradients for other variables (such as placeholders) are required, use execBackwards(Map, List) instead");
+            return;
+        }
+
+        List<String> vargradNamesList = new ArrayList<>(varGradNames);
+        execBackwards(placeholders, vargradNamesList);
     }
 
+    /**
+     * As per {@link #execBackwards(Map)}, but the set of gradients to calculate can be specified manually.<br>
+     * For example, to calculate the gradient for placeholder variable "myPlaceholder", use
+     * {@code execBackwards(placeholders, Arrays.asList(myPlaceholder.gradient().getVarName())}.
+     *
+     * @param placeholders Values for the placeholder variables in the graph. For graphs without placeholders, use null or an empty map
+     * @param variableGradNamesList Names of the gradient variables to calculate
+     */
+    public void execBackwards(Map<String,INDArray> placeholders, List<String> variableGradNamesList){
+        if (getFunction("grad") == null) {
+            createGradFunction();
+        }
+
+        log.trace("About to execute backward function");
+
+        //Edge case: if no variables, no variable gradients to calculate...
+        if(variableGradNamesList.isEmpty()){
+            log.warn("Skipping gradient calculation (backward pass) - no variables to be calculated (variableGradNamesList is empty)");
+            return;
+        }
+
+        sameDiffFunctionInstances.get("grad").exec(placeholders, variableGradNamesList);
+    }
+
+    /**
+     * Create the gradient function (for calculating gradients via {@link #execBackwards(Map)}) if it is not already defined.
+     * Users do not usually need to call this function manually, as it is called as required in the aforementioned method.
+     * <br><br>
+     * If the gradient function already exists, this method is a no-op.<br>
+     * After this method returns, the SameDiff function instance for the gradient can be accessed using {@link #getFunction(String)}
+     * with name "grad" as the argument.
+     */
     public void createGradFunction() {
         if (log.isTraceEnabled()) {
             log.trace("Defining function \"grad\"");
+        }
+
+        //First thing: check that there's only one output... throw an exception if so
+        //A variable is an output if it's eithen an input, or if it's the output of a function, but not an input
+        Set<String> variablesNotAsFunctionInput = new HashSet<>();
+        for(SDVariable s : variables()){
+            variablesNotAsFunctionInput.add(s.getVarName());
+        }
+        for(SameDiffOp op : ops.values()){
+            List<String> fnInputs = op.getInputsToOp();
+            for(String s : fnInputs) {
+                variablesNotAsFunctionInput.remove(s);
+            }
+        }
+        if(variablesNotAsFunctionInput.size() > 1){
+            List<String> outputs = new ArrayList<>(variablesNotAsFunctionInput);
+            Collections.sort(outputs);
+            throw new IllegalStateException("Cannot create gradient function for graph with multiple outputs.\n" +
+                    "Gradient calculation assumes a single output which defines a scalar loss function value.\n" +
+                    "An output is any variable that is not used as the input to a function in the graph.\n" +
+                    "In the case of multiple outputs that are components of an additive loss function, simply add the" +
+                    "component variables to create a scalar output.\nAll outputs for graph: "
+                    + outputs);
         }
 
         final SameDiff outer = this;
@@ -6369,17 +2969,16 @@ public class SameDiff {
                 outer.invokeGraphOn(sameDiff);
                 if (debugMode) {
                     //Expect incoming args and outgoing args to be the same
-                    Preconditions.checkState(sameDiff.incomingArgsReverse.keySet().equals(incomingArgsReverse.keySet()), "incomingArgsReverse keysets not equal");
-                    Preconditions.checkState(sameDiff.outgoingArgsReverse.keySet().equals(outgoingArgsReverse.keySet()), "outgoingArgsReverse keysets not equal");
+                    Preconditions.checkState(sameDiff.ops.keySet().equals(ops.keySet()), "ops keysets not equal");
                 }
 
-                List<DifferentialFunction> allFunctions = new ArrayList<>(sameDiff.functionInstancesById.values());
+                List<SameDiffOp> allFunctions = new ArrayList<>(sameDiff.ops.values());
                 if (allFunctions.isEmpty()) {
                     throw new ND4JIllegalStateException("No ops found!");
                 }
 
-
-                for (val func : allFunctions) {
+                for (SameDiffOp op : allFunctions) {
+                    DifferentialFunction func = op.getOp();
                     if (func instanceof SDVariable) {
                         continue;
                     }
@@ -6393,133 +2992,141 @@ public class SameDiff {
                     func.setSameDiff(sameDiff);
                 }
 
-                val initialOuts = allFunctions.get(allFunctions.size() - 1).outputVariables();
-                val firstBackward = initialOuts[0];
+                //Find final outputs - these are SDVariables that are output of a function that are not inputs to anything else
+                // i.e., ArrayType - not constant, variable, placeholder
+                //Also should be a floating point type, to contribute to score
+                List<SDVariable> finalOutputs = new ArrayList<>();
+                for(Variable v : sameDiff.variables.values()){
+                    String outputOfOp = v.getOutputOfOp();
+                    boolean isExternalGrad = false;
+                    if(outputOfOp != null && getOps().get(outputOfOp).getOp() instanceof ExternalErrorsFunction){
+                        isExternalGrad = true;
+                    }
+                    if(!isExternalGrad && (v.getVariable().getVariableType() != VariableType.ARRAY ||
+                            (v.getInputsForOp() != null && ! v.getInputsForOp().isEmpty())
+                            || !v.getVariable().dataType().isFPType())){
+                        continue;
+                    }
+                    finalOutputs.add(v.getVariable());
+                }
+
+                Preconditions.checkState(!finalOutputs.isEmpty(), "Could not infer final network outputs to begin differentiation");
 
                 if (log.isTraceEnabled()) {
-                    String[] initialOutputsStr = allFunctions.get(allFunctions.size() - 1).outputVariablesNames();
+                    String[] initialOutputsStr = allFunctions.get(allFunctions.size() - 1).getOp().outputVariablesNames();
                     String s = initialOutputsStr == null ? "null" : Arrays.toString(initialOutputsStr);
                     log.trace("Defining backward function: initial outputs {}", s);
                 }
 
+                //Differentiate ops in any valid reverse topological order to ensure the parent gradient nodes are
+                // available before we try to differentiate the op
+                Queue<DifferentialFunction> availableForDiff = new LinkedList<>();
+                Set<String> seenOps = new HashSet<>();
                 //start with scalar backprop
-                SDVariable initialGrad = sameDiff.var("one-var", Nd4j.trueScalar(1.0));
-                sameDiff.forwardVarForGrad.put(firstBackward.getVarName(), initialGrad);
-                sameDiff.gradients.put(firstBackward.getVarName(), initialGrad);
+                INDArray initGradArr;
+                try(MemoryWorkspace ws = Nd4j.getMemoryManager().scopeOutOfWorkspaces()) {
+                    initGradArr = Nd4j.scalar(1.0);
+                }
+                SDVariable initialGrad = sameDiff.var("one-var", initGradArr);
+                for(SDVariable v : finalOutputs) {
+                    if(v.dataType() == initialGrad.dataType()){
+                        sameDiff.setGradientForVariableName(v.getVarName(), initialGrad);
+                    } else {
+                        sameDiff.setGradientForVariableName(v.getVarName(), initialGrad.castTo(v.dataType()));
+                    }
+                    SDVariable gradientBackwardsMarker = sameDiff.gradientBackwardsMarker(v);
+                    DifferentialFunction df = sameDiff.getVariableOutputFunction(gradientBackwardsMarker.getVarName());
+                    if(!seenOps.contains(df.getOwnName())) {
+                        availableForDiff.add(df);
+                        seenOps.add(df.getOwnName());
+                    }
+                }
 
-                SDVariable gradientBackwardsMarker = sameDiff.gradientBackwardsMarker(firstBackward);
+                // Collect all the the ops that have to be traversed before we can conclude that the gradient for
+                // a variable is fully available
+                final HashMap<String, List<String>> prerequisites = new HashMap<>();
+                for (Variable variable : sameDiff.getVariables().values()) {
+                    // Copy the collection, as the original one will be modified during backprop
+                    final List<String> inputsForOp = variable.getInputsForOp();
+                    if(inputsForOp != null) {
+                        prerequisites.put(variable.getName(), new ArrayList<>(inputsForOp));
+                    }
+                }
 
-                //reinitialize list with all declared variables
-                allFunctions = new ArrayList<>(sameDiff.functionInstancesById.values());
-                Collections.reverse(allFunctions);
+                int numProcessed = 0;
+                while(availableForDiff.size() > 0){
+                    DifferentialFunction df = availableForDiff.remove();
 
-
-                for (int i = 0; i < allFunctions.size(); i++) {
-                    DifferentialFunction action = allFunctions.get(i);
-                    if (log.isTraceEnabled()) {
-                        log.trace("Defining backward function step {} of {}: {} ({}) - {}", (i + 1), allFunctions.size(),
-                                action.opName(), action.getOwnName(), action.getClass().getName());
+                    //Get the inputs and outputs of the op
+                    List<String> inputsToOp;
+                    List<String> outputsOfOp;
+                    if(df instanceof GradientBackwardsMarker){
+                        SameDiffOp op = sameDiff.ops.get(df.getOwnName());
+                        inputsToOp = op.getInputsToOp();
+                        outputsOfOp = Collections.emptyList();
+                    } else {
+                        inputsToOp = sameDiff.ops.get(df.getOwnName()).getInputsToOp();
+                        outputsOfOp = sameDiff.ops.get(df.getOwnName()).getOutputsOfOp();
+                        numProcessed++;
                     }
 
-                    if (action instanceof GradientBackwardsMarker) {
-                        continue;
+
+                    //Get gradients for all output variables:
+                    List<SDVariable> grads = new ArrayList<>();
+                    for(String s : outputsOfOp){
+                        SDVariable g = sameDiff.getVariable(s).gradient();
+                        Preconditions.checkNotNull(g, "Could not get gradient for variable %s as output of op %s", g.getVarName(), df.getOwnName());
+                        grads.add(g);
                     }
 
-                    DifferentialFunction currFunction = action;
-                    Preconditions.checkState(currFunction.getSameDiff() == sameDiff, "Wrong samediff instance found!");
-                    //Preconditions.checkNotNull("Gradient for " + currFunction.opName() + " was null ! " + sameDiff.getVariableForVertexId(currFunction.getVertexId()).getGradient());
-                    val args = currFunction.outputVariables();
-                    for (val arg : args) {
-                        if (arg.getSameDiff() != sameDiff) {
-                            arg.setSameDiff(sameDiff);
+                    //Differentiate:
+                    List<SDVariable> currFnGrads = df.diff(grads);
+
+                    //Check the inputs, see if we can differentiate those ops now (and if so: add to queue)
+                    for(String s : inputsToOp){
+                        Variable v = sameDiff.variables.get(s);
+                        String opName = v.getOutputOfOp();
+                        if(opName == null){
+                            //Skip placeholder/constant etc
+                            continue;
+                        }
+
+                        //We can differentiate this op if output variables all have gradients defined
+                        //TODO what about control ops? Need to be handled differently?
+                        boolean allAvailable = true;
+                        SameDiffOp o = sameDiff.ops.get(opName);
+                        for(String opOutputs : o.getOutputsOfOp()){
+                            allAvailable &= seenOps.containsAll(prerequisites.get(opOutputs));
+                            if(!allAvailable) break;
+                        }
+
+                        if(allAvailable && !seenOps.contains(o.getOp().getOwnName())) {
+                            availableForDiff.add(o.getOp());
+                            seenOps.add(o.getOp().getOwnName());
                         }
                     }
-
-
-                    List<SDVariable> grads = new ArrayList<>();
-                    for (val varToGrad : args) {
-                        val grad = varToGrad.gradient();
-                        if (grad == null)
-                            throw new ND4JIllegalStateException("No gradient found for " + varToGrad.getVarName());
-                        grads.add(grad);
-                    }
-
-                    List<SDVariable> currFnGrads = currFunction.diff(grads);
-
-                    if (log.isTraceEnabled()) {
-                        log.trace("Finished Defining backward function step {} of {}: {} ({}) - {}", (i + 1), allFunctions.size(),
-                                action.opName(), action.getOwnName(), action.getClass().getName());
-                    }
-
-                    if (debugMode) {
-                        //Expect incoming args and outgoing args to be the same
-                        Preconditions.checkState(sameDiff.incomingArgsReverse.keySet().equals(sameDiff.outgoingArgsReverse.keySet()),
-                                "incomingArgsReverse and outgoingArgsReverse keysets not equal after backprop of function %s of %s: %s (%s)",
-                                (i + 1), allFunctions.size(), action.getOwnName(), action.getClass().getName());
-                    }
                 }
 
+                Preconditions.checkState(numProcessed == ops.size(), "Only differentiated %s of %s ops", numProcessed, ops.size());
 
-                if (sameDiff.isDebugMode()) {
-                    //ensure all gradients are present for all variables
-                    for (SDVariable sdVariable : variables()) {
-                        sdVariable.gradient();
-                    }
-                }
-
-                if (log.isTraceEnabled()) {
-                    log.trace("Defining backward function complete");
-                }
-
-                return new SDVariable[]{sameDiff.var("grad", new int[]{1, 1})};
+                return new SDVariable[]{sameDiff.var("grad", org.nd4j.linalg.api.buffer.DataType.FLOAT, 1)};
             }
         });
+
+        associateSameDiffWithOpsAndVariables();
     }
 
 
     /**
-     * Exec a backwards operation
-     * and return the end result
-     *
-     * @return
-     */
-    public INDArray execBackwardAndEndResult() {
-        List<DifferentialFunction> backwards = execBackwards().getRight();
-        DifferentialFunction df = backwards.get(backwards.size() - 1);
-        if (df instanceof Op) {
-            return ((Op) df).z();
-        } else if (df instanceof DynamicCustomOp) {
-            return ((DynamicCustomOp) df).getOutputArgument(0);
-        } else {
-            return null;
-        }
-    }
-
-
-    /**
-     * Creates and executes a list of operations
-     *
-     * @return
-     */
-    public INDArray execWithPlaceHolderAndEndResult(Map<String, INDArray> inputs) {
-        resolveVariablesWith(inputs);
-        return execAndEndResult();
-    }
-
-
-    /**
-     * Set the original shape for a given place holder.
-     * This is used to track original shapes of place holder variables.
-     * The reason we track original shapes is to validate
-     * possible candidate arrays coming in (especially with -1
+     * Set the original shape for a given place holder.<br>
+     * This is used to track original shapes of place holder variables.<br>
+     * The reason we track original shapes is to validate possible candidate arrays coming in (especially with -1
      * as the expected shapes).
      * <p>
      * Note that if {@link #isPlaceHolder(String)}
      * returns false for the passed in vertex id,
      * a {@link ND4JIllegalStateException} is thrown.
      * <p>
-     * A vertex id must be added first. You can
-     * do this with {@link #addAsPlaceHolder(String)}
      *
      * @param variableName the vertex id for the original shape
      * @param shape        the shape of the place holder
@@ -6545,75 +3152,57 @@ public class SameDiff {
 
 
     /**
-     * Get the original shape for the vertex id if one was set
-     * (other wise returns null).
-     * This is mainly for use in validating passed in arrays
-     * as arguments to {@link #resolveVariablesWith(Map)}
+     * Get the original shape for the vertex id if one was set (other wise returns null).<br>
+     * This is mainly for use in validating passed in arrays as arguments to {@link #resolveVariablesWith(Map)}
      * usually when executing using {@link #execWithPlaceHolder(Map)}
      *
      * @param varName the vertex id to get the original shape for.
      * @return the set vertex
      */
+    @Deprecated
     public long[] getOriginalShapeForPlaceHolder(String varName) {
         return placeHolderOriginalShapes.get(varName);
     }
 
     /**
-     * Returns true if this vertex id
-     * is a place holder variable or not
+     * Returns true if this vertex id is a place holder variable or not<br>
+     * A place holder variable is one where the array shape(s) are currently known and can't yet be calculated
      *
      * @param varName the vertex id to test
-     * @return
+     * @return True if the variable is a placeholder, false otherwise
      */
     public boolean isPlaceHolder(String varName) {
-        return placeHolderVarNames.contains(varName);
+        Preconditions.checkState(variables.containsKey(varName), "No variable present in SameDiff instance with name \"%s\"", varName);
+        return variables.get(varName).getVariable().isPlaceHolder();
     }
 
 
     /**
-     * Add  this vertex id as a place holder
-     *
-     * @param varName the vertex id to add
-     */
-    public void addAsPlaceHolder(String varName) {
-        placeHolderVarNames.add(varName);
-        if (getVariable(varName) != null && getVariable(varName).getShape() != null) {
-            placeHolderOriginalShapes.put(varName, getVariable(varName).getShape());
-        }
-    }
-
-
-    /**
-     * Resolve all ndarrays by updating the variables
-     * for each array specified in the given map.
-     * An {@link IllegalStateException} will be thrown
-     * if not all arrays are
-     * specified for resolution.
+     * Resolve all ndarrays by updating the variables for each array specified in the given map.
+     * An {@link IllegalStateException} will be thrown if not all arrays are specified for resolution.
      *
      * @param arrays the arrays to resolve.
      */
     public void resolveVariablesWith(Map<String, INDArray> arrays) {
-        for (val arrayEntry : arrays.entrySet()) {
-            val varForName = getVariable(arrayEntry.getKey());
+        for (Map.Entry<String,INDArray> e : arrays.entrySet()) {
+            SDVariable varForName = getVariable(e.getKey());
             if (varForName == null) {
-                throw new ND4JIllegalStateException("No variable name found for " + arrayEntry.getKey());
+                throw new ND4JIllegalStateException("No variable name found for " + e.getKey());
             }
 
-            if (placeHolderOriginalShapes.containsKey(arrayEntry.getKey())) {
-                val originalShape = placeHolderOriginalShapes.get(arrayEntry.getKey());
-                if (originalShape.length == arrayEntry.getValue().rank()) {
-                    for (int i = 0; i < originalShape.length; i++) {
-                        if (originalShape[i] != arrayEntry.getValue().shape()[i] && originalShape[i] >= 1) {
-                            throw new ND4JIllegalStateException("Incompatible shape passed for variable. " + Arrays.toString(arrayEntry.getValue().shape()));
-                        }
-                    }
-                }
+            Variable v = variables.get(e.getKey());
+            if(varForName.getVariableType() == VariableType.PLACEHOLDER){
+                //Check shape:
+                long[] shape = varForName.placeholderShape();
+                long[] newShape = e.getValue().shape();
+                Preconditions.checkState(shape.length == newShape.length, "Placeholder shape not compatible (mismatched rank): placeholder \"%s\" " +
+                        "shape %s, got incompatible shape %s", e.getKey(), shape, newShape);
             }
         }
 
 
         for (val entry : arrays.entrySet()) {
-            if (!placeHolderVarNames.contains(entry.getKey())) {
+            if (!variables.get(entry.getKey()).getVariable().isPlaceHolder()) {
                 throw new ND4JIllegalStateException("Illegal variable " + entry.getKey() + " passed in. Variable found not to be a place holder variable");
             }
 
@@ -6625,148 +3214,18 @@ public class SameDiff {
                 }
             }
 
-
-            updateShapeForVarName(entry.getKey(), entry.getValue().shape());
             associateArrayWithVariable(entry.getValue(), getVariable(entry.getKey()));
-            updateArrayForVarName(entry.getKey(), entry.getValue());
-
+            setArrayForVariable(entry.getKey(), entry.getValue());
         }
-
-
-        for (val funcName : propertiesToResolve.keySet()) {
-            val func = functionInstancesById.get(funcName);
-            if (!functionInstancesById.containsKey(funcName)) {
-                throw new ND4JIllegalStateException("Unable to resolve function name " + funcName);
-            }
-
-            if (func instanceof CustomOp) {
-                CustomOp customOp = (CustomOp) func;
-                customOp.populateInputsAndOutputsFromSameDiff();
-            }
-
-        }
-
 
         //declare resolved
         resolvedVariables = true;
     }
 
     /**
-     * Returns true if all place holder variables
-     * are resolved.
-     * A place holder variable is resolved when
-     * {@link #getVariable(String)}
-     * getArr() does not return null and
-     * the shape is properly resolved.
-     *
-     * @return true if all place holder variables are resolved.
-     */
-    public boolean allPlaceHolderVariablesResolved() {
-        for (val vertexId : placeHolderVarNames) {
-            val var = getVariable(vertexId);
-            if (var.getArr() == null) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    /**
-     * Add one or or more place holder variables
-     * for the given vertex id.
+     * Updates the variable name property on the passed in variable, the reference in samediff, and returns the variable.
      * <p>
-     * Note that if a vertex id in placeHolderVariables
-     * isn't present in this samediff instance anyways,
-     * an {@link ND4JIllegalStateException} is thrown
-     *
-     * @param varName              the vertex id to add place holders for
-     * @param placeHolderVariables the place holder variables
-     */
-    public void putPlaceHolderForVariable(String varName, String... placeHolderVariables) {
-        for (val placeHolderVariable : placeHolderVariables) {
-            if (!variableMap.containsKey(placeHolderVariable)) {
-                throw new ND4JIllegalStateException("No variable found for " + placeHolderVariable);
-            }
-        }
-
-
-        List<String[]> placeHolders = placeHolderMap.get(varName);
-        if (placeHolders == null) {
-            placeHolders = new ArrayList<>();
-            placeHolderMap.put(varName, placeHolders);
-        }
-
-        placeHolders.add(placeHolderVariables);
-    }
-
-
-    /**
-     * Returns true if the given vertex id
-     * has any placeholder variables
-     *
-     * @param vertexId the vertex id to check for
-     * @return true if this vertex has any place holder
-     * variables or not
-     */
-    public boolean hasPlaceHolderVariables(String vertexId) {
-        return placeHolderMap.containsKey(vertexId);
-    }
-
-    /**
-     * Get the place holders for a given
-     * vertex id. May return null.
-     * <p>
-     * Consider using {@link #hasPlaceHolderVariables(String)}
-     *
-     * @param varName the vertex id to get the place holders for
-     * @return the place holder variables for the given vertex
-     * id or null
-     */
-    public List<String[]> getPlaceHoldersFor(String varName) {
-        return placeHolderMap.get(varName);
-    }
-
-
-    /**
-     * Creates and executes a list of operations
-     * based on the given variables passed in.
-     * {@link #resolveVariablesWith(Map)}
-     * is called
-     *
-     * @return
-     */
-    public Pair<Map<SDVariable, DifferentialFunction>, List<DifferentialFunction>> execWithPlaceHolder(Map<String, INDArray> inputs) {
-        resolveVariablesWith(inputs);
-        return exec();
-    }
-
-    /**
-     * Get the {@link SDVariable}
-     * associated with each function
-     * based on the {@link DifferentialFunction#outputVariables()} ()}
-     *
-     * @param functions the functions to get the variables for
-     * @return the list of variables associated with the given {@link DifferentialFunction}
-     */
-    public List<SDVariable> getVariablesAssociatedWithFunctions(List<DifferentialFunction> functions) {
-        List<SDVariable> ret = new ArrayList<>(functions.size());
-        for (DifferentialFunction function : functions) {
-            ret.addAll(Arrays.asList(function.outputVariables()));
-        }
-
-        return ret;
-    }
-
-
-    /**
-     * Updates the variable name
-     * property on the passed in variable,
-     * the reference in samediff,
-     * and returns the variable.
-     * <p>
-     * Note that if null for the new variable is passed in,
-     * it will just return the original input variable.
+     * Note that if null for the new variable is passed in, it will just return the original input variable.
      *
      * @param varToUpdate the variable to update
      * @param newVarName  the new variable name
@@ -6777,7 +3236,11 @@ public class SameDiff {
             throw new NullPointerException("Null input: No variable found for updating!");
         }
 
-        if (newVarName == null && variableMap.containsKey(varToUpdate.getVarName())) {
+        if(newVarName != null && variables.containsKey(newVarName) && varToUpdate != variables.get(newVarName).getVariable()){
+            throw new IllegalStateException("Variable name \"" + newVarName + "\" already exists for a different SDVariable");
+        }
+
+        if (newVarName == null && variables.containsKey(varToUpdate.getVarName())) {
             //Edge case: suppose we do m1=sd.mean(in), m2=sd.mean(m1) -> both initially have the name
             // "mean" and consequently a new variable name needs to be generated
             newVarName = generateNewVarName(varToUpdate.getVarName(), 0);
@@ -6795,8 +3258,7 @@ public class SameDiff {
 
 
     /**
-     * Updates the variable name property on the passed in variables,
-     * its reference in samediff, and returns the variable.
+     * Updates the variable name property on the passed in variables, its reference in samediff, and returns the variable.
      *
      * @param variablesToUpdate the variable to update
      * @param newVariableNames  the new variable name
@@ -6816,9 +3278,19 @@ public class SameDiff {
         return updatedVariables;
     }
 
-
+    /**
+     * Associate the current SameDiff instance with all ops and variables.
+     * This is necessary to ensure that when dealing with shared state (usually with a SameDiff function such
+     * as "grad" - the backward function) we have the correct SameDiff instance set for all ops/SDVariables.<br>
+     * If this is not done, arrays and shapes could be fetched from the incorrect SameDiff instance for some methods
+     */
     protected void associateSameDiffWithOpsAndVariables(){
-        for(DifferentialFunction df : functionInstancesById.values()){
+        for(SDVariable var : variableMap().values()){
+            var.setSameDiff(this);
+        }
+//        for(DifferentialFunction df : functionInstancesById.values()){
+        for(SameDiffOp op : ops.values()){
+            DifferentialFunction df = op.getOp();
             df.setSameDiff(this);
 
             //TODO: This is ugly but seemingly necessary
@@ -6840,800 +3312,50 @@ public class SameDiff {
                 }
             }
         }
-        for(SDVariable var : variableMap.values()){
-            var.setSameDiff(this);
-        }
     }
 
-
-    // required for loops
-    private SDVariable[] outputs;
-    private SDVariable[] inputs;
-
-
-    private Pair<Map<SDVariable, DifferentialFunction>, List<DifferentialFunction>> exec_cache;
-
-    public void clearExecutionCache(){
-        exec_cache = null;
+    public Map<String,INDArray> execAll(Map<String,INDArray> placeholders){
+        List<String> allVars = new ArrayList<>();
+        for(Variable v : variables.values()){
+            allVars.add(v.getName());
+        }
+        return exec(placeholders, allVars.toArray(new String[allVars.size()]));
     }
 
-    public Pair<Map<SDVariable, DifferentialFunction>, List<DifferentialFunction>> exec() {
+    public INDArray execSingle(Map<String,INDArray> placeholders, String output){
+        return exec(placeholders, output).get(output);
+    }
 
-        /*
-        if (exec_cache != null){
-            return exec_cache;
+    public Map<String,INDArray> exec(Map<String,INDArray> placeholders, List<String> outputs){
+        return exec(placeholders, outputs.toArray(new String[outputs.size()]));
+    }
+
+    public Map<String,INDArray> exec(Map<String,INDArray> placeholders, String... outputs){
+        Preconditions.checkState(outputs != null && outputs.length > 0, "No outputs were specified");
+        long threadId = Thread.currentThread().getId();
+        if(!sessions.containsKey(threadId)){
+            log.info("Creating new InferenceSession for thread {}", threadId);
+            sessions.put(threadId, new InferenceSession(this));
         }
-        */
 
-        if (log.isTraceEnabled()) {
-            log.trace("Starting execution: {} functions", functionInstancesById.size());
+        List<String> phNames = inputs();
+        if(placeholders == null && phNames != null){
+            //Maybe user set placeholders before calling exec method?
+            placeholders = placeholdersPerThread.get(Thread.currentThread().getId());
         }
 
-
-        if (!resolvedVariables)
-            resolveVariablesWith(new LinkedHashMap<String, INDArray>());
-
-        List<DifferentialFunction> ops = new ArrayList<>();
-
-        // we don't care if this thread had any other FlowPath objects attached. we'll just create new one
-        localFlowPath.set(new FlowPath());
-
-        val flowPath = localFlowPath.get();
-
-        Map<SDVariable, DifferentialFunction> opMap = new HashMap<>();
-        val funcs = new ArrayList<DifferentialFunction>(functionInstancesById.values());
-        List<String> funcNames = new ArrayList<>(functionInstancesById.keySet());       //LinkedHashMap, so order for both these vars should be identical
-        boolean onBackward = false;
-
-
-        // dequeue for Frames (nested, probably)
-        val frames = new ArrayDeque<String>();
-
-        // simple flag, set true if within frame
-        boolean inFrame = false;
-
-        // yet another flag, to remove LastFrame once we really left last frame
-        boolean frameLeft = false;
-
-        //If true: this execution includes gradient functions...
-        boolean isExecBackwards = functionInstancesById.containsKey(GradientBackwardsMarker.OP_NAME);
-
-        //Before execution: set the SameDiff instance
-        //This is necessary, because the one op could be shared by both forward and backward samediff instances
-        //If the SameDiff instance isn't set, they might use wrong shapes or arrays as part of their ops
-        //And, set the SameDiff instance on all variables, for exactly the same reason
-        associateSameDiffWithOpsAndVariables();
-
-
-
-        int i = 0;
-        int exec_counter = 0;
-        for (; i < funcs.size(); i++) {
-            ++exec_counter;
-
-            if (log.isTraceEnabled()) {
-                val f = funcs.get(i);
-                String[] argNames = f.argNames();
-                String[] outNames = f.outputVariablesNames();
-                log.trace("Starting execution of step {} of {}: Function {} (ownName={}) - {}", exec_counter, funcs.size(),
-                        f.opName(), f.getOwnName(), f.getClass().getName());
-                log.trace("Function inputs: {} - Function outputs: {}", (argNames == null ? "(none)" : Arrays.toString(argNames)),
-                        (outNames == null ? "(none)" : Arrays.toString(outNames)));
-                SDVariable[] args = f.args();
-                for (int arg = 0; arg < args.length; arg++) {
-                    if (args[arg] == null) {
-                        log.trace("--> arg {} - {}: argument is null!", arg, argNames[arg]);
-                    } else {
-                        INDArray arr = args[arg].getArr();
-                        String arrShape = (arr == null ? "<array not present>" : Arrays.toString(arr.shape()));
-                        log.trace("--> arg {} - {}: array shape: {}", arg, argNames[arg], arrShape);
-                    }
-
-                }
-            }
-
-            val opName = funcs.get(i).opName();
-            if (!onBackward && GradientBackwardsMarker.OP_NAME.equals(opName)) {
-                onBackward = true;
-            }
-
-            if (GradientBackwardsMarker.OP_NAME.equals(opName))
-                continue;
-
-            DifferentialFunction differentialFunction = funcs.get(i);
-
-            if((differentialFunction instanceof ExternalErrorsFunction)) {
-                if(isExecBackwards)
-                    ((ExternalErrorsFunction) differentialFunction).updateBeforeExecution();
-
-                continue;
-            }
-
-            val ownName = differentialFunction.getOwnName();
-
-            // just registering function for this pass
-            flowPath.ensureNodeStateExists(differentialFunction.getOwnName());
-
-            if (differentialFunction instanceof SDVariable) {
-                if (log.isTraceEnabled()) {
-                    log.trace("Skipping differentialFunction that is instanceof SDVariable: {}", opName);
-                }
-                continue;
-            }
-
-            val args = getInputsForFunction(differentialFunction);
-
-            log.debug("Step: {}; Executing op [{}] for node [{}]", exec_counter, opName, ownName);
-
-            // check if inputs are active nodes. skip step otherwise
-            // please note: Exit node can't be skipped, because it's either rewind point or exit loop point
-            boolean shouldSkip = false;
-            if (differentialFunction instanceof Merge) {
-                val arg0 = args[0];
-                val arg1 = args[1];
-
-                if (!flowPath.isActive(arg0) && !flowPath.isActive(arg1))
-                    shouldSkip = true;
-            } else {
-                if (!(differentialFunction instanceof Exit)) {
-
-                    // if we've left Exit nodes, we can finally delete last frame name
-                    if (frameLeft) {
-                        frameLeft = false;
-
-                        val frame_name = frames.removeLast();
-                        flowPath.activateFrame(frame_name, false);
-                        flowPath.forgetFrame(frame_name);
-                    }
-
-                    // we must check, if there's inactive nodes used as inputs for this node
-                    for (val input : args) {
-                        if (!flowPath.isActive(input)) {
-                            // propagate inactivity
-                            flowPath.markActive(differentialFunction.getOwnName(), false);
-                            shouldSkip = true;
-                            break;
-                        }
-                    }
-                }
-            }
-
-            if (shouldSkip) {
-                if (log.isTraceEnabled()) {
-                    log.trace("Skipping function {}: shouldSkip = true", opName);
-                }
-                continue;
-            }
-
-            differentialFunction.resolvePropertiesFromSameDiffBeforeExecution();
-            flowPath.markActive(differentialFunction.getOwnName(), true);
-
-            /**
-             * This set of operations (Enter/Exit/NextIteration/Exit/Switch) are special snowflakes: they modify graph execution order, and basically used here to replicate TF logic.
-             * Since SameDiff itself has own logic for loops and conditionals using Scopes
-             */
-            if (differentialFunction instanceof LoopCond) {
-                if (log.isTraceEnabled())
-                    log.trace("Starting execution of LoopCond op");
-
-                // this node just passes single input forward, for future evaluation
-                val inputs = getInputVariablesForFunction(differentialFunction);
-
-                val array = inputs[0].getArr();
-                variableNameToArr.put(differentialFunction.getOwnName(), array.dup(array.ordering()));
-
-                flowPath.markExecuted(differentialFunction.getOwnName(), true);
-
-                if ((int) array.getDouble(0) == 1) {
-                    val frameName = frames.getLast();
-                    // incrementing number of cycles for THIS frame, only if LoopCond is true
-                    flowPath.incrementNumberOfCycles(frameName);
-                }
-            } else if (differentialFunction instanceof Enter) {
-                if (log.isTraceEnabled())
-                    log.trace("Starting execution of Enter op");
-
-                //  if (flowPath.wasExecuted(differentialFunction.getOwnName()))
-                //      continue;
-
-                val inputs = getInputVariablesForFunction(differentialFunction);
-
-                val array = inputs[0].getArr();
-                val name = inputs[0].getVarName();
-
-                if (array != null)
-                    variableNameToArr.put(differentialFunction.getOwnName(), array.dup(array.ordering()));
-                else {
-                    val cleansed = name.replaceAll(":.*","");
-                    val list = lists.get(cleansed);
-                    if (list != null)
-                        lists.put(ownName, list);
-                }
-
-                flowPath.markExecuted(differentialFunction.getOwnName(), true);
-
-                // frame_name MUST be non-null here
-                val frame_name = ((Enter) differentialFunction).getFrameName();
-                if (!flowPath.isRegisteredFrame(frame_name)) {
-                    flowPath.registerFrame(frame_name);
-                    frames.addLast(frame_name);
-                    inFrame = true;
-                }
-
-
-            } else if (differentialFunction instanceof Exit) {
-                if (log.isTraceEnabled())
-                    log.trace("Starting execution of Exit op");
-
-                // this is just exit point of graph: it maps own input to own output or rewinds graph to specific position planned at first NextIteration node
-
-                val frame_name = frames.getLast();
-
-                // saving frame_name for backward pass
-                ((Exit) differentialFunction).setFrameName(frame_name);
-
-                if (!flowPath.isFrameActive(frame_name)) {
-                    flowPath.markActive(differentialFunction.getOwnName(), false);
-
-                    // if frame is inactive, lets remove it from queue as well
-                    frameLeft = true;
-                    continue;
-                }
-
-                // Exit node is called in any way, doesn't matters if body was executed or not
-                // so, we're checking if rewind was planned (so, NextIteration was executed before Exit)
-                // and if it's TRUE - we're setting applying rewind by setting loop idx and calling continue
-                if (flowPath.isRewindPlanned(frame_name)) {
-                    // just reset loop
-                    flowPath.planRewind(frame_name, false);
-                    val currentPosition = i;
-                    i = flowPath.getRewindPosition(frame_name);
-                    val startPosition = i + 1;
-                    flowPath.setRewindPosition(frame_name, -1);
-
-                    continue;
-                }
-
-                val inputs = getInputVariablesForFunction(differentialFunction);
-
-                val array = inputs[0].getArr();
-                val name = inputs[0].getVarName();
-
-                if (array != null)
-                    variableNameToArr.put(differentialFunction.getOwnName(), array.dup(array.ordering()));
-                else {
-                    val cleansed = name.replaceAll(":.*","");
-                    val list = lists.get(cleansed);
-                    if (list != null)
-                        lists.put(ownName, list);
-                }
-
-                flowPath.markExecuted(differentialFunction.getOwnName(), true);
-
-                // now it's safe to remove LastFrame
-                frameLeft = true;
-
-            } else if (differentialFunction instanceof NextIteration) {
-                if (log.isTraceEnabled())
-                    log.trace("Starting execution of NextIteration op");
-
-                // this operations merges own input, and schedules rewind to specific Merge node
-                val inputs = getInputVariablesForFunction(differentialFunction);
-                val frame_name = frames.getLast();
-
-                val array = inputs[0].getArr();
-                val name = inputs[0].getVarName();
-
-                if (array != null)
-                    variableNameToArr.put(differentialFunction.getOwnName(), array.dup(array.ordering()));
-                else {
-                    val cleansed = name.replaceAll(":.*","");
-                    val list = lists.get(cleansed);
-                    if (list != null)
-                        lists.put(ownName, list);
-                }
-
-                flowPath.markExecuted(differentialFunction.getOwnName(), true);
-
-                // if NextIteration wasn't skipped with inactive branch, we'll plan rewind for this frame. obviously, only once
-                if (!flowPath.isRewindPlanned(frame_name)) {
-                    flowPath.planRewind(frame_name, true);
-
-                    continue;
-                }
-
-            } else if (differentialFunction instanceof Merge) {
-                if (log.isTraceEnabled())
-                    log.trace("Starting execution of Merge op");
-
-                // merge operation takes two inputs, and saves one of them as own output.
-                // if SDVariable exists for second input - we use it. First input used otherwise
-                val inputs = getInputVariablesForFunction(differentialFunction);
-
-                val frame_name = frames.size() > 0 ? frames.getLast() : null;
-
-                if (frame_name != null)
-                    flowPath.activateFrame(frame_name, true);
-
-                // frame_name can be null if this merge node is used for something that's not loop. i.e. switch/merge pair
-                if (frame_name != null)
-                    flowPath.setRewindPositionOnce(frame_name, i - 1);
-
-                // NextIteration can have NO frame_name defined. so let's propagate it
-                if (inputs.length == 2) {
-                    val secondArg = functionInstancesById.get(inputs[1].getVarName());
-
-                    if (secondArg != null && secondArg instanceof NextIteration) {
-                        ((NextIteration) secondArg).setFrameName(frame_name);
-                    }
-                }
-
-                // we must check second input first here
-                if (flowPath.wasExecuted(inputs[1].getVarName())) {
-                    // propagate second input
-                    val array = inputs[1].getArr();
-                    val name = inputs[1].getVarName();
-
-                    if (array != null)
-                        variableNameToArr.put(differentialFunction.getOwnName(), array.dup(array.ordering()));
-                    else {
-                        val cleansed = name.replaceAll(":.*","");
-                        val list = lists.get(cleansed);
-                        if (list != null)
-                            lists.put(ownName, list);
-                    }
-
-                    // nullify executed mark
-                    flowPath.markExecuted(inputs[1].getVarName(), false);
-                } else {
-                    // propagate first input
-                    val array = inputs[0].getArr();
-                    val name = inputs[0].getVarName();
-
-                    if (array != null)
-                        variableNameToArr.put(differentialFunction.getOwnName(), array.dup(array.ordering()));
-                    else {
-                        val cleansed = name.replaceAll(":.*","");
-                        val list = lists.get(cleansed);
-                        if (list != null)
-                            lists.put(ownName, list);
-                    }
-                }
-
-                flowPath.markExecuted(differentialFunction.getOwnName(), true);
-            } else if (differentialFunction instanceof Switch) {
-                if (log.isTraceEnabled())
-                    log.trace("Starting execution of Switch op");
-
-                // switch takes 2 inputs: actual input and boolean scalar. If scalar is false, input is saved as output:0, if scalar is true, input is saved as output:1
-                ((CustomOp) differentialFunction).populateInputsAndOutputsFromSameDiff();
-
-                val inputs = getInputVariablesForFunction(differentialFunction);
-
-                val input = inputs[0].getArr();
-                val bool = inputs[1].getArr();
-                val name = inputs[0].getVarName();
-
-                // basically we're setting one of the graph branches inactive. branch 0 for false, branch 1 for true
-                if ((int) bool.getDouble(0) == 0) {
-                    // false step, we'll propagate output:0 here
-                    flowPath.setActiveBranch(differentialFunction.getOwnName(), 0);
-                    flowPath.markActive(differentialFunction.getOwnName(), true);
-                    flowPath.markActive(differentialFunction.getOwnName() + ":1", false);
-
-                    if (input != null)
-                        variableNameToArr.put(differentialFunction.getOwnName(), input.dup(input.ordering()));
-                    else {
-                        val cleansed = name.replaceAll(":.*","");
-                        val list = lists.get(cleansed);
-                        if (list != null)
-                            lists.put(ownName, list);
-                    }
-                } else {
-                    // true step, we'll propagate output:1 here
-                    flowPath.setActiveBranch(differentialFunction.getOwnName(), 1);
-
-                    if (input != null)
-                        variableNameToArr.put(differentialFunction.getOwnName() + ":1", input.dup(input.ordering()));
-                    else {
-                        val cleansed = name.replaceAll(":.*","");
-                        val list = lists.get(cleansed);
-                        if (list != null)
-                            lists.put(ownName, list);
-                    }
-
-                    flowPath.markActive(differentialFunction.getOwnName(), false);
-                    flowPath.markActive(differentialFunction.getOwnName() + ":1", true);
-                }
-
-                flowPath.markExecuted(differentialFunction.getOwnName(), true);
-            } else if (differentialFunction instanceof BaseTensorOp) {
-                //if(log.isTraceEnabled())
-                log.info("Starting execution of Tensor op [{}]", opName);
-
-                // we just pull actual code out of
-                val list = ((BaseTensorOp) differentialFunction).execute(this);
-
-                if (!lists.containsKey(list.getName()))
-                    lists.put(list.getName(), list);
-
-                ops.add(differentialFunction);
-            } else if (differentialFunction instanceof If) {
-                if (log.isTraceEnabled())
-                    log.trace("Starting execution of If op");
-
-                If ifOp = (If) differentialFunction;
-                if (!onBackward) {
-                    ifOp.getPredicateExecution().exec();
-                    //depending on the block add the proper graph body to this for persistence
-                    //and possible later processing.
-                    if (ifOp.getTargetBoolean().getArr().sumNumber().doubleValue() > 0) {
-                        ifOp.getLoopBodyExecution().exec();
-                        ifOp.exectedTrueOrFalse(true);
-                    } else {
-                        ifOp.getFalseBodyExecution().exec();
-                        ifOp.exectedTrueOrFalse(false);
-
-                    }
-                } else {
-                    if (ifOp.getTrueBodyExecuted() != null) {
-                        Pair<Map<SDVariable, DifferentialFunction>, List<DifferentialFunction>> execBackwards = null;
-                        List<SDVariable> variablesForFunctions = null;
-                        if (ifOp.getTrueBodyExecuted()) {
-                            execBackwards = ifOp.getLoopBodyExecution().execBackwards();
-
-                            variablesForFunctions = ifOp.getLoopBodyExecution().getVariablesAssociatedWithFunctions(execBackwards.getRight());
-                        } else {
-                            execBackwards = ifOp.getFalseBodyExecution().execBackwards();
-                            variablesForFunctions = ifOp.getFalseBodyExecution().getVariablesAssociatedWithFunctions(execBackwards.getRight());
-                        }
-
-                        /**
-                         * Maps the variables from the child namespace body to
-                         * the parent. This allows access to the underlying ndarray
-                         * and returning a valid variable reference for autodiff.
-                         */
-                        for (SDVariable variable : variablesForFunctions) {
-                            SDVariable proxyVar = var(variable);
-                        }
-
-
-                    } else
-                        throw new ND4JIllegalStateException("No body was run.");
-
-                }
-
-                flowPath.markExecuted(differentialFunction.getOwnName(), true);
-
-                ops.add(differentialFunction);
-
-            } else if (differentialFunction instanceof While) {
-                if (log.isTraceEnabled())
-                    log.trace("Starting execution of While op");
-
-                While whileOp = (While) differentialFunction;
-
-                if (!onBackward) {
-                    SameDiff execBody = whileOp.getLoopBodyExecution();
-                    //depending on the block add the proper graph body to this for persistence
-                    //and possible later processing.
-                    //note that we need to update the graph predicate by running the execution
-
-
-                    whileOp.getPredicateExecution().exec();
-                    if (execBody.outputs == null) {
-                        // No explicit inputs/outputs provided.
-                        //Op was probably created by tensorflow import.
-                        // Non-inplace ops not supported.
-                        while (whileOp.getTargetBoolean().getArr().sumNumber().doubleValue() > 0) {
-                            //run the body
-                            execBody.exec();
-                            whileOp.getPredicateExecution().exec();
-                            whileOp.incrementLoopCounter();
-                        }
-                    } else {
-                        if (whileOp.getTargetBoolean().getSameDiff().inputs == null) {
-                            whileOp.getTargetBoolean().getSameDiff().inputs = new SDVariable[whileOp.getInputVars().length];
-                            for (int e = 0; e < whileOp.getInputVars().length; e++) {
-                                whileOp.getTargetBoolean().getSameDiff().inputs[i] = whileOp.getTargetBoolean().getSameDiff().variables().get(i);
-                            }
-                        }
-                        while (whileOp.getTargetBoolean().getArr().sumNumber().doubleValue() > 0) {
-                            //run the body
-                            execBody.exec();
-                            val outputs = execBody.outputs;
-
-                            int cnt = 0;
-                            for (val out : execBody.outputs) {
-                                execBody.associateArrayWithVariable(out.getArr(), execBody.inputs[cnt]);
-                                whileOp.getTargetBoolean().getSameDiff().associateArrayWithVariable(out.getArr(),
-                                        whileOp.getTargetBoolean().getSameDiff().inputs[cnt++]);
-                            }
-                            //update the predicate
-                            whileOp.getPredicateExecution().exec();
-                            whileOp.incrementLoopCounter();
-
-                        }
-                    }
-
-                    List<SDVariable> outputs = new ArrayList<>();
-                    val outputFuncArgs = new ArrayList<>(execBody.functionInstancesById.values()).get(execBody.functionInstancesById.values().size() - 1).outputVariables();
-                    outputs.addAll(Arrays.asList(outputFuncArgs));
-
-                    whileOp.setOutputVars(outputs.toArray(new SDVariable[outputs.size()]));
-                    ops.add(differentialFunction);
-                } else {
-                    /**
-                     * Note: Need to accumulate gradients.
-                     * Multiply each value by the number of times looped.
-                     * This approximates accumulating the gradient
-                     * across a number of loop cycles.
-                     * We only compute the gradient for the internal loop once
-                     * and from that we multiply the gradient by 5.
-                     *
-                     */
-                    Pair<Map<SDVariable, DifferentialFunction>, List<DifferentialFunction>> mapListPair = whileOp.getLoopBodyExecution().execBackwards();
-                    for (SDVariable variable : mapListPair.getFirst().keySet()) {
-                        variable.getArr().muli(whileOp.getNumLooped());
-                    }
-
-
-                }
-
-                flowPath.markExecuted(differentialFunction.getOwnName(), true);
-
-            } else if (differentialFunction instanceof CustomOp) {
-                if (log.isTraceEnabled())
-                    log.trace("Starting execution of CustomOp op");
-
-
-                DynamicCustomOp customOp = (DynamicCustomOp) differentialFunction;
-
-                if (customOp.opName().equalsIgnoreCase("identity")) {
-                    val cleansed = args[0].replaceAll(":.*","");
-                    val list = lists.get(cleansed);
-                    if (list != null) {
-                        lists.put(ownName, list);
-
-                        flowPath.markExecuted(differentialFunction.getOwnName(), true);
-
-                        ops.add(customOp);
-
-                        continue;
-                    }
-                }
-
-                try {
-                    customOp.populateInputsAndOutputsFromSameDiff();
-                } catch (Throwable t) {
-                    throw new RuntimeException("Error populating inputs and outputs for function \"" + differentialFunction.getOwnName()
-                            + "\" of type " + differentialFunction.getClass().getName(), t);
-                }
-                customOp.assertValidForExecution();
-
-                Nd4j.getExecutioner().exec(customOp);
-
-                /*
-                if (customOp instanceof LessThanOrEqual) {
-                    log.info("Step: {}; InnerCondition: {} <= {} = {}", exec_counter, customOp.getInputArgument(0), customOp.getInputArgument(1), customOp.getOutputArgument(0));
-                } else if (customOp instanceof LessThan) {
-                    log.info("Step: {}; OuterCondition: {} <= {} = {}", exec_counter, customOp.getInputArgument(0), customOp.getInputArgument(1), customOp.getOutputArgument(0));
-                }
-                */
-
-                flowPath.markExecuted(differentialFunction.getOwnName(), true);
-
-                ops.add(customOp);
-            } else if (differentialFunction instanceof Op) {
-                if (log.isTraceEnabled())
-                    log.trace("Starting execution of Op op");
-
-                val inputs = getInputVariablesForFunction(differentialFunction);
-
-                Op op = (Op) differentialFunction;
-
-                // ops in differential function might have stale NDArrays used. we should renew them
-                if(inputs != null && inputs.length > 0) {
-                    op.setX(inputs[0].getArr());
-                    if (inputs.length == 2)
-                        op.setY(inputs[1].getArr());
-                }
-
-                //Check output shape; allocate a new Z if required
-                //For example, if minibatch size has changed since last op execution
-                List<long[]> outputShape = ((BaseOp)op).calculateOutputShape();
-                Preconditions.checkState(outputShape != null && outputShape.size() == 1, "Could not calculate output shape for op: %s", op.getClass());
-                //Update shape. DynamicCustomOp does this in populateInputsAndOutputsFromSameDiff(); for legacy ops, we'll do it here
-                putOrUpdateShapeForVarName(((BaseOp) op).outputVariable().getVarName(), outputShape.get(0), true);
-                INDArray z = op.z();
-                Preconditions.checkNotNull(z, "Could not get output array for op: %s", op.getClass());
-                if(!Arrays.equals(outputShape.get(0), z.shape())){
-                    if(log.isTraceEnabled()){
-                        log.trace("Existing op result (z) array shape for op {} was {}, allocating new array of shape {}",
-                                op.getClass().getSimpleName(), Arrays.toString(z.shape()), Arrays.toString(outputShape.get(0)));
-                    }
-                    //Get output variable:
-                    String fnName = funcNames.get(i);
-                    String outputName = outgoingArgsReverse.get(fnName)[0];
-                    SDVariable outputVar = getVariable(outputName);
-
-                    putOrUpdateShapeForVarName(outputName, outputShape.get(0), true);
-                    INDArray newZ = outputVar.storeAndAllocateNewArray();
-                    op.setZ(newZ);
-                }
-
-
-                if (differentialFunction.getDimensions() == null)
-                    Nd4j.getExecutioner().exec(op);
-                else if (op.isExecSpecial()) {
-                    op.exec();
-                } else {
-                    int[] axes = differentialFunction.getDimensions();
-                    if (differentialFunction instanceof Accumulation) {
-                        Accumulation accumulation = (Accumulation) differentialFunction;
-
-                        Nd4j.getExecutioner().exec(accumulation, axes);
-
-                        if (differentialFunction.outputVariable().getArr() == null) {
-                            val var = differentialFunction.outputVariables()[0];
-                            updateVariable(var.getVarName(), accumulation.z());
-                            updateShapeForVarName(var.getVarName(), accumulation.z().shape());
-                        }
-                    } else if (differentialFunction instanceof BroadcastOp) {
-                        BroadcastOp broadcastOp = (BroadcastOp) differentialFunction;
-                        Nd4j.getExecutioner().exec(broadcastOp, axes);
-                    } else if (differentialFunction instanceof GradientOp) {
-                        Nd4j.getExecutioner().exec(op);
-                    } else if (differentialFunction instanceof IndexAccumulation) {
-                        IndexAccumulation indexAccumulation = (IndexAccumulation) differentialFunction;
-                        Nd4j.getExecutioner().exec(indexAccumulation, axes);
-
-                    } else if (differentialFunction instanceof TransformOp) {
-                        TransformOp t = (TransformOp) differentialFunction;
-                        Nd4j.getExecutioner().exec(t, axes);
-                    }
-                }
-
-
-                flowPath.markExecuted(differentialFunction.getOwnName(), true);
-
-                ops.add(differentialFunction);
-            } else {
-                throw new IllegalStateException("Unknown function type: " + differentialFunction.getClass().getName());
-            }
-
-            //debug
-            // printFunction(differentialFunction);
-
-            if (log.isTraceEnabled()) {
-                log.trace("Execution completed for DifferentialFunction {} - {}", opName, differentialFunction.getOwnName());
-                SDVariable[] outputVars = differentialFunction.outputVariables();
-                for (int x = 0; x < outputVars.length; x++) {
-                    INDArray arr = outputVars[x].getArr();
-                    String arrShape = (arr == null ? "<no array>" : Arrays.toString(arr.shape()));
-                    log.trace("--> output {} - {}: array shape {}", x, outputVars[x].getVarName(), arrShape);
-                }
+        //Check that all placeholders are provided
+        if(phNames != null && phNames.size() > 0) {
+            Preconditions.checkNotNull(placeholders, "No placeholders were provided. Network has placeholders: %s", phNames);
+            for (String s : phNames) {
+                Preconditions.checkState(placeholders.containsKey(s), "No placeholder variable was provided for variable \"%s\"." +
+                        " Cannot execute without all placeholders set", s);
             }
         }
 
-        if (log.isTraceEnabled()) {
-            log.trace("Execution complete");
-        }
-
-        val ret = new Pair<>(opMap, ops);
-        exec_cache = ret;
-        if (parent != null) {
-            parent.exec_cache = exec_cache;
-        }
-
-
+        InferenceSession is = sessions.get(threadId);
+        Map<String,INDArray> ret = is.output(Arrays.asList(outputs), placeholders);
         return ret;
-    }
-
-
-    /**
-     * Print the given function for debugging (will not print functions)
-     *
-     * @param differentialFunction the function to print
-     */
-    public void printFunction(DifferentialFunction differentialFunction) {
-        if (!logExecution)
-            return;
-        if (differentialFunction instanceof SDVariable)
-            return;
-
-        StringBuilder argShapes = new StringBuilder();
-        for (val arg : differentialFunction.args()) {
-            argShapes.append(" Variable " + arg.getVarName() +
-                    " Shape for " + Arrays.toString(arg.getShape()));
-        }
-
-        for (val func : differentialFunction.outputVariables()) {
-            argShapes.append("  Output variable " + func.getVarName() + " is " +
-                    Arrays.toString(func.getShape()));
-        }
-
-
-        StringBuilder realShapes = new StringBuilder();
-        for (val arg : differentialFunction.args()) {
-            realShapes.append(" Input shape for " + arg.getVarName() + " is  " + Arrays.
-                    toString(getShapeForVarName(arg.getVarName())));
-        }
-
-        for (val arg : differentialFunction.outputVariables()) {
-            realShapes.append(" Output shape for " + arg.getVarName() + " is  " + Arrays.
-                    toString(getShapeForVarName(arg.getVarName())));
-        }
-
-
-//        log.info(realShapes.toString());
-    }
-
-
-    /**
-     * Permute indices for the samediff/dl4j format.
-     * Due to the dl4j format being NCHW, this is a
-     * simple routine for returning permute indices.
-     * This is typically used for model import.
-     *
-     * @param dataFormat the data format to permute
-     * @return the permuted indices
-     */
-    public static int[] permuteDataFormatForSameDiff(String dataFormat, boolean weights) {
-        val dl4jFormat = "NCHW";
-        dataFormat = dataFormat.toUpperCase();
-        //TF: filter_height, filter_width, in_channels, out_channels
-        /**
-         * N: filter_height
-         * H: filter_width
-         * W: in_channels
-         * C: out_channels
-         */
-
-
-        /**
-         *
-         *
-         */
-        //DL4J: filter_height,out_channels,filter_width,in_channels
-        // Weights should be: out channels, in channels, height,width
-        int[] ret = new int[4];
-        if (weights) {
-            ret[0] = dataFormat.indexOf('W');
-            ret[1] = dataFormat.indexOf('C');
-            ret[2] = dataFormat.indexOf('N');
-            ret[3] = dataFormat.indexOf('H');
-            return ret;
-        }
-
-
-        //NHWC
-        //DL4J: NCHW
-        for (int i = 0; i < dataFormat.length(); i++) {
-            if (dl4jFormat.indexOf(dataFormat.charAt(i)) < 0) {
-                throw new ND4JIllegalStateException("Illegal convolution data format string passed in " + dataFormat + " must be some variant of NCHW");
-            }
-        }
-
-        for (int i = 0; i < dl4jFormat.length(); i++) {
-            ret[i] = dl4jFormat.indexOf(dataFormat.charAt(i));
-        }
-
-        return ret;
-    }
-
-    /**
-     * Update the {@link INDArray}
-     * ndarray for the given variable name
-     *
-     * @param variableName the variable to update
-     * @param arr          the array to update with
-     */
-    public void updateVariable(String variableName, INDArray arr) {
-        if (!variableNameToArr.containsKey(variableName))
-            putArrayForVarName(variableName, arr);
-        else
-            updateArrayForVarName(variableName, arr);
     }
 
 
@@ -7654,12 +3376,13 @@ public class SameDiff {
                 0,
                 0,
                 -1,
-                0.0f, 0, 0);
+                0, 0, 0, 0,0, 0);
 
         return flatNode;
     }
 
     /**
+     * Note: INTENDED FOR DEVELOPER USE<br>
      * This method extract base variable name and output index (if exists) from raw variable name.
      * I.e:
      * - if variable name is "Unstack_2", result will be Pair("Unstack_2", 0)
@@ -7690,20 +3413,29 @@ public class SameDiff {
         }
     }
 
-    protected int asFlatNode(@NonNull DifferentialFunction node, @NonNull FlatBufferBuilder bufferBuilder, List<SDVariable> variables, Map<String, Integer> reverseMap, Map<String, Integer> forwardMap, Map<String, Integer> framesMap, AtomicInteger idCounter) {
+    protected int asFlatNode(@NonNull DifferentialFunction node, @NonNull FlatBufferBuilder bufferBuilder, List<SDVariable> variables,
+                             Map<String, Integer> reverseMap, Map<String, Integer> forwardMap, Map<String, Integer> framesMap, AtomicInteger idCounter, Integer id) {
         val opName = node.opName();
-        val hash = getOpNum(node.opName(), node.opType());
+        val hash = FlatBuffersMapper.getOpNum(node.opName(), node.opType());
         //log.info("Exporting node: [{}:<{}> ; OpType: {}; Hash/opNum: {}]", node.opName(), node.tensorflowName(), node.opType(), hash);
 
-        double[] extras = node.getExtraArgs() != null ? new double[node.getExtraArgs().length] : new double[0];
-        for (int e = 0; e < extras.length; e++) {
-            extras[e] = ((Number) node.getExtraArgs()[e]).doubleValue();
+        double[] extras;
+        if(node.opType() == Op.Type.CUSTOM){
+            CustomOp op = (CustomOp)node;
+            extras = op.tArgs();
+        } else {
+            extras = node.getExtraArgs() != null ? new double[node.getExtraArgs().length] : new double[0];
+            for (int e = 0; e < extras.length; e++) {
+                extras[e] = ((Number) node.getExtraArgs()[e]).doubleValue();
+            }
         }
 
+        boolean[] boolArgs = null;
         long[] extraBits = null;
         if (node.opType() == Op.Type.CUSTOM) {
             DynamicCustomOp dynamicCustomOp = (DynamicCustomOp) node;
             extraBits = dynamicCustomOp.iArgs();
+            boolArgs = dynamicCustomOp.bArgs();
         } else if (node instanceof Enter) {
             // in case of Enter node we'll be storing unique frame reference
             val frameName = ((Enter) node).getFrameName();
@@ -7713,6 +3445,20 @@ public class SameDiff {
             extraBits = new long[]{framesMap.get(frameName).intValue()};
         } else
             extraBits = new long[]{};
+
+        if (node.opType() == Op.Type.REDUCE_BOOL || node.opType() == Op.Type.REDUCE_SAME || node.opType() == Op.Type.REDUCE_FLOAT || node.opType() == Op.Type.REDUCE_LONG) {
+            val op = (ReduceOp) node;
+
+            boolArgs = new boolean[2];
+            boolArgs[0] = op.isKeepDims();
+            boolArgs[1] = true; // always new format
+        } else if (node.opType() == Op.Type.INDEXREDUCE) {
+            val op = (IndexAccumulation) node;
+
+            boolArgs = new boolean[2];
+            boolArgs[0] = op.isKeepDims();
+            boolArgs[1] = true; // always new format
+        }
 
         val inPaired = new ArrayList<Integer>();
 
@@ -7734,84 +3480,140 @@ public class SameDiff {
         }
 
 
-        val inputs = node.args();
-        log.trace("");
-        for (val input : inputs) {
-            //for (int i = 0; i < outputVertexId.length; i++) {
-            val pair = parseVariable(input.getVarName());
-            if (!reverseMap.containsKey(pair.getFirst())) {
-                if (pair.getFirst().contains("NextIteration")) {
+        SDVariable[] inputs = node.args();
+        for (SDVariable input : inputs) {
+            String varName = input.getVarName();
+            int outIdx;
+            if(this.variables.get(varName).getOutputOfOp() != null){
+                DifferentialFunction df = ops.get(this.variables.get(varName).getOutputOfOp()).getOp();
+                outIdx = ops.get(df.getOwnName()).getOutputsOfOp().indexOf(varName);
+            } else {
+                outIdx = 0;
+            }
+
+            if (!reverseMap.containsKey(varName)) {
+                if (varName.contains("NextIteration")) {
                     // forward declaration: Merge node in case of loop will be referring to NextIteration node, which wasn't announced yet
                     int fwdNodeId = idCounter.incrementAndGet();
-                    forwardMap.put(pair.getFirst(), fwdNodeId);
-                    reverseMap.put(pair.getFirst(), fwdNodeId);
+                    forwardMap.put(varName, fwdNodeId);
+                    reverseMap.put(varName, fwdNodeId);
                 } else {
-                    throw new ND4JIllegalStateException("Unknown variable used in input: [" + pair.getFirst() + "]");
+                    throw new ND4JIllegalStateException("Unknown variable used in input: [" + varName + "]");
                 }
             }
 
-            int nodeId = reverseMap.get(pair.getFirst());
-            int outputIndex = pair.getSecond();
-
-            inPaired.add(IntPair.createIntPair(bufferBuilder, nodeId, outputIndex));
-            //}
+            int nodeId = reverseMap.get(varName);
+            inPaired.add(IntPair.createIntPair(bufferBuilder, nodeId, outIdx));
         }
 
-        log.debug("Own Name: {}", node.getOwnName());
-        int ownId = forwardMap.containsKey(node.getOwnName()) ? forwardMap.get(node.getOwnName()) : idCounter.incrementAndGet();
-        reverseMap.put(node.getOwnName(), ownId);
+        log.trace("Own Name: {}", node.getOwnName());
+        int ownId = id != null ? id : idCounter.incrementAndGet();  //forwardMap.containsKey(node.getOwnName()) ? forwardMap.get(node.getOwnName()) : idCounter.incrementAndGet();
+        String[] outNames = node.outputVariablesNames();
+        for(String s : outNames){
+            if(!reverseMap.containsKey(s)){
+                reverseMap.put(s, ownId);
+            }
+        }
 
-        val dims = node.opType() == Op.Type.REDUCE && inPaired.size() == 1 && node.getDimensions() != null ? node.getDimensions() : new int[]{};
-        // TODO: Adam, just put your props here, instead of empty list, and they will be saved
-        List<FunctionProperties> props = new ArrayList<>();
-        int properties = FunctionProperties.asFlatProperties(bufferBuilder, props);
+        int[] dims;
+        if(node.opType() == Op.Type.REDUCE_FLOAT || node.opType() == Op.Type.REDUCE_SAME || node.opType() == Op.Type.REDUCE_BOOL || node.opType() == Op.Type.REDUCE_LONG || node.opType() == Op.Type.INDEXREDUCE || node.opType() == Op.Type.REDUCE3){
+            dims = node.getDimensions();
+            if(dims == null)
+                dims = new int[0];
+        } else {
+            dims = new int[0];
+        }
+        Map<String,Object> fnProps = node.propertiesForFunction();
+        int[] flatProperties = FlatBuffersMapper.mapFunctionPropertiesToFlatProperties(bufferBuilder, fnProps);
+        int propIdx = FlatNode.createPropertiesVector(bufferBuilder, flatProperties);
 
         int nodesIn = FlatNode.createInputVector(bufferBuilder, new int[]{});
         int nodesInPaired = FlatNode.createInputPairedVector(bufferBuilder, Ints.toArray(inPaired));
         int nodesOut = FlatNode.createOutputVector(bufferBuilder, outputIds);
         int extraz = FlatNode.createExtraParamsVector(bufferBuilder, extras);
         int integerArgs = FlatNode.createExtraIntegerVector(bufferBuilder, extraBits);
+        int bArgs = FlatNode.createExtraBoolsVector(bufferBuilder, boolArgs != null ? boolArgs : new boolean[0]);
         int dimensions = FlatNode.createDimensionsVector(bufferBuilder, dims);
-        int fname = bufferBuilder.createString(
-                outputVertexId == null ||
-                        outputVertexId.length < 1 ||
-                        outputVertexId[0] == null ? "" :
-                        outputVertexId[0].getVarName());
+        int fname = bufferBuilder.createString(node.getOwnName());
         int scopeName = bufferBuilder.createString("");
+        int scalar = 0;
+        if(node instanceof ScalarOp){
+            ScalarOp sOp = (ScalarOp)node;
+            INDArray s = sOp.scalar();
+            if(s != null){
+                scalar = s.toFlatArray(bufferBuilder);
+            }
+        }
+
 
         if (node.opType() == null)
             log.warn("Null-op node: {}", node);
+
+
+        List<String> outVarNames = node.getSameDiff().ops.get(node.getOwnName()).getOutputsOfOp();
+        int[] outVarNamesStringsOffsets = new int[outVarNames == null ? 0 : outVarNames.size()];
+        for( int i=0; i<outVarNamesStringsOffsets.length; i++ ){
+            outVarNamesStringsOffsets[i] = bufferBuilder.createString(outVarNames.get(i));
+        }
+        int outVarNamesOffset = FlatNode.createOutputNamesVector(bufferBuilder, outVarNamesStringsOffsets);
+
+        int opNameOffset = bufferBuilder.createString(opName);
+
+        byte[] outTypes = new byte[outVarNames.size()];
+        int i=0;
+        for(String s : outVarNames){
+            SDVariable v = getVariable(s);
+            outTypes[i++] = FlatBuffersMapper.getDataTypeAsByte(v.dataType());
+        }
+        int outTypesOffset = FlatNode.createOutputTypesVector(bufferBuilder, outTypes);
 
         int flatNode = FlatNode.createFlatNode(
                 bufferBuilder,
                 ownId,
                 fname,
-                getFlatOpType(node.opType()),
+                FlatBuffersMapper.getFlatOpType(node.opType()),
                 hash,
-                properties,
+                propIdx,
                 nodesIn,
                 nodesInPaired,
-                (byte) 0,
                 nodesOut,
                 extraz,
                 integerArgs,
+                bArgs,
                 dimensions,
-                -1,
-                node.opType() == Op.Type.SCALAR && node.getScalarValue() != null ? node.getScalarValue().floatValue() : 0.0f, 0, scopeName);
+                -1,     //Device
+                0,      //Scope ID
+                scopeName,      //Scope name
+                outVarNamesOffset,
+                opNameOffset,
+                outTypesOffset,   //Output types
+                scalar
+        );
 
         return flatNode;
     }
 
-
     /**
-     * This method exports given SameDiff instance into FlatBuffers
+     * This method exports the current SameDiff instance into FlatBuffers format, returning the array ops and
+     * all arrays as a ByteBuffer containing the FlatBuffers format data
      *
      * @param configuration - ExecutorConfiguration to be embedded into serialized graph
-     * @return
+     * @return a ByteBuffer holding the exported FlatBuffers representation of the graph
      */
     public ByteBuffer asFlatBuffers(@NonNull ExecutorConfiguration configuration) {
+        return asFlatBuffers(0, configuration);
+    }
+
+    /**
+     * This method exports the current SameDiff instance into FlatBuffers format, returning the array ops and
+     * all arrays as a ByteBuffer containing the FlatBuffers format data
+     *
+     * @param configuration - ExecutorConfiguration to be embedded into serialized graph
+     * @return a ByteBuffer holding the exported FlatBuffers representation of the graph
+     */
+    public ByteBuffer asFlatBuffers(long graphId, @NonNull ExecutorConfiguration configuration) {
         Nd4j.getExecutioner().commit();
-        FlatBufferBuilder bufferBuilder = new FlatBufferBuilder(1024);
+        val bufferBuilder = new FlatBufferBuilder(1024);
         val idCounter = new AtomicInteger(0);
 
         val flatVariables = new ArrayList<Integer>();
@@ -7819,53 +3621,81 @@ public class SameDiff {
         val flatNodes = new ArrayList<Integer>();
 
         // first of all we build VariableSpace dump
-        List<SDVariable> variableList = new ArrayList<>(variables());
+        val variableList = new ArrayList<SDVariable>(variables());
         val reverseMap = new LinkedHashMap<String, Integer>();
         val forwardMap = new LinkedHashMap<String, Integer>();
         val framesMap = new LinkedHashMap<String, Integer>();
 
         int idx = 0;
-        for (val variable : variables()) {
-            log.debug("Exporting variable: [{}]", variable.getVarName());
-            if (variable.getArr() == null || variable.getShape() == null) {
-                //putArrayForVarName(variable.getVarName(), Nd4j.scalar(1.0));
-                //addAsPlaceHolder(variable.getVarName());
-                continue;
+        val idxForOps = new IdentityHashMap<DifferentialFunction,Integer>();
+        List<SDVariable> allVars = variables();
+        for (SDVariable variable : allVars) {
+            INDArray arr = variable.getArr();
+            log.trace("Exporting variable: [{}]", variable.getVarName());
+
+            //If variable is the output of some op - let's use the ONE index for exporting, and properly track the output
+            // numbers. For example, unstack(x) -> y0, y1, y2 -> the y's should be say (3,0), (3,1), (3,2) NOT (4,0), (5,0), (6,0)
+            String varName = variable.getVarName();
+            int varIdx;
+            int outputNum;
+            if(variables.get(varName).getOutputOfOp() != null){
+                //This variable is the output of a node
+                DifferentialFunction df = ops.get(variables.get(varName).getOutputOfOp()).getOp();
+                if(!idxForOps.containsKey(df)){
+                    varIdx = idCounter.incrementAndGet();
+                    idxForOps.put(df, varIdx);
+                } else {
+                    varIdx = idxForOps.get(df);
+                }
+                String[] outNames = df.outputVariablesNames();
+                outputNum = ArrayUtils.indexOf(outNames, varName);
+                Preconditions.checkState(outputNum >= 0, "Variable name \"%s\" not found in list of outputs: %s", varName, outNames);
+            } else {
+                varIdx = idCounter.incrementAndGet();
+                outputNum = 0;
             }
 
 
-            val pair = parseVariable(variable.getVarName());
-            reverseMap.put(pair.getFirst(), idCounter.incrementAndGet());
-            log.debug("Adding [{}] as [{}]", pair.getFirst(), idCounter.get());
+            reverseMap.put(variable.getVarName(), varIdx);
+            log.trace("Adding [{}] as [{}]", variable.getVarName(), varIdx);
 
-            val arr = variable.getArr();
+//            val arr = variable.getArr();
 
+            int shape = 0;
             int name = bufferBuilder.createString(variable.getVarName());
-            int array = arr.toFlatArray(bufferBuilder);
-            int id = IntPair.createIntPair(bufferBuilder, idCounter.get(), 0);
+            int array = arr == null ? 0 : arr.toFlatArray(bufferBuilder);
+            int id = IntPair.createIntPair(bufferBuilder, varIdx, outputNum);
+            byte varType = (byte)variable.getVariableType().ordinal();
 
+            if (variable.getVariableType() == VariableType.PLACEHOLDER) {
+                val shp = variable.getShape();
+                shape = FlatVariable.createShapeVector(bufferBuilder, shp);
+            }
 
-            int flatVariable = FlatVariable.createFlatVariable(bufferBuilder, id, name, 0, array, -1);
+            int flatVariable = FlatVariable.createFlatVariable(bufferBuilder, id, name,  FlatBuffersMapper.getDataTypeAsByte(variable.dataType()), shape, array, -1, varType);
             flatVariables.add(flatVariable);
         }
 
         //add functions
-        for (val func : functionInstancesById.values()) {
-            flatNodes.add(asFlatNode(func, bufferBuilder, variableList, reverseMap, forwardMap, framesMap, idCounter));
+        for(SameDiffOp op : ops.values()){
+            DifferentialFunction func = op.getOp();
+            Integer fnId = idxForOps.get(func);
+            flatNodes.add(asFlatNode(func, bufferBuilder, variableList, reverseMap, forwardMap, framesMap, idCounter, fnId));
         }
 
         // we're dumping scopes now
-        for (val scope : sameDiffFunctionInstances.entrySet()) {
+        for (Map.Entry<String, SameDiff> scope : sameDiffFunctionInstances.entrySet()) {
+            if(scope.getKey().equalsIgnoreCase("grad")){
+                //Skip the gradient function for export
+                continue;
+            }
+
             flatNodes.add(asFlatNode(scope.getKey(), scope.getValue(), bufferBuilder));
             val currVarList = new ArrayList<SDVariable>(scope.getValue().variables());
             // converting all ops from node
             for (val node : scope.getValue().variables()) {
                 INDArray arr = node.getArr();
                 if (arr == null) {
-                    //val otherArr = Nd4j.scalar(1.0);
-                    //scope.getValue().putArrayForVarName(node.getVarName(), otherArr);
-                    //log.warn("Adding placeholder for export for var name {}", node.getVarName());
-                    //arr = otherArr;
                     continue;
                 }
 
@@ -7876,38 +3706,73 @@ public class SameDiff {
                 val pair = parseVariable(node.getVarName());
                 reverseMap.put(pair.getFirst(), idx);
 
-                log.debug("Adding [{}] as [{}]", pair.getFirst(), idx);
+                log.trace("Adding [{}] as [{}]", pair.getFirst(), idx);
 
-                int flatVariable = FlatVariable.createFlatVariable(bufferBuilder, id, name, 0, array, -1);
+                byte varType = (byte)node.getVariableType().ordinal();
+                int flatVariable = FlatVariable.createFlatVariable(bufferBuilder, id, name, FlatBuffersMapper.getDataTypeAsByte(arr.dataType()),0, array, -1, varType);
                 flatVariables.add(flatVariable);
             }
 
             //add functions
-            for (val func : scope.getValue().functionInstancesById.values()) {
-                flatNodes.add(asFlatNode(func, bufferBuilder, currVarList, reverseMap, forwardMap, framesMap, idCounter));
+            for(SameDiffOp op : scope.getValue().ops.values()){
+                DifferentialFunction func = op.getOp();
+                flatNodes.add(asFlatNode(func, bufferBuilder, currVarList, reverseMap, forwardMap, framesMap, idCounter, null));
             }
-
         }
 
         int outputsOffset = FlatGraph.createVariablesVector(bufferBuilder, Ints.toArray(flatOffsets));
         int variablesOffset = FlatGraph.createVariablesVector(bufferBuilder, Ints.toArray(flatVariables));
         int nodesOffset = FlatGraph.createNodesVector(bufferBuilder, Ints.toArray(flatNodes));
 
-        int fg = FlatGraph.createFlatGraph(bufferBuilder, 119, variablesOffset, nodesOffset, outputsOffset, configuration.getFlatConfiguration(bufferBuilder));
+        int numPlaceholders = 0;
+        for(SDVariable v : variables()){
+            if(v.isPlaceHolder()){
+                numPlaceholders++;
+            }
+        }
+
+        int[] placeholderOffsets = new int[numPlaceholders];
+        if(numPlaceholders > 0){
+            int i=0;
+            for(SDVariable v : variables()){
+                if(!v.isPlaceHolder())
+                    continue;
+                placeholderOffsets[i++] = bufferBuilder.createString(v.getVarName());
+            }
+        }
+        int placeholdersOffset = FlatGraph.createPlaceholdersVector(bufferBuilder, placeholderOffsets);
+
+        int fg = FlatGraph.createFlatGraph(bufferBuilder, graphId, variablesOffset, nodesOffset, outputsOffset, configuration.getFlatConfiguration(bufferBuilder), placeholdersOffset);
         bufferBuilder.finish(fg);
 
         synchronized (this) {
-            if (this.reverseMap == null)
-                this.reverseMap = reverseMap;
+            for(Map.Entry<String,Integer> e : reverseMap.entrySet()){
+                this.variables.get(e.getKey()).setVariableIndex(e.getValue());
+            }
         }
 
         return bufferBuilder.dataBuffer();
     }
 
+    public FlatGraph asFlatGraph() {
+        return FlatGraph.getRootAsFlatGraph(this.asFlatBuffers());
+    }
+
     /**
-     * This method exports given SameDiff instance into FlatBuffers
+     * This method returns FlatGraph structure
      *
+     * @param configuration
      * @return
+     */
+    public FlatGraph asFlatGraph(long graphId, ExecutorConfiguration configuration) {
+        return FlatGraph.getRootAsFlatGraph(asFlatBuffers(graphId, configuration));
+    }
+
+    /**
+     * This method exports the current SameDiff instance into FlatBuffers format, returning the array ops and
+     * all arrays as a ByteBuffer containing the FlatBuffers format data
+     *
+     * @return a ByteBuffer holding the exported FlatBuffers representation of the graph
      */
     public ByteBuffer asFlatBuffers() {
         val configuration = ExecutorConfiguration.builder()
@@ -7920,35 +3785,113 @@ public class SameDiff {
         return asFlatBuffers(configuration);
     }
 
+
     /**
-     * This method just converts enums
+     * Save this samediff instance with its training config.
+     * Note that if a training configuration is not defined,
+     * an {@link IllegalStateException} is thrown.
      *
-     * @param val
-     * @return
+     * @param outputStream the output stream to write to
+     * @throws IOException
      */
-    public static ByteOrder getOrderFromByte(byte val) {
-        if (val == org.nd4j.graph.ByteOrder.LE)
-            return ByteOrder.LITTLE_ENDIAN;
-        else
-            return ByteOrder.BIG_ENDIAN;
+    public void saveWithTrainingConfig(OutputStream outputStream) throws IOException {
+        if(this.trainingConfig == null) {
+            throw new IllegalStateException("No training configuration found!");
+        }
+
+        saveWithTrainingConfig(this.trainingConfig,outputStream);
+    }
+
+
+
+    /**
+     * Save this samediff instance with its training config.
+     * Note that if a training configuration is not defined,
+     * an {@link IllegalStateException} is thrown.
+     *
+     * @param outputFile the output stream to write to
+     * @throws IOException
+     */
+    public void saveWithTrainingConfig(File outputFile) throws IOException {
+        if(this.trainingConfig == null) {
+            throw new IllegalStateException("No training configuration found!");
+        }
+
+        try(BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(new FileOutputStream(outputFile))) {
+            saveWithTrainingConfig(this.trainingConfig, bufferedOutputStream);
+            bufferedOutputStream.flush();
+        }
+
+    }
+
+
+    /**
+     * Save this samediff instance as a zip file
+     * with the training configuration
+     * @param trainingConfig the training configuration to save
+     * @param outputStream the output stream to write to
+     * @throws IOException
+     */
+    public void saveWithTrainingConfig(TrainingConfig trainingConfig,OutputStream outputStream) throws  IOException {
+        ObjectMapper objectMapper = ObjectMapperHolder.getJsonMapper();
+        String configJson = objectMapper.writeValueAsString(trainingConfig);
+        ZipOutputStream zipfile = new ZipOutputStream(new CloseShieldOutputStream(outputStream));
+        ZipEntry config = new ZipEntry(TRAINING_CONFIG_JSON_ZIP_ENTRY_NAME);
+        zipfile.putNextEntry(config);
+        zipfile.write(configJson.getBytes());
+
+        ZipEntry sameDiff = new ZipEntry(SAMEDIFF_FILE_ENTRY_NAME);
+        zipfile.putNextEntry(sameDiff);
+
+        val fb = asFlatBuffers();
+        val offset = fb.position();
+
+        val array = fb.array();
+
+        try (BufferedOutputStream zipFileOutputStream = new BufferedOutputStream(zipfile);
+             val dos = new DataOutputStream(zipFileOutputStream)) {
+            dos.write(array, offset, array.length - offset);
+        }
+    }
+
+
+    /**
+     * Restore a {@link SameDiff}
+     * instance from a configuration
+     * zip file
+     * @param file the file to restore from
+     * @return the associated samediff instance
+     * @throws IOException
+     */
+    public static SameDiff restoreFromTrainingConfigZip(File file) throws IOException {
+        ZipFile zipFile = new ZipFile(file);
+        ZipEntry config = zipFile.getEntry(TRAINING_CONFIG_JSON_ZIP_ENTRY_NAME);
+        TrainingConfig trainingConfig = null;
+        try(InputStream stream = zipFile.getInputStream(config)) {
+            byte[] read = IOUtils.toByteArray(stream);
+            trainingConfig = ObjectMapperHolder.getJsonMapper().readValue(read,TrainingConfig.class);
+        }
+
+        SameDiff ret = null;
+
+        ZipEntry sameDiffFile = zipFile.getEntry(SAMEDIFF_FILE_ENTRY_NAME);
+        try(InputStream stream = zipFile.getInputStream(sameDiffFile)) {
+            byte[] read = IOUtils.toByteArray(stream);
+            ret = SameDiff.fromFlatBuffers(ByteBuffer.wrap(read));
+        }
+
+
+        ret.setTrainingConfig(trainingConfig);
+        ret.initializeTraining();
+        return ret;
     }
 
     /**
-     * This method returns current byte order for this JVM as libnd4j enum
+     * This method converts SameDiff instance to
+     * FlatBuffers and saves it to file which
+     * can be restored later
      *
-     * @return
-     */
-    public static byte getOrderAsByte() {
-        if (ByteOrder.nativeOrder().equals(ByteOrder.BIG_ENDIAN))
-            return org.nd4j.graph.ByteOrder.BE;
-        else
-            return org.nd4j.graph.ByteOrder.LE;
-    }
-
-    /**
-     * This method converts SameDiff instance to FlatBuffers and saves it to file which can be restored later
-     *
-     * @param file
+     * @param file File to save the FlatBuffers serialized graph (including arrays) to
      */
     public void asFlatFile(@NonNull File file) throws IOException {
         val fb = asFlatBuffers();
@@ -7964,7 +3907,7 @@ public class SameDiff {
     /**
      * This method converts SameDiff instance to FlatBuffers and saves it to file which can be restored later
      *
-     * @param file
+     * @param file File to save the FlatBuffers serialized graph (including arrays) to
      */
     public void asFlatFile(@NonNull File file, @NonNull ExecutorConfiguration configuration) throws IOException {
         val fb = asFlatBuffers(configuration);
@@ -7977,10 +3920,221 @@ public class SameDiff {
         }
     }
 
+
     /**
-     * This method returns "flattened" graph.
+     * Create a {@link SameDiff}
+     * instance from a file.
+     * The method to save the file is
+     * {@link #asFlatFile(File)}
+     * @param file the file to load from
+     * @return the loaded same diff instance
+     * @throws IOException
+     */
+    public static SameDiff fromFlatFile(@NonNull File file) throws IOException {
+        byte[] bytes;
+        try (InputStream is = new BufferedInputStream(new FileInputStream(file))) {
+            bytes = IOUtils.toByteArray(is);
+        }
+
+        ByteBuffer bbIn = ByteBuffer.wrap(bytes);
+        return fromFlatBuffers(bbIn);
+    }
+
+    /**
+     * Create a {@link SameDiff}
+     * instance from a byte buffers
+     * instance.
+     * @param bbIn the input byte buffer
+     * @return the created samediff instance
+     * @throws IOException
+     */
+    public static SameDiff fromFlatBuffers(ByteBuffer bbIn) throws IOException {
+
+        FlatGraph fg = FlatGraph.getRootAsFlatGraph(bbIn);
+
+        int numOps = fg.nodesLength();
+        int numVars = fg.variablesLength();
+        List<FlatNode> ops = new ArrayList<>(numOps);
+        for( int i=0; i<numOps; i++ ){
+            ops.add(fg.nodes(i));
+        }
+        List<FlatVariable> vars = new ArrayList<>(numVars);
+        for( int i = 0; i < numVars; i++) {
+            vars.add(fg.variables(i));
+        }
+
+        FlatConfiguration conf = fg.configuration();
+
+        /* Reconstruct the graph
+        We'll do the reconstruction manually here, rather than using sd.var(...), so that we have more control
+        over the final result.
+         */
+
+        SameDiff sd = SameDiff.create();
+
+        //Reconstruct placeholders
+        int numPlaceholders = fg.placeholdersLength();
+        Set<String> ph = new LinkedHashSet<>();
+        for(int i=0; i<numPlaceholders; i++ ){
+            ph.add(fg.placeholders(i));
+        }
+
+        //Reconstruct variables:
+        Map<Integer,SDVariable> varNodeIds = new HashMap<>();
+        Map<Pair<Integer,Integer>, SDVariable> variablesByNodeAndOutNum = new HashMap<>();
+        Map<String,List<SDVariable>> variablesByName = new HashMap<>();
+        for(FlatVariable v : vars){
+            int shapeLength = v.shapeLength();
+            long[] shape = new long[shapeLength];
+            for( int i = 0; i < shapeLength; i++) {
+                shape[i] = v.shape(i);
+            }
+
+            String n = v.name();
+
+            byte dtypeByte = v.dtype();
+            org.nd4j.linalg.api.buffer.DataType dtype = FlatBuffersMapper.getDataTypeFromByte(dtypeByte);
+
+            //TODO Infer this properly! Could be constant, etc.
+            VariableType vt = VariableType.values()[v.variabletype()];
+            SDVariable var = new SDVariable(n, vt, sd, shape, dtype, null);
+            sd.variables.put(n, Variable.builder().name(n).variable(var).build());
+            sd.variableNameToShape.put(n, shape);
+
+
+            FlatArray fa = v.ndarray();
+            if(fa != null && vt != VariableType.ARRAY){
+                INDArray arr;
+                try(MemoryWorkspace ws = Nd4j.getWorkspaceManager().scopeOutOfWorkspaces()) {
+                    arr = Nd4j.createFromFlatArray(fa);
+                }
+                sd.setArrayForVariable(n, arr);
+            }
+
+            IntPair id = v.id();    //First value: node (op) id. Second: output number
+            variablesByNodeAndOutNum.put(new Pair<>(id.first(), id.second()), var);
+
+            if(!variablesByName.containsKey(n)){
+                variablesByName.put(n, new ArrayList<SDVariable>());
+            }
+
+            List<SDVariable> list = variablesByName.get(n);
+            list.add(var);
+        }
+
+        //Reconstruct ops:
+        for(FlatNode fn : ops){
+            DifferentialFunction df = FlatBuffersMapper.fromFlatNode(fn);
+            String name = fn.name();
+            df.setSameDiff(sd);
+            df.setOwnName(name);
+            if(sd.ops.containsKey(name)){
+                sd.ops.get(name).setOp(df);
+            } else {
+                sd.ops.put(name, SameDiffOp.builder().name(name).op(df).build());
+            }
+
+            int outLength = fn.outputLength();
+            int[] outs = new int[outLength];
+            for( int i=0; i<outLength; i++ ){
+                outs[i] = fn.output(i);
+            }
+
+            int opId = fn.id();
+
+            //Work out inputs and outputs:
+            int[] output = new int[fn.outputLength()];
+            for (int i = 0; i < output.length; i++) {
+                output[i] = fn.output(i);
+            }
+            int[] input = new int[fn.inputLength()];
+            for (int i = 0; i < input.length; i++) {
+                input[i] = fn.input(i);
+            }
+            IntPair[] inputPaired = new IntPair[fn.inputPairedLength()];
+            List<Pair<Integer,Integer>> intPairList = new ArrayList<>();
+            for (int i = 0; i < inputPaired.length; i++) {
+                inputPaired[i] = fn.inputPaired(i);
+                intPairList.add(new Pair<>(inputPaired[i].first(), inputPaired[i].second()));
+            }
+
+            String[] inputNames = new String[inputPaired.length];
+            for(int i=0; i<inputPaired.length; i++ ){
+                int nodeId = inputPaired[i].first();
+                int nodeOutNum = inputPaired[i].second();
+                SDVariable varIn = variablesByNodeAndOutNum.get(new Pair<>(nodeId, nodeOutNum));
+                if(varIn == null){
+                    //The variable corresponding to this op was not
+                }
+                inputNames[i] = varIn.getVarName();
+            }
+            sd.ops.get(df.getOwnName()).setInputsToOp(Arrays.asList(inputNames));
+
+            //Record that input variables are input to this op
+            for(String inName : inputNames) {
+                Variable v = sd.getVariables().get(inName);
+                if(v.getInputsForOp() == null){
+                    v.setInputsForOp(new ArrayList<String>());
+                }
+                if(!v.getInputsForOp().contains(df.getOwnName())){
+                    v.getInputsForOp().add(df.getOwnName());
+                }
+            }
+
+            List<SDVariable> varsForOp = variablesByName.get(name);
+
+            //Can't assume that variables for the op have all been defined. For example, if we export before execution in SameDiff
+            //In theory, we can reconstruct the output variables (minus names) if we know the number of op outputs
+            //And we can calculate the op outputs - in most cases - after the op has been created and parameters set
+            int numOutputs = df.getNumOutputs();
+            if(numOutputs <= 0){
+                numOutputs = fn.outputLength();
+            }
+
+            String[] varNames = null;
+            if(varsForOp != null && varsForOp.size() == numOutputs){
+                varNames = new String[varsForOp.size()];
+                for( int i=0; i<varNames.length; i++ ){
+                    varNames[i] = varsForOp.get(i).getVarName();
+                    sd.getVariables().get(varNames[i]).setOutputOfOp(df.getOwnName());
+                }
+                sd.ops.get(df.getOwnName()).setOutputsOfOp(Arrays.asList(varNames));
+            } else {
+                //We're missing some variables...
+                int outputNamesLength = fn.outputNamesLength();
+                varNames = new String[outputNamesLength];
+                for( int i=0; i<outputNamesLength; i++ ){
+                    String n = fn.outputNames(i);
+                    varNames[i] = n;
+                    if(!sd.variables.containsKey(n)){
+                        //Need to create the variable - perhaps it wasn't exported. Note output of node -> can only be VARIABLE type
+                        SDVariable var = new SDVariable(n, VariableType.VARIABLE, sd, null, null, null);
+                        sd.variables.put(n, Variable.builder().name(n).variable(var).build());
+                        variablesByNodeAndOutNum.put(new Pair<>(opId, i), var);
+                    }
+                    sd.getVariables().get(varNames[i]).setOutputOfOp(df.getOwnName());
+                }
+                sd.ops.get(df.getOwnName()).setOutputsOfOp(Arrays.asList(varNames));
+            }
+
+            //Check the op mapping int he variablesByNodeAndOutputNum
+            //For multi-output ops, variables will have their own index, not related to the op index
+            for( int i=0; i<varNames.length; i++ ){
+                Pair<Integer,Integer> p = new Pair<>(opId, i);
+                if(!variablesByNodeAndOutNum.containsKey(p)){
+                    variablesByNodeAndOutNum.put(p, sd.getVariable(varNames[i]));
+                }
+            }
+        }
+
+        return sd;
+    }
+
+    /**
+     * This method returns a text representation of the "flattened" graph.
      *
-     * @return
+     * @return String representation of the graph
+     * @see #summary()
      */
     public String asFlatPrint() {
         val sb = new StringBuilder();
@@ -7991,11 +4145,42 @@ public class SameDiff {
         sb.append("\nExternal variables:\n\n");
         for (int e = 0; e < graph.variablesLength(); e++) {
             val var = graph.variables(e);
-            val ndarray = Nd4j.createFromFlatArray(var.ndarray());
+            INDArray ndarray = null;
+            try(MemoryWorkspace ws = Nd4j.getWorkspaceManager().scopeOutOfWorkspaces()) {
+                FlatArray fa = var.ndarray();
+                if(fa != null) {
+                    ndarray = Nd4j.createFromFlatArray(fa);
+                }
+            }
 
             sb.append(var.id().first())
-                    .append(":<").append(var.name()).append("> ")
-                    .append(Arrays.toString(ndarray.shapeInfoDataBuffer().asInt())).append("; Values: ").append(Arrays.toString(ndarray.data().asFloat())).append(";\n");
+                    .append(":<").append(var.name()).append("> ");
+            if(ndarray == null){
+                sb.append("<no array>").append("; Values: ").append("<no array>").append(";\n");
+            } else {
+                sb.append(Arrays.toString(ndarray.shapeInfoDataBuffer().asInt())).append("; Values: ");
+                if(ndarray.data() == null){
+                    //Empty array
+                    sb.append("<empty array>");
+                } else if(ndarray.dataType() == DataType.UTF8) {
+                    sb.append("<string array>");
+                } else {
+                    if(ndarray.length() < 50){
+                        sb.append(Arrays.toString(ndarray.data().asFloat()).replaceAll(" ",""));
+                    } else {
+                        //Array is too long - only tak. last few values...
+                        sb.append("[");
+                        for( int i=0; i<50; i++ ){
+                            if(i > 0)
+                                sb.append(",");
+                            sb.append(ndarray.data().getFloat(i));
+                        }
+                        sb.append("]");
+                    }
+                }
+                sb.append(";\n");
+            }
+
         }
 
         val map = Nd4j.getExecutioner().getCustomOperations();
@@ -8007,9 +4192,9 @@ public class SameDiff {
 
             log.info("{}:<{}>", node.id(), node.name());
             sb.append(node.id())
-                    .append(":<").append(node.name()).append("> ").append(SameDiff.getTypeFromByte(node.opType()));
+                    .append(":<").append(node.name()).append("> ").append(FlatBuffersMapper.getTypeFromByte(node.opType()));
 
-            if (SameDiff.getTypeFromByte(node.opType()) != Op.Type.CUSTOM)
+            if (FlatBuffersMapper.getTypeFromByte(node.opType()) != Op.Type.CUSTOM)
                 sb.append(": ").append(node.opNum());
             else {
                 val keys = map.keySet();
@@ -8048,171 +4233,13 @@ public class SameDiff {
     }
 
     /**
-     * This method converts enums for DataType
+     * Generate and return a String representation of the current SameDiff instance<br>
+     * Reports variables, ops, SameDiff function instances, and (where possible) array shapes.<br>
+     * For ops, the input and output variables are reported.<br>
+     * For variables, the ops that they are inputs to - or outputs of - are also reported
      *
-     * @param val
-     * @return
+     * @return A String representation of the SameDiff instance
      */
-    public static DataBuffer.Type getDataTypeFromByte(byte val) {
-        if (val == DataType.FLOAT)
-            return DataBuffer.Type.FLOAT;
-        else if (val == DataType.DOUBLE)
-            return DataBuffer.Type.DOUBLE;
-        else if (val == DataType.HALF)
-            return DataBuffer.Type.HALF;
-
-        throw new UnsupportedOperationException("Unsupported DataType: [" + val + "]");
-    }
-
-    /**
-     * This method converts enums for DataType
-     *
-     * @param type
-     * @return
-     */
-    public static byte getDataTypeAsByte(DataBuffer.Type type) {
-        switch (type) {
-            case FLOAT:
-                return DataType.FLOAT;
-            case DOUBLE:
-                return DataType.DOUBLE;
-            case HALF:
-                return DataType.HALF;
-            case INT:
-                return DataType.INT32;
-            case LONG:
-                return DataType.INT64;
-            default:
-                throw new ND4JIllegalStateException("Unknown or unsupported DataType used: [" + type + "]");
-        }
-    }
-
-    /**
-     * This method return operation ID for given op name/type pair.
-     *
-     * @param name
-     * @param type
-     * @return
-     */
-    public static long getOpNum(String name, Op.Type type) {
-        if (type == Op.Type.LOOP) {
-            return 0;
-        } else if (type == Op.Type.RETURN) {
-            return 40;
-        } else if (type == Op.Type.IF) {
-            return 30;
-        } else if (type == Op.Type.CONDITIONAL) {
-            return 10;
-        } else if (type == Op.Type.MERGE) {
-            return 60L;
-        } else if (type == Op.Type.LOOP_COND) {
-            return 70L;
-        } else if (type == Op.Type.NEXT_ITERATION) {
-            return 80L;
-        } else if (type == Op.Type.EXIT) {
-            return 90L;
-        } else if (type == Op.Type.ENTER) {
-            return 100L;
-        } else if (type == Op.Type.CUSTOM) {
-            val name2 = Nd4j.getExecutioner().getCustomOperations().get(name.toLowerCase());
-            if (name2 == null) {
-                val name3 = Nd4j.getExecutioner().getCustomOperations().get(name);
-                if (name3 == null)
-                    return 0;
-                else
-                    return name3.getHash();
-            } else
-                return name2.getHash();
-            //return Nd4j.getExecutioner().getCustomOperations().get(name.toLowerCase()).getHash();
-
-        } else
-            return (long) Nd4j.getOpFactory().getOpNumByName(name);
-    }
-
-    /**
-     * This method converts enums for DataType
-     *
-     * @param type
-     * @return
-     */
-    public static Op.Type getTypeFromByte(byte type) {
-        switch (type) {
-            case OpType.SCALAR:
-                return Op.Type.SCALAR;
-            case OpType.BROADCAST:
-                return Op.Type.BROADCAST;
-            case OpType.TRANSFORM:
-                return Op.Type.TRANSFORM;
-            case OpType.ACCUMULATION:
-                return Op.Type.REDUCE;
-            case OpType.ACCUMULATION3:
-                return Op.Type.REDUCE3;
-            case OpType.INDEX_ACCUMULATION:
-                return Op.Type.INDEXREDUCE;
-            case OpType.RANDOM:
-                return Op.Type.RANDOM;
-            case OpType.LOGIC:
-                return Op.Type.META;
-            case OpType.CUSTOM:
-                return Op.Type.CUSTOM;
-            case OpType.SHAPE:
-                return Op.Type.SHAPE;
-            case OpType.PAIRWISE:
-                return Op.Type.PAIRWISE;
-            case OpType.SUMMARYSTATS:
-                return Op.Type.SUMMARYSTATS;
-            default:
-                throw new UnsupportedOperationException("Unknown op type passed in: " + type);
-        }
-    }
-
-    /**
-     * This method converts enums for DataType
-     *
-     * @param type
-     * @return
-     */
-    public static byte getFlatOpType(Op.Type type) {
-        switch (type) {
-            case SCALAR:
-                return OpType.SCALAR;
-            case BROADCAST:
-                return OpType.BROADCAST;
-            case TRANSFORM:
-            case SPECIAL:
-                return OpType.TRANSFORM;
-            case REDUCE:
-                return OpType.ACCUMULATION;
-            case REDUCE3:
-                return OpType.ACCUMULATION3;
-            case INDEXREDUCE:
-                return OpType.INDEX_ACCUMULATION;
-            case RANDOM:
-                return OpType.RANDOM;
-            case MERGE:
-            case CONDITIONAL:
-            case LOOP:
-            case RETURN:
-            case ENTER:
-            case EXIT:
-            case NEXT_ITERATION:
-            case LOOP_COND:
-            case IF:
-                return OpType.LOGIC;
-            case CUSTOM:
-                return OpType.CUSTOM;
-            case SHAPE:
-                return OpType.SHAPE;
-            case PAIRWISE:
-                return OpType.PAIRWISE;
-            case SUMMARYSTATS:
-                return OpType.SUMMARYSTATS;
-            default:
-                throw new UnsupportedOperationException("Unknown op type passed in: " + type);
-        }
-    }
-
-
     public String summary() {
 
         Map<String, SDVariable> varMap = variableMap();
@@ -8241,9 +4268,10 @@ public class SameDiff {
         int maxLengthOfName = 8;       //Length of "- Name -"
         for (String s : varMap.keySet()) {
             String outputOf = null;
-            for (Map.Entry<String, String[]> dfToArgs : outgoingArgsReverse.entrySet()) {
-                if (dfToArgs.getValue() != null && ArrayUtils.contains(dfToArgs.getValue(), s)) {
-                    outputOf = dfToArgs.getKey();
+            for(SameDiffOp op : ops.values()){
+                List<String> outputsOfOp = op.getOutputsOfOp();
+                if (outputsOfOp != null && outputsOfOp.contains(s)) {
+                    outputOf = op.getName();
                     break;
                 }
             }
@@ -8262,28 +4290,26 @@ public class SameDiff {
         maxLengthOfName += 2;
 
         //Create the output for values:
-        format = "%-" + maxLengthOfName + "s%-20s%-" + maxLengthOutputOf + "s%-20s";
-        sb.append(String.format(format, "- Name -", "- Array Shape -", "- Output Of Function -", "- Inputs To Functions -")).append("\n");
+        format = "%-" + maxLengthOfName + "s%-20s%-20s%-20s%-" + maxLengthOutputOf + "s%-20s";
+        sb.append(String.format(format, "- Name -", "- Array Shape -", "- Variable Type -", "- Data Type-", "- Output Of Function -", "- Inputs To Functions -")).append("\n");
         for (String s : varMap.keySet()) {
             INDArray arr = getArrForVarName(s);
             String arrayShape = "-";
             if (arr != null) {
                 arrayShape = Arrays.toString(arr.shape());
             }
+            String varType = getVariable(s).getVariableType().toString();
+            String dtype = getVariable(s).dataType().toString();
 
-            List<DifferentialFunction> dfs = functionsArgsFor.get(s);
+            List<String> argNames = variables.get(s).getInputsForOp();
             String dfArrStr = "";
-            if (dfs != null) {
-                String[] dfArr = new String[dfs.size()];
-                for (int i = 0; i < dfs.size(); i++) {
-                    dfArr[i] = dfs.get(i).getOwnName();
-                }
-                dfArrStr = Arrays.toString(dfArr);
+            if (argNames != null) {
+                dfArrStr = argNames.toString();
             }
 
             String outputOfStr = outputOfFn.get(s);
 
-            sb.append(String.format(format, s, arrayShape, outputOfStr, dfArrStr)).append("\n");
+            sb.append(String.format(format, s, arrayShape, varType, dtype, outputOfStr, dfArrStr)).append("\n");
         }
 
         sb.append("\n\n--- Functions ---\n");
@@ -8343,5 +4369,21 @@ public class SameDiff {
         }
 
         return sb.toString();
+    }
+
+
+    public Map<String,org.nd4j.linalg.api.buffer.DataType> calculateOutputDataTypes(){
+        List<String> allVars = new ArrayList<>(variables.keySet());
+        DataTypesSession session = new DataTypesSession(this);
+        Map<String,org.nd4j.linalg.api.buffer.DataType> phValues = new HashMap<>();
+        for(Variable v : variables.values()){
+            if(v.getVariable().isPlaceHolder()){
+                org.nd4j.linalg.api.buffer.DataType dt = v.getVariable().dataType();
+                Preconditions.checkNotNull(dt, "Placeholder variable %s has null datatype", v.getName());
+                phValues.put(v.getName(), dt);
+            }
+        }
+        Map<String, org.nd4j.linalg.api.buffer.DataType> out = session.output(allVars, phValues);
+        return out;
     }
 }

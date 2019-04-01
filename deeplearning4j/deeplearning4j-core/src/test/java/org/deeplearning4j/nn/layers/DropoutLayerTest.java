@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.nn.layers;
 
 import org.deeplearning4j.BaseDL4JTest;
@@ -18,8 +34,8 @@ import org.deeplearning4j.nn.multilayer.MultiLayerNetwork;
 import org.deeplearning4j.nn.weights.WeightInit;
 import org.junit.Test;
 import org.nd4j.linalg.activations.Activation;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.ndarray.INDArray;
-import org.nd4j.linalg.api.ops.random.impl.DropOut;
 import org.nd4j.linalg.dataset.DataSet;
 import org.nd4j.linalg.dataset.api.iterator.DataSetIterator;
 import org.nd4j.linalg.factory.Nd4j;
@@ -35,6 +51,11 @@ import static org.junit.Assert.assertNull;
 /**
  */
 public class DropoutLayerTest extends BaseDL4JTest {
+
+    @Override
+    public DataType getDataType(){
+        return DataType.FLOAT;
+    }
 
     @Test
     public void testInputTypes() {
@@ -57,9 +78,10 @@ public class DropoutLayerTest extends BaseDL4JTest {
                                                         .activation(Activation.IDENTITY).weightInit(WeightInit.XAVIER)
                                                         .build())
                         .layer(1, new OutputLayer.Builder(LossFunctions.LossFunction.MCXENT)
-                                        .weightInit(WeightInit.XAVIER).activation(Activation.IDENTITY).dropOut(0.25)
+                                        .activation(Activation.SOFTMAX)
+                                        .weightInit(WeightInit.XAVIER).dropOut(0.25)
                                         .nOut(4).build())
-                        .backprop(true).pretrain(false).setInputType(InputType.convolutionalFlat(2, 2, 1)).build();
+                        .setInputType(InputType.convolutionalFlat(2, 2, 1)).build();
 
         MultiLayerNetwork netIntegrated = new MultiLayerNetwork(confIntegrated);
         netIntegrated.init();
@@ -80,9 +102,9 @@ public class DropoutLayerTest extends BaseDL4JTest {
                                                         .build())
                                         .layer(2, new DropoutLayer.Builder(0.25).build())
                                         .layer(3, new OutputLayer.Builder(LossFunctions.LossFunction.MCXENT)
-                                                        .weightInit(WeightInit.XAVIER).activation(Activation.IDENTITY)
+                                                        .weightInit(WeightInit.XAVIER).activation(Activation.SOFTMAX)
                                                         .nOut(4).build())
-                                        .backprop(true).pretrain(false)
+
                                         .setInputType(InputType.convolutionalFlat(2, 2, 1)).build();
 
         MultiLayerNetwork netSeparate = new MultiLayerNetwork(confSeparate);
@@ -100,7 +122,7 @@ public class DropoutLayerTest extends BaseDL4JTest {
             l.allowInputModification(false);
         }
 
-        INDArray in = Nd4j.arange(1, 5);
+        INDArray in = Nd4j.arange(1, 5).reshape(1,4);
         Nd4j.getRandom().setSeed(12345);
         List<INDArray> actTrainIntegrated = netIntegrated.feedForward(in.dup(), true);
         Nd4j.getRandom().setSeed(12345);
@@ -140,7 +162,7 @@ public class DropoutLayerTest extends BaseDL4JTest {
                         .layer(1, new OutputLayer.Builder(LossFunctions.LossFunction.MCXENT)
                                         .weightInit(WeightInit.XAVIER).activation(Activation.SOFTMAX).dropOut(0.25)
                                         .nIn(10).nOut(10).build())
-                        .backprop(true).pretrain(false).build();
+                        .build();
 
         MultiLayerNetwork netIntegrated = new MultiLayerNetwork(confIntegrated);
         netIntegrated.init();
@@ -156,7 +178,7 @@ public class DropoutLayerTest extends BaseDL4JTest {
                         .layer(2, new OutputLayer.Builder(LossFunctions.LossFunction.MCXENT)
                                         .weightInit(WeightInit.XAVIER).activation(Activation.SOFTMAX).nIn(10).nOut(10)
                                         .build())
-                        .backprop(true).pretrain(false).build();
+                        .build();
 
         MultiLayerNetwork netSeparate = new MultiLayerNetwork(confSeparate);
         netSeparate.init();
@@ -177,8 +199,8 @@ public class DropoutLayerTest extends BaseDL4JTest {
         assertEquals(netIntegrated.getLayer(1).getParam("b"), netSeparate.getLayer(2).getParam("b"));
 
         // check activations
-        netIntegrated.setInput(next.getFeatureMatrix());
-        netSeparate.setInput(next.getFeatureMatrix());
+        netIntegrated.setInput(next.getFeatures());
+        netSeparate.setInput(next.getFeatures());
 
         Nd4j.getRandom().setSeed(12345);
         List<INDArray> actTrainIntegrated = netIntegrated.feedForward(true);
@@ -197,6 +219,7 @@ public class DropoutLayerTest extends BaseDL4JTest {
 
     @Test
     public void testDropoutLayerWithConvMnist() throws Exception {
+        Nd4j.setDefaultDataTypes(DataType.DOUBLE, DataType.DOUBLE); //Set to double datatype - MKL-DNN not used for CPU (otherwise different strides due to Dl4J impl permutes)
         DataSetIterator iter = new MnistDataSetIterator(2, 2);
         DataSet next = iter.next();
 
@@ -210,7 +233,7 @@ public class DropoutLayerTest extends BaseDL4JTest {
                         .layer(1, new OutputLayer.Builder(LossFunctions.LossFunction.MCXENT)
                                         .weightInit(WeightInit.XAVIER).activation(Activation.SOFTMAX).dropOut(0.5)
                                         .nOut(10).build())
-                        .backprop(true).pretrain(false).setInputType(InputType.convolutionalFlat(28, 28, 1)).build();
+                        .setInputType(InputType.convolutionalFlat(28, 28, 1)).build();
 
         // Run with separate activation layer
         Nd4j.getRandom().setSeed(12345);
@@ -227,7 +250,7 @@ public class DropoutLayerTest extends BaseDL4JTest {
                         .layer(1, new DropoutLayer.Builder(0.5).build())
                         .layer(2, new OutputLayer.Builder(LossFunctions.LossFunction.MCXENT)
                                         .weightInit(WeightInit.XAVIER).activation(Activation.SOFTMAX).nOut(10).build())
-                        .inputPreProcessors(preProcessorMap).backprop(true).pretrain(false)
+                        .inputPreProcessors(preProcessorMap)
                         .setInputType(InputType.convolutionalFlat(28, 28, 1)).build();
 
 
@@ -256,8 +279,8 @@ public class DropoutLayerTest extends BaseDL4JTest {
         assertEquals(netIntegrated.getLayer(1).getParam("b"), netSeparate.getLayer(2).getParam("b"));
 
         // check activations
-        netIntegrated.setInput(next.getFeatureMatrix());
-        netSeparate.setInput(next.getFeatureMatrix());
+        netIntegrated.setInput(next.getFeatures());
+        netSeparate.setInput(next.getFeatures());
 
         Nd4j.getRandom().setSeed(12345);
         List<INDArray> actTrainIntegrated = netIntegrated.feedForward(true);

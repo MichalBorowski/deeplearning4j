@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.nn.transferlearning;
 
 import lombok.extern.slf4j.Slf4j;
@@ -44,7 +60,9 @@ public class TransferLearningComplex extends BaseDL4JTest {
                         .addLayer("B", new DenseLayer.Builder().nIn(9).nOut(8).build(), "A")
                         .addLayer("C", new DenseLayer.Builder().nIn(7).nOut(6).build(), "in2")
                         .addLayer("D", new DenseLayer.Builder().nIn(8 + 7).nOut(5).build(), "B", "C")
-                        .addLayer("out", new OutputLayer.Builder().nIn(5).nOut(4).build(), "D").setOutputs("out")
+                        .addLayer("out", new OutputLayer.Builder().nIn(5).nOut(4).activation(Activation.LEAKYRELU).build(), "D")
+                        .setOutputs("out")
+                        .validateOutputLayerConfig(false)
                         .build();
 
         ComputationGraph graph = new ComputationGraph(conf);
@@ -62,7 +80,7 @@ public class TransferLearningComplex extends BaseDL4JTest {
         ComputationGraph graph2 =
                         new TransferLearning.GraphBuilder(graph)
                                         .fineTuneConfiguration(new FineTuneConfiguration.Builder().updater(new Adam(2e-2)).build())
-                                        .setFeatureExtractor("C").build();
+                                        .setFeatureExtractor("C").validateOutputLayerConfig(false).build();
 
         boolean cFound = false;
         Layer[] layers = graph2.getLayers();

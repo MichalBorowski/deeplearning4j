@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.gradientcheck;
 
 import org.deeplearning4j.BaseDL4JTest;
@@ -11,11 +27,9 @@ import org.deeplearning4j.nn.conf.inputs.InputType;
 import org.deeplearning4j.nn.conf.layers.*;
 import org.deeplearning4j.nn.conf.preprocessor.RnnToCnnPreProcessor;
 import org.deeplearning4j.nn.multilayer.MultiLayerNetwork;
-import org.deeplearning4j.nn.weights.WeightInit;
 import org.junit.Test;
 import org.nd4j.linalg.activations.Activation;
-import org.nd4j.linalg.api.buffer.DataBuffer;
-import org.nd4j.linalg.api.buffer.util.DataTypeUtil;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.learning.config.NoOp;
@@ -37,7 +51,7 @@ public class LSTMGradientCheckTests extends BaseDL4JTest {
     private static final double DEFAULT_MIN_ABS_ERROR = 1e-8;
 
     static {
-        Nd4j.setDataType(DataBuffer.Type.DOUBLE);
+        Nd4j.setDataType(DataType.DOUBLE);
     }
 
     @Test
@@ -59,17 +73,17 @@ public class LSTMGradientCheckTests extends BaseDL4JTest {
             Layer l1;
             if (graves) {
                 l0 = new GravesLSTM.Builder().nIn(nIn).nOut(layerSize).activation(Activation.SIGMOID)
-                                .weightInit(WeightInit.DISTRIBUTION).dist(new NormalDistribution(0, 1.0))
+                                .dist(new NormalDistribution(0, 1.0))
                                 .updater(new NoOp()).build();
                 l1 = new GravesLSTM.Builder().nIn(layerSize).nOut(layerSize).activation(Activation.SIGMOID)
-                                .weightInit(WeightInit.DISTRIBUTION).dist(new NormalDistribution(0, 1.0))
+                                .dist(new NormalDistribution(0, 1.0))
                                 .updater(new NoOp()).build();
             } else {
                 l0 = new LSTM.Builder().nIn(nIn).nOut(layerSize).activation(Activation.SIGMOID)
-                                .weightInit(WeightInit.DISTRIBUTION).dist(new NormalDistribution(0, 1.0))
+                                .dist(new NormalDistribution(0, 1.0))
                                 .updater(new NoOp()).build();
                 l1 = new LSTM.Builder().nIn(layerSize).nOut(layerSize).activation(Activation.SIGMOID)
-                                .weightInit(WeightInit.DISTRIBUTION).dist(new NormalDistribution(0, 1.0))
+                                .dist(new NormalDistribution(0, 1.0))
                                 .updater(new NoOp()).build();
             }
 
@@ -79,10 +93,10 @@ public class LSTMGradientCheckTests extends BaseDL4JTest {
                                                             l1)
                                             .layer(2, new RnnOutputLayer.Builder(LossFunction.MCXENT)
                                                             .activation(Activation.SOFTMAX).nIn(layerSize).nOut(nOut)
-                                                            .weightInit(WeightInit.DISTRIBUTION)
+
                                                             .dist(new NormalDistribution(0, 1.0)).updater(new NoOp())
                                                             .build())
-                                            .pretrain(false).backprop(true).build();
+                                            .build();
 
             MultiLayerNetwork mln = new MultiLayerNetwork(conf);
             mln.init();
@@ -164,7 +178,7 @@ public class LSTMGradientCheckTests extends BaseDL4JTest {
 
                 NeuralNetConfiguration.Builder conf =
                         new NeuralNetConfiguration.Builder()
-                                .seed(12345L).weightInit(WeightInit.DISTRIBUTION)
+                                .seed(12345L)
                                 .dist(new NormalDistribution(0, 1)).updater(new NoOp());
 
                 if (l1 > 0.0)
@@ -186,7 +200,7 @@ public class LSTMGradientCheckTests extends BaseDL4JTest {
                 NeuralNetConfiguration.ListBuilder conf2 = conf.list().layer(0, layer)
                         .layer(1, new RnnOutputLayer.Builder(lf).activation(outputActivation)
                                 .nIn(layerSize).nOut(nOut).build())
-                        .pretrain(false).backprop(true);
+                        ;
 
                 MultiLayerNetwork mln = new MultiLayerNetwork(conf2.build());
                 mln.init();
@@ -252,11 +266,11 @@ public class LSTMGradientCheckTests extends BaseDL4JTest {
                 }
 
                 MultiLayerConfiguration conf = new NeuralNetConfiguration.Builder().seed(12345L)
-                                .weightInit(WeightInit.DISTRIBUTION).dist(new NormalDistribution(0, 1))
+                                .dist(new NormalDistribution(0, 1))
                                 .updater(new NoOp()).list().layer(0, layer)
                                 .layer(1, new RnnOutputLayer.Builder(LossFunction.MCXENT).activation(Activation.SOFTMAX)
                                                 .nIn(layerSize).nOut(nOut).build())
-                                .pretrain(false).backprop(true).build();
+                                .build();
                 MultiLayerNetwork mln = new MultiLayerNetwork(conf);
                 mln.init();
 
@@ -331,15 +345,15 @@ public class LSTMGradientCheckTests extends BaseDL4JTest {
                     MultiLayerConfiguration mlc = conf.seed(12345L)
                                     .list().layer(0,
                                                     new GravesBidirectionalLSTM.Builder().nIn(nIn).nOut(layerSize)
-                                                                    .weightInit(WeightInit.DISTRIBUTION)
+
                                                                     .dist(new NormalDistribution(0, 1))
                                                                     .activation(afn).updater(
                                                                                     Updater.NONE)
                                                                     .build())
                                     .layer(1, new RnnOutputLayer.Builder(lf).activation(outputActivation).nIn(layerSize)
-                                                    .nOut(nOut).weightInit(WeightInit.DISTRIBUTION)
+                                                    .nOut(nOut)
                                                     .dist(new NormalDistribution(0, 1)).updater(new NoOp()).build())
-                                    .pretrain(false).backprop(true).build();
+                                    .build();
 
 
                     MultiLayerNetwork mln = new MultiLayerNetwork(mlc);
@@ -399,14 +413,14 @@ public class LSTMGradientCheckTests extends BaseDL4JTest {
             MultiLayerConfiguration conf = new NeuralNetConfiguration.Builder().seed(12345L)
                             .list()
                             .layer(0, new GravesBidirectionalLSTM.Builder().nIn(nIn).nOut(layerSize)
-                                            .weightInit(WeightInit.DISTRIBUTION)
+
                                             .dist(new NormalDistribution(0, 1)).updater(
                                                             Updater.NONE)
                                             .build())
                             .layer(1, new RnnOutputLayer.Builder(LossFunction.MCXENT).activation(Activation.SOFTMAX)
-                                            .nIn(layerSize).nOut(nOut).weightInit(WeightInit.DISTRIBUTION)
+                                            .nIn(layerSize).nOut(nOut)
                                             .dist(new NormalDistribution(0, 1)).updater(new NoOp()).build())
-                            .pretrain(false).backprop(true).build();
+                            .build();
             MultiLayerNetwork mln = new MultiLayerNetwork(conf);
             mln.init();
 
@@ -445,7 +459,7 @@ public class LSTMGradientCheckTests extends BaseDL4JTest {
 
 
         MultiLayerConfiguration conf = new NeuralNetConfiguration.Builder().updater(new NoOp()).seed(12345)
-                        .weightInit(WeightInit.DISTRIBUTION).dist(new UniformDistribution(-2, 2)).list()
+                        .dist(new UniformDistribution(-2, 2)).list()
                         .layer(0, new ConvolutionLayer.Builder(5, 5).nIn(3).nOut(5).stride(1, 1)
                                         .activation(Activation.TANH).build()) //Out: (10-5)/1+1 = 6 -> 6x6x5
                         .layer(1, new SubsamplingLayer.Builder(SubsamplingLayer.PoolingType.MAX).kernelSize(2, 2)
@@ -454,7 +468,7 @@ public class LSTMGradientCheckTests extends BaseDL4JTest {
                         .layer(3, new GravesLSTM.Builder().nIn(4).nOut(3).activation(Activation.TANH).build())
                         .layer(4, new RnnOutputLayer.Builder().lossFunction(LossFunction.MCXENT).nIn(3).nOut(nClasses)
                                         .activation(Activation.SOFTMAX).build())
-                        .setInputType(InputType.convolutional(10, 10, 3)).pretrain(false).backprop(true).build();
+                        .setInputType(InputType.convolutional(10, 10, 3)).build();
 
         //Here: ConvolutionLayerSetup in config builder doesn't know that we are expecting time series input, not standard FF input -> override it here
         conf.getInputPreProcessors().put(0, new RnnToCnnPreProcessor(10, 10, 3));

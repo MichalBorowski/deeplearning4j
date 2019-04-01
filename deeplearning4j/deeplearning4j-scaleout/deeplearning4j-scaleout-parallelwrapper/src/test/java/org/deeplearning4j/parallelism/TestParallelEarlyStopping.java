@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.parallelism;
 
 import org.deeplearning4j.datasets.iterator.impl.IrisDataSetIterator;
@@ -41,7 +57,7 @@ public class TestParallelEarlyStopping {
     //                .weightInit(WeightInit.XAVIER)
     //                .list()
     //                .layer(0,new OutputLayer.Builder().nIn(4).nOut(3).lossFunction(LossFunctions.LossFunction.MCXENT).build())
-    //                .pretrain(false).backprop(true)
+    //
     //                .build();
     //        MultiLayerNetwork net = new MultiLayerNetwork(conf);
     //        net.setListeners(new ScoreIterationListener(1));
@@ -84,8 +100,8 @@ public class TestParallelEarlyStopping {
                         .optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT)
                         .updater(new Sgd()).weightInit(WeightInit.XAVIER).list()
                         .layer(0, new OutputLayer.Builder().nIn(4).nOut(3)
-                                        .lossFunction(LossFunctions.LossFunction.MCXENT).build())
-                        .pretrain(false).backprop(true).build();
+                                        .lossFunction(LossFunctions.LossFunction.MCXENT).activation(Activation.SOFTMAX).build())
+                        .build();
         MultiLayerNetwork net = new MultiLayerNetwork(conf);
         net.setListeners(new ScoreIterationListener(1));
 
@@ -118,7 +134,7 @@ public class TestParallelEarlyStopping {
                         .weightInit(WeightInit.XAVIER).list()
                         .layer(0, new OutputLayer.Builder().nIn(4).nOut(3).activation(Activation.SOFTMAX)
                                         .lossFunction(LossFunctions.LossFunction.MCXENT).build())
-                        .pretrain(false).backprop(true).build();
+                        .build();
         MultiLayerNetwork net = new MultiLayerNetwork(conf);
         net.setListeners(new ScoreIterationListener(1));
 

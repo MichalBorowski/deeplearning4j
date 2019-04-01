@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.nn.layers.convolution;
 
 import org.deeplearning4j.BaseDL4JTest;
@@ -15,6 +31,7 @@ import org.deeplearning4j.nn.multilayer.MultiLayerNetwork;
 import org.deeplearning4j.nn.weights.WeightInit;
 import org.deeplearning4j.util.ConvolutionUtils;
 import org.junit.Test;
+import org.nd4j.linalg.activations.Activation;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.indexing.NDArrayIndex;
@@ -75,8 +92,9 @@ public class TestConvolutionModes extends BaseDL4JTest {
                                                                 .convolutionMode(cm).list()
                                                                 .layer(0, layer).layer(1,
                                                                                 new OutputLayer.Builder()
-                                                                                                .lossFunction(LossFunctions.LossFunction.MCXENT)
-                                                                                                .nOut(3).build())
+                                                                                        .activation(Activation.SOFTMAX)
+                                                                                        .lossFunction(LossFunctions.LossFunction.MCXENT)
+                                                                                        .nOut(3).build())
                                                                 .setInputType(InputType.convolutional(inSize, inSize,
                                                                                 inDepth))
                                                                 .build();
@@ -152,6 +170,7 @@ public class TestConvolutionModes extends BaseDL4JTest {
                                                 .weightInit(WeightInit.XAVIER).convolutionMode(cm).graphBuilder()
                                                 .addInputs("in").addLayer("0", layer, "in")
                                                 .addLayer("1", new OutputLayer.Builder()
+                                                                .activation(Activation.SOFTMAX)
                                                                 .lossFunction(LossFunctions.LossFunction.MCXENT).nOut(3)
                                                                 .build(), "0")
                                                 .setOutputs("1")
@@ -215,7 +234,7 @@ public class TestConvolutionModes extends BaseDL4JTest {
                             .layer(7, new SubsamplingLayer.Builder().convolutionMode(ConvolutionMode.Same)
                                             .kernelSize(3, 3).stride(3, 3).padding(0, 0).build())
                             .layer(8, new OutputLayer.Builder().lossFunction(LossFunctions.LossFunction.MCXENT).nOut(3)
-                                            .build())
+                                    .activation(Activation.SOFTMAX).build())
                             .build();
 
             assertEquals(cm, ((ConvolutionLayer) conf.getConf(0).getLayer()).getConvolutionMode());
@@ -263,7 +282,7 @@ public class TestConvolutionModes extends BaseDL4JTest {
                             .addLayer("7", new SubsamplingLayer.Builder().convolutionMode(ConvolutionMode.Same)
                                             .kernelSize(3, 3).stride(3, 3).padding(0, 0).build(), "6")
                             .addLayer("8", new OutputLayer.Builder().lossFunction(LossFunctions.LossFunction.MCXENT)
-                                            .nOut(3).build(), "7")
+                                    .activation(Activation.SOFTMAX).nOut(3).build(), "7")
                             .setOutputs("8").build();
 
             assertEquals(cm, ((ConvolutionLayer) ((LayerVertex) conf.getVertices().get("0")).getLayerConf().getLayer())
@@ -422,7 +441,7 @@ public class TestConvolutionModes extends BaseDL4JTest {
         for (int i = 0; i < l.length; i++) {
 
             MultiLayerConfiguration conf = new NeuralNetConfiguration.Builder().convolutionMode(ConvolutionMode.Same)
-                            .list().layer(0, l[i]).layer(1, new OutputLayer.Builder().nOut(3).build())
+                            .list().layer(0, l[i]).layer(1, new OutputLayer.Builder().nOut(3).activation(Activation.SOFTMAX).build())
                             .setInputType(InputType.convolutional(inH, inW, inDepth)).build();
 
             MultiLayerNetwork net = new MultiLayerNetwork(conf);

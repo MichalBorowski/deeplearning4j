@@ -1,176 +1,269 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 //
 // @author raver119@gmail.com
+// @author Yurii Shyrma (iuriish@yahoo.com)
 //
 
 #include <op_boilerplate.h>
 #if NOT_EXCLUDED(OP_range)
 
-#include <NDArray.h>
-#include <graph/VariableSpace.h>
 #include <ops/declarable/CustomOperations.h>
+#include <ops/declarable/helpers/range.h>
 
-/**
- * FIXME: current shape_fn design does NOT allow run-time evaluation for this op.
- */
 namespace nd4j {
-    namespace ops {
-        CUSTOM_OP_IMPL(range, -2, 1, false, -2, -2) {
-            std::vector<T> data;
+namespace ops {
 
-            auto output = OUTPUT_VARIABLE(0);
+CUSTOM_OP_IMPL(range, -2, 1, false, -2, -2) {
+    auto output = OUTPUT_VARIABLE(0);
 
-            if (block.getIArguments()->size() > 0) {
-                int start = INT_ARG(0);
-                int stop = INT_ARG(1);
-                int step = INT_ARG(2);
+    const int numInArrs = block.width();
+    const int numTArgs  = block.getTArguments()->size();
+    const int numIArgs  = block.getIArguments()->size();
 
-                int cnt = 0;
-                auto e = static_cast<T>(start);
-                if (start > stop) {
-                    while (e > (T) stop) {
-                        output->putScalar(cnt++, e);
-                        e = (T) step > (T) 0.0 ? e - (T)step : e + (T)step;
-                    }
+    NDArray *s = nullptr;
+    NDArray *d = nullptr;
+
+    bool localS = false;
+    bool localD = false;
+    // FIXME: this op should be fully moved to helpers
+
+    if (output->isEmpty())
+        return Status::OK();
+
+    if (numInArrs > 0) {
+        if(numInArrs == 1) {
+                //limit = (*INPUT_VARIABLE(0))(0.);
+                if (output->isR()) {
+                    s = NDArrayFactory::create_(0.0f, block.workspace());
+                    d = NDArrayFactory::create_(1.0f, block.workspace());
                 } else {
-                    while (e < (T) stop) {
-                        output->putScalar(cnt++, (T) e);
-                        e += step;
-                    }
+                    s = NDArrayFactory::create_(0, block.workspace());
+                    d = NDArrayFactory::create_(1, block.workspace());
                 }
-
-                STORE_RESULT(output);
-            } else if (block.getTArguments()->size() > 0) {
-                T start = T_ARG(0);
-                T stop = T_ARG(1);
-                T step = T_ARG(2);
-
-                int cnt = 0;
-                auto e = start;
-                if (start > stop) {
-                    while (e > stop) {
-                        output->putScalar(cnt++, e);
-                        e = step > (T) 0.0 ? e - step : e + step;
-                    }
+                localS = true;
+                localD = true;
+        } else if(numInArrs == 2) {
+                s = INPUT_VARIABLE(0);
+                //limit = (*INPUT_VARIABLE(1))(0.);
+                if (output->isR()) {
+                    d = NDArrayFactory::create_(1.0f, block.workspace());
                 } else {
-                    while (e < stop) {
-                        output->putScalar(cnt++, e);
-                        e += step;
-                    }
+                    d = NDArrayFactory::create_(1, block.workspace());
                 }
-
-                STORE_RESULT(output);
-            } else if (block.width() > 0) {
-                REQUIRE_TRUE(block.width() == 3, 0, "Runtime range should have 3 arrays as input, but got %i instead", block.width());
-
-                auto arr0 = INPUT_VARIABLE(0);
-                auto arr1 = INPUT_VARIABLE(1);
-                auto arr2 = INPUT_VARIABLE(2);
-
-                T start = arr0->getScalar(0);
-                T stop = arr1->getScalar(0);
-                T step = arr2->getScalar(0);
-
-                auto e = start;
-                if (start > stop) {
-                    while (e > stop) {
-                        data.emplace_back(e);
-                        e = step > (T) 0.0 ? e - step : e + step;
-                    }
-                } else {
-                    while (e < stop) {
-                        data.emplace_back(e);
-                        e += step;
-                    }
-                }
-
-                if (output->lengthOf() == data.size()) {
-                    memcpy(output->buffer(), data.data(), data.size() * sizeof(T));
-                } else {
-                    // this shouldn't ever happen, but let it be for now
-                    REQUIRE_TRUE(false, 0, "RANGE: wrong length of output array: [%lld] vs [%lld]", output->lengthOf(), data.size())
-                }
-            } else {
-                REQUIRE_TRUE(false, 0, "Runtime range should have inputs defined in any possible way: T_args, INT_args, or INPUT variables")
-            }
-
-            return ND4J_STATUS_OK;
+                localD = true;
+        } else {
+                s = INPUT_VARIABLE(0);
+                //limit = (*INPUT_VARIABLE(1))(0.);
+                d = INPUT_VARIABLE(2);
         }
-        DECLARE_SHAPE_FN(range) {
-            Nd4jLong *newShape;
-            Nd4jLong cnt = 0;
-            if (!block.getIArguments()->empty()) {
-                auto start = INT_ARG(0);
-                auto stop = INT_ARG(1);
-                auto step = INT_ARG(2);
-
-                REQUIRE_TRUE(stop != start, 0, "Range: stop should be larger then start");
-
-                auto e = static_cast<T>(start);
-                if (start > stop) {
-                    while (e > (T) stop) {
-                        cnt++;
-                        e = (T) step > (T) 0.0 ? e - (T)step : e + (T)step;
-                    }
-                } else {
-                    while (e < (T) stop) {
-                        cnt++;
-                        e += step;
-                    }
-                }
-            } else if (!block.getTArguments()->empty()) {
-                T start = T_ARG(0);
-                T stop = T_ARG(1);
-                T step = T_ARG(2);
-
-                REQUIRE_TRUE(stop != start, 0, "Range: stop should be larger then start");
-
-                auto e = start;
-                if (start > stop) {
-                    while (e > stop) {
-                        cnt++;
-                        e = step > (T) 0.0 ? e - step : e + step;
-                    }
-                } else {
-                    while (e < stop) {
-                        cnt++;
-                        e += step;
-                    }
-                }
-            } else {
-                // FIXME:if that's runtime evaluation - we'll just pass some vector. 
-                REQUIRE_TRUE(block.width() == 3, 0, "Runtime range should have 3 arrays as input, but got %i instead", block.width());
-
-                auto arr0 = INPUT_VARIABLE(0);
-                auto arr1 = INPUT_VARIABLE(1);
-                auto arr2 = INPUT_VARIABLE(2);
-
-                T start = arr0->getScalar(0);
-                T stop = arr1->getScalar(0);
-                T step = arr2->getScalar(0);
-
-                REQUIRE_TRUE(stop != start, 0, "Range: stop should be larger then start");
-
-                auto e = start;
-                if (start > stop) {
-                    while (e > stop) {
-                        cnt++;
-                        e = step > (T) 0.0 ? e - step : e + step;
-                    }
-                } else {
-                    while (e < stop) {
-                        cnt++;
-                        e += step;
-                    }
-                }
-            }
-            
-            ALLOCATE(newShape, block.getWorkspace(), shape::shapeInfoLength(1), Nd4jLong);
-            //shape::shapeBuffer(1, shape.data(), newShape);
-            shape::shapeVector(cnt, newShape);
-
-            return SHAPELIST(newShape);
+    } else if (numIArgs > 0) {
+    
+        if(numIArgs == 1) {
+          //  limit = INT_ARG(0);
+        } else if(numIArgs == 2) {
+            s = NDArrayFactory::create_(INT_ARG(0), block.workspace());
+            //limit = INT_ARG(1);
+            d = NDArrayFactory::create_(1, block.workspace());
         }
+        else {
+            s = NDArrayFactory::create_(INT_ARG(0), block.workspace());
+            //limit = INT_ARG(1);
+            d = NDArrayFactory::create_(INT_ARG(2), block.workspace());
+        }
+
+        localS = true;
+        localD = true;
     }
+    else if (numTArgs > 0) {
+
+        if(numTArgs == 1) {
+            //limit = T_ARG(0);
+            s = NDArrayFactory::create_(0.0f, block.workspace());
+            d = NDArrayFactory::create_(1.0f, block.workspace());
+        } else if(numTArgs == 2) {
+            s = NDArrayFactory::create_(T_ARG(0), block.workspace());
+            //limit = T_ARG(1);
+            d = NDArrayFactory::create_(1.0f, block.workspace());
+        }
+        else {
+            s = NDArrayFactory::create_(T_ARG(0), block.workspace());
+            //limit = T_ARG(1);
+            d = NDArrayFactory::create_(T_ARG(2), block.workspace());
+        }
+
+        localS = true;
+        localD = true;
+    } else {
+        REQUIRE_TRUE(false, 0, "CUSTOM RANGE OP: op should have inputs defined in any possible way: T_args, INT_args, or INPUT variables!");
+    }
+
+    helpers::range(*s, *d, *output);
+
+    if (localS)
+        delete s;
+
+    if (localD)
+        delete d;
+
+    return Status::OK();
+}
+
+DECLARE_SHAPE_FN(range) {
+    
+    const int numInArrs = block.width();
+    const int numTArgs  = block.getTArguments()->size();
+    const int numIArgs  = block.getIArguments()->size();    
+
+    Nd4jLong steps = 0;
+    nd4j::DataType dataType = nd4j::DataType::INHERIT;
+
+    if (numInArrs > 0) {
+        auto isR = INPUT_VARIABLE(0)->isR();
+        auto isZ = INPUT_VARIABLE(0)->isZ();
+        auto dtype = INPUT_VARIABLE(0)->dataType();
+
+        if (isR) {
+            double start(0), limit, delta(1);
+
+            if (numInArrs == 1)
+                limit = INPUT_VARIABLE(0)->e<double>(0);
+            else if (numInArrs == 2) {
+                start = INPUT_VARIABLE(0)->e<double>(0);
+                limit = INPUT_VARIABLE(1)->e<double>(0);
+            } else {
+                start = INPUT_VARIABLE(0)->e<double>(0);
+                limit = INPUT_VARIABLE(1)->e<double>(0);
+                delta = INPUT_VARIABLE(2)->e<double>(0);
+            }
+
+            if (limit == start)
+                return SHAPELIST(ShapeBuilders::emptyShapeInfo(dtype, block.workspace()));
+
+            REQUIRE_TRUE(delta != 0, 0, "CUSTOM RANGE OP: delta should not be equal to zero !");
+
+            steps = static_cast<Nd4jLong >((limit - start) / delta);
+            dataType = INPUT_VARIABLE(0)->dataType();
+
+            if(math::nd4j_abs<double>(start + steps * delta) < math::nd4j_abs<double >(limit))
+                ++steps;
+        } else if (isZ) {
+            Nd4jLong start(0), limit, delta(1);
+
+            if (numInArrs == 1)
+                limit = INPUT_VARIABLE(0)->e<Nd4jLong>(0);
+            else if (numInArrs == 2) {
+                start = INPUT_VARIABLE(0)->e<Nd4jLong>(0);
+                limit = INPUT_VARIABLE(1)->e<Nd4jLong>(0);
+            } else {
+                start = INPUT_VARIABLE(0)->e<Nd4jLong>(0);
+                limit = INPUT_VARIABLE(1)->e<Nd4jLong>(0);
+                delta = INPUT_VARIABLE(2)->e<Nd4jLong>(0);
+            }
+
+            nd4j_printf("Start: [%lld]; Limit: [%lld]; Delta: [%lld];\n", start, limit, delta)
+
+            if (limit == start)
+                return SHAPELIST(ShapeBuilders::emptyShapeInfo(dtype, block.workspace()));
+
+            REQUIRE_TRUE(delta != 0, 0, "CUSTOM RANGE OP: delta should not be equal to zero !");
+
+            steps = static_cast<Nd4jLong >((limit - start) / delta);
+            dataType = INPUT_VARIABLE(0)->dataType();
+
+            if(math::nd4j_abs<double>(start + steps * delta) < math::nd4j_abs<double >(limit))
+                ++steps;
+        }
+    } else if (numIArgs > 0) {
+        Nd4jLong start(0), limit, delta(1);
+
+        if(numIArgs == 1)
+            limit = INT_ARG(0);
+        else if(numIArgs == 2) {
+            start = INT_ARG(0);
+            limit = INT_ARG(1);
+        }
+        else {
+            start = INT_ARG(0);
+            limit = INT_ARG(1);
+            delta = INT_ARG(2);
+        }
+
+        if (limit == start)
+            return SHAPELIST(ShapeBuilders::emptyShapeInfo(nd4j::DataType::INT32, block.workspace()));
+
+        REQUIRE_TRUE(delta != 0, 0, "CUSTOM RANGE OP: delta should not be equal to zero !");
+
+        if (limit > DataTypeUtils::max<int>())
+            dataType = nd4j::DataType::INT64;
+        else
+            dataType = nd4j::DataType::INT32;
+
+        steps = (limit - start) / delta;
+
+        if(math::nd4j_abs<Nd4jLong>(start + steps * delta) < math::nd4j_abs<Nd4jLong>(limit))
+            ++steps;
+    }         
+    else if (numTArgs > 0) {
+        double start(0), limit, delta(1);
+
+        if(numTArgs == 1) 
+            limit = T_ARG(0);
+        else if(numTArgs == 2) {
+            start = T_ARG(0);
+            limit = T_ARG(1);
+        }
+        else {
+            start = T_ARG(0);
+            limit = T_ARG(1);
+            delta = T_ARG(2);
+        }
+
+        //REQUIRE_TRUE(limit != start, 0, "CUSTOM RANGE OP: limit and start values should be different, but got both equal to %f !", limit);
+        if (limit == start)
+            return SHAPELIST(ShapeBuilders::emptyShapeInfo(Environment::getInstance()->defaultFloatDataType(), block.workspace()));
+
+
+        REQUIRE_TRUE(delta != 0, 0, "CUSTOM RANGE OP: delta should not be equal to zero !");
+
+        steps = static_cast<Nd4jLong >((limit - start) / delta);
+        if (Environment::getInstance()->precisionBoostAllowed())
+            dataType = nd4j::DataType::DOUBLE;
+        else
+            dataType = Environment::getInstance()->defaultFloatDataType();
+
+        if(math::nd4j_abs<double>(start + steps * delta) < math::nd4j_abs<double >(limit))
+            ++steps;
+    } else {
+        REQUIRE_TRUE(false, 0, "CUSTOM RANGE OP: op should have inputs defined in any possible way: T_args, INT_args, or INPUT variables!");
+    }
+
+    REQUIRE_TRUE(steps > 0, 0, "CUSTOM RANGE OP: value of (limit-start)/delta should be positive !");
+
+    return SHAPELIST(ShapeBuilders::createVectorShapeInfo(dataType, steps, block.workspace()));
+}
+
+
+    DECLARE_TYPES(range) {
+        getOpDescriptor()
+                ->setAllowedInputTypes(nd4j::DataType::ANY)
+                ->setAllowedOutputTypes({ALL_FLOATS, ALL_INTS});
+    }
+}
 }
 
 #endif

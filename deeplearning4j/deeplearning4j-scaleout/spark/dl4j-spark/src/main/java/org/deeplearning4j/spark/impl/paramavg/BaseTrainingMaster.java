@@ -1,5 +1,23 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.spark.impl.paramavg;
 
+import lombok.Getter;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -7,7 +25,9 @@ import org.apache.hadoop.fs.Path;
 import org.apache.spark.SparkContext;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.broadcast.Broadcast;
 import org.apache.spark.storage.StorageLevel;
+import org.datavec.spark.util.SerializableHadoopConfig;
 import org.deeplearning4j.api.storage.StatsStorageRouter;
 import org.deeplearning4j.optimize.api.TrainingListener;
 import org.deeplearning4j.spark.api.*;
@@ -34,6 +54,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Collection;
+import java.util.List;
 import java.util.Random;
 
 /**
@@ -57,10 +78,14 @@ public abstract class BaseTrainingMaster<R extends TrainingResult, W extends Tra
 
     protected String trainingMasterUID;
 
+    @Setter @Getter
+    protected Boolean workerTogglePeriodicGC;
+    @Setter @Getter
+    protected Integer workerPeriodicGCFrequency;
     protected StatsStorageRouter statsStorage;
 
     //Listeners etc
-    protected Collection<TrainingListener> listeners;
+    protected List<TrainingListener> listeners;
 
 
     protected Repartition repartition;
@@ -72,6 +97,8 @@ public abstract class BaseTrainingMaster<R extends TrainingResult, W extends Tra
     @JsonDeserialize(using = StorageLevelDeserializer.class)
     protected StorageLevel storageLevelStreams = StorageLevel.MEMORY_ONLY();
     protected RDDTrainingApproach rddTrainingApproach = RDDTrainingApproach.Export;
+
+    protected Broadcast<SerializableHadoopConfig> broadcastHadoopConfig;
 
     protected BaseTrainingMaster() {
 
@@ -251,6 +278,4 @@ public abstract class BaseTrainingMaster<R extends TrainingResult, W extends Tra
     public boolean deleteTempFiles(SparkContext sc) {
         return deleteTempFiles(new JavaSparkContext(sc));
     }
-
-
 }

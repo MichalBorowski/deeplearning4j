@@ -1,12 +1,32 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.imports.TFGraphs;
 
-import org.junit.After;
-import org.junit.Test;
+import org.junit.*;
+import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.nd4j.linalg.api.ndarray.INDArray;
+import org.nd4j.linalg.api.ops.executioner.OpExecutioner;
+import org.nd4j.linalg.factory.Nd4j;
+import org.nd4j.linalg.primitives.Pair;
 import org.nd4j.nativeblas.NativeOpsHolder;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -23,68 +43,33 @@ import java.util.Map;
  * <p>
  */
 @RunWith(Parameterized.class)
+//@Ignore
 public class TFGraphTestList {
-    public static String[] modelNames = new String[]{
-            "conv_0",
-            /*"add_n",
-            "ae",
-            "ae_00",
-            "bias_add",
-            "norm_tests/norm_0",
-            "concat",
-            "conv_0",
-            "conv_1", //Raver is working on this
-            "conv_2", //missing SpaceToBatchND
-            "conv_3", //fails due to 4d input: this seems to be related to Conv2d being mapped to Dilation2D which takes 3d input
-           // "deep_mnist", //broadcast bug? double check with raver
-          //  "deep_mnist_no_dropout",
-            "expand_dim",
-            "g_00",
-            "g_01",
-            "g_01",
-            "g_02",
-            "g_03", //op missing?
-            "g_04",
-            "g_05",
-            "gru_mnist",
-            "lstm_mnist",
-            "math_mul_order",
-            "mlp_00",
-            "mnist_00",
-            //"node_multiple_out",
-            "non2d_0",
-            "non2d_0A",
-            "pool_0",
-            "pool_1",
-            "primitive_gru",
-            "primitive_gru_dynamic", //while loop related NullPointer, double check import here
-            "primitive_lstm",
-          "ssd_mobilenet_v1_coco",
-            "stack",
-            "stack_1d",
-            "stack_scalar",
-            "simpleif_0",
-            "simple_cond", //JVM crash
-            "simple_while",  //Functions not being added: Need to finish while import
-            "transform_0",
-            "transpose_00",
-            "unstack",
-            //"yolov2_608x608"*/
+    @Rule
+    public TemporaryFolder testDir = new TemporaryFolder();
 
+    public static String[] modelNames = new String[]{
+            "rnn/lstmblockcell/dynamic_b1_n5-3_ts4_noPH_clip-0.3-0.4_fB1_Tanh_noIS_noTM"
     };
 
     @After
-    public void tearDown() throws Exception {
+    public void tearDown() {
         NativeOpsHolder.getInstance().getDeviceNativeOps().enableDebugMode(false);
         NativeOpsHolder.getInstance().getDeviceNativeOps().enableVerboseMode(false);
     }
 
     //change this to SAMEDIFF for samediff
-    //public static TFGraphTestAllHelper.ExecuteWith executeWith = TFGraphTestAllHelper.ExecuteWith.SAMEDIFF;
-    public static TFGraphTestAllHelper.ExecuteWith executeWith = TFGraphTestAllHelper.ExecuteWith.LIBND4J;
+    public static TFGraphTestAllHelper.ExecuteWith executeWith = TFGraphTestAllHelper.ExecuteWith.SAMEDIFF;
+//    public static TFGraphTestAllHelper.ExecuteWith executeWith = TFGraphTestAllHelper.ExecuteWith.LIBND4J;
     // public static TFGraphTestAllHelper.ExecuteWith executeWith = TFGraphTestAllHelper.ExecuteWith.JUST_PRINT;
 
-    public static String modelDir = TFGraphTestAllHelper.COMMON_BASE_DIR; //this is for later if we want to check in models separately for samediff and libnd4j
+    public static final String MODEL_DIR = "tf_graphs/examples";
+    public static final String MODEL_FILENAME = "frozen_model.pb";
+
+    @BeforeClass
+    public static void beforeClass(){
+        Nd4j.getExecutioner().setProfilingMode(OpExecutioner.ProfilingMode.SCOPE_PANIC);
+    }
 
     private String modelName;
 
@@ -104,15 +89,24 @@ public class TFGraphTestList {
 
     @Test
     public void testOutputOnly() throws IOException {
-        Map<String, INDArray> inputs = TFGraphTestAllHelper.inputVars(modelName, modelDir);
-        Map<String, INDArray> predictions = TFGraphTestAllHelper.outputVars(modelName, modelDir);
-        TFGraphTestAllHelper.checkOnlyOutput(inputs, predictions, modelName, modelDir, executeWith);
+        //Nd4jCpu.Environment.getInstance().setUseMKLDNN(false);
+        File dir = testDir.newFolder();
+        Map<String, INDArray> inputs = TFGraphTestAllHelper.inputVars(modelName, MODEL_DIR, dir);
+        Map<String, INDArray> predictions = TFGraphTestAllHelper.outputVars(modelName, MODEL_DIR, dir);
+        Pair<Double,Double> precisionOverride = TFGraphTestAllHelper.testPrecisionOverride(modelName);
+        Double maxRE = (precisionOverride == null ? null : precisionOverride.getFirst());
+        Double minAbs = (precisionOverride == null ? null : precisionOverride.getSecond());
+
+        TFGraphTestAllHelper.checkOnlyOutput(inputs, predictions, modelName, MODEL_DIR, MODEL_FILENAME, executeWith,
+                TFGraphTestAllHelper.LOADER, maxRE, minAbs);
     }
 
-    @Test
+    @Test @Ignore
     public void testAlsoIntermediate() throws IOException {
-        Map<String, INDArray> inputs = TFGraphTestAllHelper.inputVars(modelName, modelDir);
-        TFGraphTestAllHelper.checkIntermediate(inputs, modelName, executeWith);
+        //Nd4jCpu.Environment.getInstance().setUseMKLDNN(false);
+        File dir = testDir.newFolder();
+        Map<String, INDArray> inputs = TFGraphTestAllHelper.inputVars(modelName, MODEL_DIR, dir);
+        TFGraphTestAllHelper.checkIntermediate(inputs, modelName, MODEL_DIR, MODEL_FILENAME, executeWith, dir);
 
     }
 }

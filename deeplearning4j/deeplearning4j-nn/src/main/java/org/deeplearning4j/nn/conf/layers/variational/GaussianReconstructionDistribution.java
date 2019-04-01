@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.nn.conf.layers.variational;
 
 import lombok.Data;
@@ -82,7 +98,8 @@ public class GaussianReconstructionDistribution implements ReconstructionDistrib
 
         INDArray[] logProbArrays = calcLogProbArrayExConstants(x, preOutDistributionParams);
 
-        return logProbArrays[0].sum(1).muli(0.5).subi(size * NEG_HALF_LOG_2PI).addi(logProbArrays[1].sum(1));
+        return logProbArrays[0].sum(true, 1).muli(0.5).subi(size * NEG_HALF_LOG_2PI)
+                        .addi(logProbArrays[1].sum(true, 1));
     }
 
     private INDArray[] calcLogProbArrayExConstants(INDArray x, INDArray preOutDistributionParams) {
@@ -94,9 +111,9 @@ public class GaussianReconstructionDistribution implements ReconstructionDistrib
         INDArray logStdevSquared = output.get(NDArrayIndex.all(), NDArrayIndex.interval(size, 2 * size));
 
         INDArray sigmaSquared = Transforms.exp(logStdevSquared, true);
-        INDArray lastTerm = x.sub(mean);
+        INDArray lastTerm = x.sub(mean.castTo(x.dataType()));
         lastTerm.muli(lastTerm);
-        lastTerm.divi(sigmaSquared).divi(2);
+        lastTerm.divi(sigmaSquared.castTo(lastTerm.dataType())).divi(2);
 
         return new INDArray[] {logStdevSquared, lastTerm};
     }
@@ -110,9 +127,9 @@ public class GaussianReconstructionDistribution implements ReconstructionDistrib
         INDArray mean = output.get(NDArrayIndex.all(), NDArrayIndex.interval(0, size));
         INDArray logStdevSquared = output.get(NDArrayIndex.all(), NDArrayIndex.interval(size, 2 * size));
 
-        INDArray sigmaSquared = Transforms.exp(logStdevSquared, true);
+        INDArray sigmaSquared = Transforms.exp(logStdevSquared, true).castTo(x.dataType());
 
-        INDArray xSubMean = x.sub(mean);
+        INDArray xSubMean = x.sub(mean.castTo(x.dataType()));
         INDArray xSubMeanSq = xSubMean.mul(xSubMean);
 
         INDArray dLdmu = xSubMean.divi(sigmaSquared);

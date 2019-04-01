@@ -1,7 +1,23 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 //
 //  @author raver119@gmail.com
+//  modified by sgazeos@gmail.com with backprop implementation.
 //
-
 #include <op_boilerplate.h>
 #if NOT_EXCLUDED(OP_floormod)
 
@@ -10,69 +26,60 @@
 
 namespace nd4j {
     namespace ops {
-        CUSTOM_OP_IMPL(floormod, 2, 1, true, 0, 0) {
-            NDArray<T> *x = INPUT_VARIABLE(0);
-            NDArray<T> *y = INPUT_VARIABLE(1);
-            NDArray<T> *z = this->getZ(block);
+        BROADCASTABLE_OP_IMPL(floormod, 0, 0) {
+            auto x = INPUT_VARIABLE(0);
+            auto y = INPUT_VARIABLE(1);
+            auto z = OUTPUT_VARIABLE(0);
 
-            auto tZ = BroadcastHelper<T>::template broadcast_apply<simdOps::FloorMod<T>>(x, y, z);
+            BROADCAST_CHECK_EMPTY(x,y,z);
+
+            REQUIRE_TRUE(!y->isB(), 0, "FLOORMOD OP: you can't divide by bool array!");
+            auto tZ = BroadcastHelper::broadcastApply(BROADCAST(FloorMod), x, y, z);
             if (tZ == nullptr)
                 return ND4J_STATUS_KERNEL_FAILURE;
             else if (tZ != z) {
                 OVERWRITE_RESULT(tZ);
             }
 
-            return ND4J_STATUS_OK;
+            return Status::OK();
         }
 
-        DECLARE_SHAPE_FN(floormod) {
-            auto shapeList = SHAPELIST();
-            auto x = inputShape->at(0);
-            auto y = inputShape->at(1);
+        DECLARE_TYPES(floormod) {
+            getOpDescriptor()
+                    ->setAllowedInputTypes(0, DataType::ANY)
+                    ->setAllowedInputTypes(1, DataType::ANY)
+                    ->setAllowedOutputTypes(0, DataType::INHERIT);
+        }
 
-            if (shape::equalsSoft(x, y)) {
-                Nd4jLong *newshape;
-                COPY_SHAPE(x, newshape);
-
-                shapeList->push_back(newshape);
-            } else if (shape::isScalar(x) && !shape::isScalar(y)) {
-                Nd4jLong *newshape;
-                COPY_SHAPE(y, newshape);
-
-                shapeList->push_back(newshape);
-            } else if (!shape::isScalar(x) && shape::isScalar(y)) {
-                Nd4jLong *newshape;
-                COPY_SHAPE(x, newshape);
-
-                shapeList->push_back(newshape);
-            } else if (ShapeUtils<T>::areShapesBroadcastable(x, y)) {
-                Nd4jLong *newshape = nullptr;
-                ShapeUtils<T>::evalBroadcastShapeInfo(x, y, true, newshape, block.workspace());
-
-                shapeList->push_back(newshape);
-            } else {
-                // in this case we'll throw exception later
-                Nd4jLong *newshape;
-                COPY_SHAPE(x, newshape);
-
-                shapeList->push_back(newshape);
-            }
-
-            return shapeList;
+        DECLARE_TYPES(floormod_bp) {
+            getOpDescriptor()
+                    ->setAllowedInputTypes(DataType::ANY)
+                    ->setAllowedOutputTypes({ALL_FLOATS});
         }
 
         CUSTOM_OP_IMPL(floormod_bp, 3, 2, false, 0, 0) {
-            // PLEASE NOTE: we're just passing eps down the line here
             auto x = INPUT_VARIABLE(0);
             auto y = INPUT_VARIABLE(1);
             auto epsNext = INPUT_VARIABLE(2);
 
             auto gradX = OUTPUT_VARIABLE(0);
             auto gradY = OUTPUT_VARIABLE(1);
+            gradX->assign(epsNext);
+            nd4j::ops::floormod op;
+            std::unique_ptr<ResultSet> tmpResult(op.execute({x, y}, {}, {}, {}));
 
-            gradY->assign((T) 0.0f);
-            gradX->assign((T) 0.0f);
-
+            if (gradY->rankOf() == gradX->rankOf())
+                epsNext->applyPairwiseTransform(pairwise::Multiply, tmpResult->at(0), gradY, nullptr);
+            else // epsNext is greater than gradY
+            {
+                std::vector<Nd4jLong> dims(epsNext->rankOf() * 2);
+                Nd4jLong gap = epsNext->rankOf() - gradY->rankOf();
+                for (Nd4jLong d = 0; d < gap; d++) {
+                    dims[d * 2 + 1] = 1;
+                }
+                auto tempIn((*tmpResult->at(0))(dims));
+                (*epsNext)(dims).applyPairwiseTransform(pairwise::Multiply, &tempIn, gradY, nullptr);
+            }
             return Status::OK();
         }
 

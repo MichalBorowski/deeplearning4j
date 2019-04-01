@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 //
 //
 //
@@ -85,6 +101,32 @@ namespace nd4j {
         #endif
 
         /**
+         * 3D deconvolution implementation
+         * 
+         * IntArgs:
+         * 0:  filter(kernel) depth
+         * 1:  filter(kernel) height
+         * 2:  filter(kernel) width
+         * 3:  strides depth
+         * 4:  strides height
+         * 5:  strides width
+         * 6:  paddings depth
+         * 7:  paddings height
+         * 8:  paddings width
+         * 9:  dilations depth
+         * 10: dilations height
+         * 11: dilations width
+         * 12: same mode: 0 false, 1 true
+         * 13: data format (optional): 0-NDHWC, 1-NCDHW, default is 1
+         */
+
+        #if NOT_EXCLUDED(OP_deconv3d)
+        DECLARE_CUSTOM_OP(deconv3d, 2, 1, false, 0, 13);
+        DECLARE_CUSTOM_OP(deconv3d_bp, 3, 2, false, 0, 13);
+        #endif
+
+
+        /**
          * This op implements max pooling for convolution networks.
          * Expected Input: 4D array, NCHW format.
          *
@@ -145,28 +187,10 @@ namespace nd4j {
         DECLARE_CUSTOM_OP(pnormpool2d_bp, 2, 1, false, 1, 10);
         #endif
 
-        #if NOT_EXCLUDED(OP_maxpool3d)
-        DECLARE_CUSTOM_OP(maxpool3d, 1, 2, true, 0, 14); 
-        DECLARE_CUSTOM_OP(maxpool3d_bp, 3, 1, true, 0, 14);
-        #endif
-
-        #if NOT_EXCLUDED(OP_avgpool3d)
-        DECLARE_CUSTOM_OP(avgpool3d, 1, 1, true, 0, 14);
-        DECLARE_CUSTOM_OP(avgpool3d_bp, 2, 1, true, 0, 14);
-        #endif
-
         #if NOT_EXCLUDED(OP_fullconv3d)
         DECLARE_CUSTOM_OP(fullconv3d, 5, 1, false, 0, 13);
         DECLARE_CUSTOM_OP(fullconv3d_bp, 5, 1, false, 0, 13);
         DECLARE_CUSTOM_OP(fullconv3d_grad, 4, 2, false, 1, 13);
-        #endif
-
-        /**
-         *  Universal pooling op, combines max/avg/pnorm pooling.
-         *  Shouldn't be used directly, consider using corresponding operations instead.
-         */
-        #if NOT_EXCLUDED(OP_pooling2d)
-        DECLARE_CUSTOM_OP(pooling2d, 1, 1, false, 0, 11);
         #endif
 
         /**
@@ -232,22 +256,6 @@ namespace nd4j {
         #if NOT_EXCLUDED(OP_upsampling3d)
         DECLARE_CUSTOM_OP(upsampling3d, 1, 1, false, 0, 3);
         DECLARE_CUSTOM_OP(upsampling3d_bp, 2, 1, false, 0, 0);    
-        #endif
-
-        /**
-         * 3D convolution implementation
-         * 
-         * IntArgs:
-         * 0: dilation T
-         * 1: dilation W
-         * 2: dilation H
-         * 4: padding T
-         * 5: padding W
-         * 6: padding H
-         */
-        #if NOT_EXCLUDED(OP_conv3d)
-        DECLARE_CUSTOM_OP(conv3d, 2, 1, false, 0, 7);
-        DECLARE_CONFIGURABLE_OP(conv3d_bp, 3, 1, false, 0, 7); // TODO: to be implemented        
         #endif
 
         /**

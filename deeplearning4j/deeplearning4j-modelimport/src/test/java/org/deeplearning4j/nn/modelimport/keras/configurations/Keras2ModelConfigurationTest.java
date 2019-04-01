@@ -1,28 +1,29 @@
-/*-
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
  *
- *  * Copyright 2017 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
  *
- */
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.nn.modelimport.keras.configurations;
 
 import lombok.extern.slf4j.Slf4j;
+import lombok.val;
 import org.deeplearning4j.nn.conf.ComputationGraphConfiguration;
 import org.deeplearning4j.nn.conf.MultiLayerConfiguration;
 import org.deeplearning4j.nn.graph.ComputationGraph;
 import org.deeplearning4j.nn.modelimport.keras.KerasLayer;
 import org.deeplearning4j.nn.modelimport.keras.KerasModel;
+import org.deeplearning4j.nn.modelimport.keras.KerasModelImport;
 import org.deeplearning4j.nn.modelimport.keras.layers.convolutional.KerasSpaceToDepth;
 import org.deeplearning4j.nn.multilayer.MultiLayerNetwork;
 import org.junit.Test;
@@ -30,11 +31,13 @@ import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.io.ClassPathResource;
 
+import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.Arrays;
 
 import static junit.framework.TestCase.assertTrue;
+import static org.junit.Assert.assertArrayEquals;
 
 
 /**
@@ -56,6 +59,17 @@ public class Keras2ModelConfigurationTest {
     @Test(expected = IOException.class)
     public void notAFileTest() throws Exception {
         runModelConfigTest("modelimport/keras/");
+    }
+
+
+    @Test
+    public void simple222ConfigTest() throws Exception {
+        runSequentialConfigTest("modelimport/keras/configs/keras2/model_2_2_2.json");
+    }
+
+    @Test
+    public void simple224ConfigTest() throws Exception {
+        runSequentialConfigTest("modelimport/keras/configs/keras2/model_2_2_4.json");
     }
 
     @Test
@@ -99,6 +113,10 @@ public class Keras2ModelConfigurationTest {
         runSequentialConfigTest("modelimport/keras/configs/keras2/simple_rnn_tf_keras_2_config.json");
     }
 
+    @Test
+    public void simplePreluConfigTest() throws Exception {
+        runSequentialConfigTest("modelimport/keras/configs/keras2/prelu_config_tf_keras_2.json");
+    }
 
     @Test
     public void mnistMlpTfSequentialConfigTest() throws Exception {
@@ -206,6 +224,20 @@ public class Keras2ModelConfigurationTest {
     @Test
     public void conv1dDilationTest() throws Exception {
         runModelConfigTest("/modelimport/keras/configs/keras2/conv1d_dilation_tf_keras_2_config.json");
+    }
+
+    @Test
+    public void test5982() throws Exception {
+        File jsonFile = new ClassPathResource("modelimport/keras/configs/bidirectional_last_timeStep.json").getFile();
+        val modelGraphConf = KerasModelImport.importKerasSequentialConfiguration(jsonFile.getAbsolutePath());
+        MultiLayerNetwork model = new MultiLayerNetwork(modelGraphConf);
+
+        INDArray features = Nd4j.create(new double[]{1, 3, 1, 2, 2, 1, 82, 2, 10,1, 3, 1, 2, 1, 82, 3, 1, 10, 1, 2, 1, 3,
+                1, 10, 82, 2, 1, 1, 10, 82, 2, 3, 1, 2, 1, 10, 1, 2, 3, 82, 2, 1, 10, 3, 82, 1, 2, 1, 10, 1}, new int[]{1,1,50});
+
+        model.init();
+        INDArray out = model.output(features);
+        assertArrayEquals(new long[]{1,14}, out.shape());
     }
 
     @Test

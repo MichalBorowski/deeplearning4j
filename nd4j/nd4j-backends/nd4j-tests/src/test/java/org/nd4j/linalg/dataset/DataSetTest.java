@@ -1,28 +1,30 @@
-/*-
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
  *
- *  * Copyright 2015 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
  *
- */
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.nd4j.linalg.dataset;
 
+import lombok.extern.slf4j.Slf4j;
 import lombok.val;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.nd4j.linalg.BaseNd4jTest;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.api.ops.random.impl.BernoulliDistribution;
 import org.nd4j.linalg.dataset.api.iterator.DataSetIterator;
@@ -37,13 +39,14 @@ import java.io.*;
 import java.util.*;
 
 import static org.junit.Assert.*;
-import static org.nd4j.linalg.indexing.NDArrayIndex.all;
-import static org.nd4j.linalg.indexing.NDArrayIndex.interval;
-import static org.nd4j.linalg.indexing.NDArrayIndex.point;
+import static org.nd4j.linalg.indexing.NDArrayIndex.*;
 
+@Slf4j
 @RunWith(Parameterized.class)
 public class DataSetTest extends BaseNd4jTest {
 
+    @Rule
+    public TemporaryFolder testDir = new TemporaryFolder();
 
 
     public DataSetTest(Nd4jBackend backend) {
@@ -58,7 +61,7 @@ public class DataSetTest extends BaseNd4jTest {
         while (iter.hasNext()) {
             DataSet next = iter.next();
             count++;
-            assertArrayEquals(new long[] {10, 4}, next.getFeatureMatrix().shape());
+            assertArrayEquals(new long[] {10, 4}, next.getFeatures().shape());
         }
 
         assertFalse(iter.hasNext());
@@ -70,7 +73,7 @@ public class DataSetTest extends BaseNd4jTest {
     @Test
     public void  testViewIterator2(){
 
-        INDArray f = Nd4j.linspace(1,100,100).reshape('c', 10, 10);
+        INDArray f = Nd4j.linspace(1,100,100, DataType.DOUBLE).reshape('c', 10, 10);
         DataSet ds = new DataSet(f, f);
         DataSetIterator iter = new ViewIterator(ds, 1);
         for( int i=0; i<10; i++ ){
@@ -86,7 +89,7 @@ public class DataSetTest extends BaseNd4jTest {
     @Test
     public void  testViewIterator3(){
 
-        INDArray f = Nd4j.linspace(1,100,100).reshape('c', 10, 10);
+        INDArray f = Nd4j.linspace(1,100,100, DataType.DOUBLE).reshape('c', 10, 10);
         DataSet ds = new DataSet(f, f);
         DataSetIterator iter = new ViewIterator(ds, 6);
         DataSet d1 = iter.next();
@@ -102,7 +105,7 @@ public class DataSetTest extends BaseNd4jTest {
 
 
     @Test
-    public void testSplitTestAndTrain() throws Exception {
+    public void testSplitTestAndTrain() {
         INDArray labels = FeatureUtil.toOutcomeMatrix(new int[] {0, 0, 0, 0, 0, 0, 0, 0}, 1);
         DataSet data = new DataSet(Nd4j.rand(8, 1), labels);
 
@@ -110,19 +113,19 @@ public class DataSetTest extends BaseNd4jTest {
         assertEquals(train.getTrain().getLabels().length(), 6);
 
         SplitTestAndTrain train2 = data.splitTestAndTrain(6, new Random(1));
-        assertEquals(getFailureMessage(), train.getTrain().getFeatureMatrix(), train2.getTrain().getFeatureMatrix());
+        assertEquals(getFailureMessage(), train.getTrain().getFeatures(), train2.getTrain().getFeatures());
 
         DataSet x0 = new IrisDataSetIterator(150, 150).next();
         SplitTestAndTrain testAndTrain = x0.splitTestAndTrain(10);
-        assertArrayEquals(new long[] {10, 4}, testAndTrain.getTrain().getFeatureMatrix().shape());
-        assertEquals(x0.getFeatureMatrix().getRows(ArrayUtil.range(0, 10)), testAndTrain.getTrain().getFeatureMatrix());
+        assertArrayEquals(new long[] {10, 4}, testAndTrain.getTrain().getFeatures().shape());
+        assertEquals(x0.getFeatures().getRows(ArrayUtil.range(0, 10)), testAndTrain.getTrain().getFeatures());
         assertEquals(x0.getLabels().getRows(ArrayUtil.range(0, 10)), testAndTrain.getTrain().getLabels());
 
 
     }
 
     @Test
-    public void testSplitTestAndTrainRng() throws Exception {
+    public void testSplitTestAndTrainRng() {
 
         Random rngHere;
 
@@ -136,9 +139,9 @@ public class DataSetTest extends BaseNd4jTest {
         rngHere = new Random(123);
         SplitTestAndTrain testAndTrainRng = x2.splitTestAndTrain(10, rngHere);
 
-        assertArrayEquals(testAndTrainRng.getTrain().getFeatureMatrix().shape(),
-                        testAndTrain.getTrain().getFeatureMatrix().shape());
-        assertEquals(testAndTrainRng.getTrain().getFeatureMatrix(), testAndTrain.getTrain().getFeatureMatrix());
+        assertArrayEquals(testAndTrainRng.getTrain().getFeatures().shape(),
+                        testAndTrain.getTrain().getFeatures().shape());
+        assertEquals(testAndTrainRng.getTrain().getFeatures(), testAndTrain.getTrain().getFeatures());
         assertEquals(testAndTrainRng.getTrain().getLabels(), testAndTrain.getTrain().getLabels());
 
     }
@@ -182,7 +185,7 @@ public class DataSetTest extends BaseNd4jTest {
 
         for (int i = 0; i < numExamples; i++) {
             DataSet exp = list.get(i);
-            INDArray expIn = exp.getFeatureMatrix();
+            INDArray expIn = exp.getFeatures();
             INDArray expL = exp.getLabels();
 
             INDArray fSubset = f.get(interval(i, i + 1), all(), all());
@@ -230,7 +233,7 @@ public class DataSetTest extends BaseNd4jTest {
         //Check each row individually:
         for (int i = 0; i < numExamples; i++) {
             DataSet exp = list.get(i);
-            INDArray expIn = exp.getFeatureMatrix();
+            INDArray expIn = exp.getFeatures();
             INDArray expL = exp.getLabels();
 
             int thisRowOriginalLength = minTSLength + i;
@@ -333,7 +336,7 @@ public class DataSetTest extends BaseNd4jTest {
         //Check each row individually:
         for (int i = 0; i < numExamples; i++) {
             DataSet original = list.get(i);
-            INDArray expIn = original.getFeatureMatrix();
+            INDArray expIn = original.getFeatures();
             INDArray expL = original.getLabels();
             INDArray origMaskF = original.getFeaturesMaskArray();
             INDArray origMaskL = original.getLabelsMaskArray();
@@ -408,18 +411,18 @@ public class DataSetTest extends BaseNd4jTest {
         int length1 = width * height * depth * nExamples1;
         int length2 = width * height * depth * nExamples2;
 
-        INDArray first = Nd4j.linspace(1, length1, length1).reshape('c', nExamples1, depth, width, height);
-        INDArray second = Nd4j.linspace(1, length2, length2).reshape('c', nExamples2, depth, width, height).addi(0.1);
+        INDArray first = Nd4j.linspace(1, length1, length1, DataType.DOUBLE).reshape('c', nExamples1, depth, width, height);
+        INDArray second = Nd4j.linspace(1, length2, length2, DataType.DOUBLE).reshape('c', nExamples2, depth, width, height).addi(0.1);
 
-        INDArray labels1 = Nd4j.linspace(1, nExamples1 * nOut, nExamples1 * nOut).reshape('c', nExamples1, nOut);
-        INDArray labels2 = Nd4j.linspace(1, nExamples2 * nOut, nExamples2 * nOut).reshape('c', nExamples2, nOut);
+        INDArray labels1 = Nd4j.linspace(1, nExamples1 * nOut, nExamples1 * nOut, DataType.DOUBLE).reshape('c', nExamples1, nOut);
+        INDArray labels2 = Nd4j.linspace(1, nExamples2 * nOut, nExamples2 * nOut, DataType.DOUBLE).reshape('c', nExamples2, nOut);
 
         DataSet ds1 = new DataSet(first, labels1);
         DataSet ds2 = new DataSet(second, labels2);
 
         DataSet merged = DataSet.merge(Arrays.asList(ds1, ds2));
 
-        INDArray fMerged = merged.getFeatureMatrix();
+        INDArray fMerged = merged.getFeatures();
         INDArray lMerged = merged.getLabels();
 
         assertArrayEquals(new long[] {nExamples1 + nExamples2, depth, width, height}, fMerged.shape());
@@ -475,6 +478,123 @@ public class DataSetTest extends BaseNd4jTest {
     }
 
     @Test
+    public void testCnnMergeFeatureMasks() {
+        //Tests merging of different CNN masks: [mb,1,h,1], [mb,1,1,w], [mb,1,h,w]
+
+        for( int t=0; t<3; t++) {
+            log.info("Starting test: {}", t);
+            int nOut = 3;
+            int width = 5;
+            int height = 4;
+            int depth = 3;
+            int nExamples1 = 2;
+            int nExamples2 = 1;
+
+            int length1 = width * height * depth * nExamples1;
+            int length2 = width * height * depth * nExamples2;
+
+            INDArray first = Nd4j.linspace(1, length1, length1, DataType.DOUBLE).reshape('c', nExamples1, depth, height, width);
+            INDArray second = Nd4j.linspace(1, length2, length2, DataType.DOUBLE).reshape('c', nExamples2, depth, height, width).addi(0.1);
+            INDArray third = Nd4j.linspace(1, length2, length2, DataType.DOUBLE).reshape('c', nExamples2, depth, height, width).addi(0.2);
+
+            INDArray fm1 = null;
+            INDArray fm2;
+            INDArray fm3;
+            switch (t){
+                case 0:
+                    fm2 = Nd4j.ones(1,1,height,1);
+                    fm3 = Nd4j.zeros(1,1,height,1);
+                    fm3.get(all(), all(), interval(0,2), all()).assign(1.0);
+                    break;
+                case 1:
+                    fm2 = Nd4j.ones(1,1,1,width);
+                    fm3 = Nd4j.zeros(1,1,1,width);
+                    fm3.get(all(), all(), all(), interval(0,3)).assign(1.0);
+                    break;
+                case 2:
+                    fm2 = Nd4j.ones(1,1,height,width);
+                    fm3 = Nd4j.zeros(1,1,height,width);
+                    fm3.get(all(), all(), interval(0,2), interval(0,3)).assign(1.0);
+                    break;
+                default:
+                    throw new RuntimeException();
+            }
+
+            INDArray fmExpected = Nd4j.concat(0, Nd4j.ones(2, 1, (t == 1 ? 1 : height), (t == 0 ? 1 : width)), fm2, fm3);
+
+            INDArray labels1 = Nd4j.linspace(1, nExamples1 * nOut, nExamples1 * nOut, DataType.DOUBLE).reshape('c', nExamples1, nOut);
+            INDArray labels2 = Nd4j.linspace(1, nExamples2 * nOut, nExamples2 * nOut, DataType.DOUBLE).reshape('c', nExamples2, nOut).addi(0.1);
+            INDArray labels3 = Nd4j.linspace(1, nExamples2 * nOut, nExamples2 * nOut, DataType.DOUBLE).reshape('c', nExamples2, nOut).addi(0.2);
+
+            DataSet ds1 = new DataSet(first, labels1, fm1, null);
+            DataSet ds2 = new DataSet(second, labels2, fm2, null);
+            DataSet ds3 = new DataSet(third, labels3, fm3, null);
+
+            DataSet merged = DataSet.merge(Arrays.asList(ds1, ds2, ds3));
+
+            INDArray fMerged = merged.getFeatures();
+            INDArray lMerged = merged.getLabels();
+            INDArray fmMerged = merged.getFeaturesMaskArray();
+
+            assertArrayEquals(new long[]{nExamples1 + 2*nExamples2, depth, height, width}, fMerged.shape());
+            assertArrayEquals(new long[]{nExamples1 + 2*nExamples2, nOut}, lMerged.shape());
+            assertArrayEquals(new long[]{nExamples1 + 2*nExamples2, 1, (t == 1 ? 1 : height), (t == 0 ? 1 : width)}, fmMerged.shape());
+
+
+            assertEquals(first, fMerged.get(interval(0, nExamples1), all(), all(), all()));
+            INDArray secondExp = fMerged.get(interval(nExamples1, nExamples1 + nExamples2), all(), all(), all());
+            assertEquals(second, secondExp);
+            assertEquals(third, fMerged.get(interval(nExamples1 + nExamples2, nExamples1 + 2*nExamples2), all(), all(), all()));
+            assertEquals(labels1, lMerged.get(interval(0, nExamples1), all()));
+            assertEquals(labels2, lMerged.get(interval(nExamples1, nExamples1 + nExamples2), all()));
+            assertEquals(labels3, lMerged.get(interval(nExamples1 + nExamples2, nExamples1 + 2*nExamples2), all()));
+
+            assertEquals(fmExpected, fmMerged);
+
+            //Test merging with an empty DataSet (this should be ignored)
+            DataSet merged2 = DataSet.merge(Arrays.asList(ds1, new DataSet(), ds2, ds3));
+            assertEquals(merged, merged2);
+
+            //Test merging with no features in one of the DataSets
+            INDArray temp = ds1.getFeatures();
+            ds1.setFeatures(null);
+            try {
+                DataSet.merge(Arrays.asList(ds1, ds2));
+                fail("Expected exception");
+            } catch (IllegalStateException e) {
+                //OK
+                assertTrue(e.getMessage().contains("Cannot merge"));
+            }
+
+            try {
+                DataSet.merge(Arrays.asList(ds2, ds1));
+                fail("Expected exception");
+            } catch (IllegalStateException e) {
+                //OK
+                assertTrue(e.getMessage().contains("Cannot merge"));
+            }
+
+            ds1.setFeatures(temp);
+            ds2.setLabels(null);
+            try {
+                DataSet.merge(Arrays.asList(ds1, ds2));
+                fail("Expected exception");
+            } catch (IllegalStateException e) {
+                //OK
+                assertTrue(e.getMessage().contains("Cannot merge"));
+            }
+
+            try {
+                DataSet.merge(Arrays.asList(ds2, ds1));
+                fail("Expected exception");
+            } catch (IllegalStateException e) {
+                //OK
+                assertTrue(e.getMessage().contains("Cannot merge"));
+            }
+        }
+    }
+
+    @Test
     public void testMixedRnn2dMerging() {
         //RNN input with 2d label output
         //Basic test for time series, all of the same length + no masking arrays
@@ -501,7 +621,7 @@ public class DataSetTest extends BaseNd4jTest {
 
         for (int i = 0; i < numExamples; i++) {
             DataSet exp = list.get(i);
-            INDArray expIn = exp.getFeatureMatrix();
+            INDArray expIn = exp.getFeatures();
             INDArray expL = exp.getLabels();
 
             INDArray fSubset = f.get(interval(i, i + 1), all(), all());
@@ -517,16 +637,16 @@ public class DataSetTest extends BaseNd4jTest {
 
         //Test 2d mask merging, 2d data
         //features
-        INDArray f2d1 = Nd4j.create(new double[] {1, 2, 3});
+        INDArray f2d1 = Nd4j.create(new double[] {1, 2, 3}).reshape(1, -1);
         INDArray f2d2 = Nd4j.create(new double[][] {{4, 5, 6}, {7, 8, 9}});
         //labels
-        INDArray l2d1 = Nd4j.create(new double[] {1.5, 2.5, 3.5});
+        INDArray l2d1 = Nd4j.create(new double[] {1.5, 2.5, 3.5}).reshape(1, -1);
         INDArray l2d2 = Nd4j.create(new double[][] {{4.5, 5.5, 6.5}, {7.5, 8.5, 9.5}});
         //feature masks
-        INDArray fm2d1 = Nd4j.create(new double[] {0, 1, 1});
+        INDArray fm2d1 = Nd4j.create(new double[] {0, 1, 1}).reshape(1, -1);
         INDArray fm2d2 = Nd4j.create(new double[][] {{1, 0, 1}, {0, 1, 0}});
         //label masks
-        INDArray lm2d1 = Nd4j.create(new double[] {1, 1, 0});
+        INDArray lm2d1 = Nd4j.create(new double[] {1, 1, 0}).reshape(1, -1);
         INDArray lm2d2 = Nd4j.create(new double[][] {{1, 0, 0}, {0, 1, 1}});
 
         DataSet mds2d1 = new DataSet(f2d1, l2d1, fm2d1, lm2d1);
@@ -561,12 +681,12 @@ public class DataSetTest extends BaseNd4jTest {
         DataSet ds3d2 = new DataSet(f3d2, l3d2, null, lm3d2);
 
         INDArray expLabels3d = Nd4j.create(3, 3, 4);
-        expLabels3d.put(new INDArrayIndex[] {point(0), NDArrayIndex.all(), NDArrayIndex.interval(0, 4)},
+        expLabels3d.put(new INDArrayIndex[] {interval(0,1), NDArrayIndex.all(), NDArrayIndex.interval(0, 4)},
                         l3d1);
         expLabels3d.put(new INDArrayIndex[] {NDArrayIndex.interval(1, 2, true), NDArrayIndex.all(),
                         NDArrayIndex.interval(0, 3)}, l3d2);
         INDArray expLM3d = Nd4j.create(3, 3, 4);
-        expLM3d.put(new INDArrayIndex[] {point(0), NDArrayIndex.all(), NDArrayIndex.interval(0, 4)},
+        expLM3d.put(new INDArrayIndex[] {interval(0,1), NDArrayIndex.all(), NDArrayIndex.interval(0, 4)},
                         lm3d1);
         expLM3d.put(new INDArrayIndex[] {NDArrayIndex.interval(1, 2, true), NDArrayIndex.all(),
                         NDArrayIndex.interval(0, 3)}, lm3d2);
@@ -598,8 +718,8 @@ public class DataSetTest extends BaseNd4jTest {
         int entries = nSamples * nChannels * imgRows * imgCols;
         int labels = nSamples * nLabels;
 
-        INDArray ds_data = Nd4j.linspace(1, entries, entries).reshape(nSamples, nChannels, imgRows, imgCols);
-        INDArray ds_labels = Nd4j.linspace(1, labels, labels).reshape(nSamples, nLabels);
+        INDArray ds_data = Nd4j.linspace(1, entries, entries, DataType.INT).reshape(nSamples, nChannels, imgRows, imgCols);
+        INDArray ds_labels = Nd4j.linspace(1, labels, labels, DataType.INT).reshape(nSamples, nLabels);
         DataSet ds = new DataSet(ds_data, ds_labels);
         ds.shuffle();
 
@@ -610,7 +730,7 @@ public class DataSetTest extends BaseNd4jTest {
                     int f_element = ds.getFeatures().tensorAlongDimension(tensorNum, dim).getInt(i);
                     int f_next_element = ds.getFeatures().tensorAlongDimension(tensorNum, dim).getInt(j);
                     int f_element_diff = f_next_element - f_element;
-                    assertTrue(f_element_diff == ds_data.stride(dim));
+                    assertEquals(f_element_diff, ds_data.stride(dim));
                 }
             }
         }
@@ -632,8 +752,8 @@ public class DataSetTest extends BaseNd4jTest {
         }
         int labels = shape[0] * nLabels;
 
-        INDArray ds_data = Nd4j.linspace(1, entries, entries).reshape(shape);
-        INDArray ds_labels = Nd4j.linspace(1, labels, labels).reshape(shape[0], nLabels);
+        INDArray ds_data = Nd4j.linspace(1, entries, entries, DataType.INT).reshape(shape);
+        INDArray ds_labels = Nd4j.linspace(1, labels, labels, DataType.INT).reshape(shape[0], nLabels);
 
         DataSet ds = new DataSet(ds_data, ds_labels);
         ds.shuffle();
@@ -641,13 +761,13 @@ public class DataSetTest extends BaseNd4jTest {
         //Checking Nd dataset which is the data
         for (int dim = 1; dim < numDims; dim++) {
             //get tensor along dimension - the order in every dimension but zero should be preserved
-            for (int tensorNum = 0; tensorNum < ds_data.tensorssAlongDimension(dim); tensorNum++) {
+            for (int tensorNum = 0; tensorNum < ds_data.tensorsAlongDimension(dim); tensorNum++) {
                 //the difference between consecutive elements should be equal to the stride
                 for (int i = 0, j = 1; j < shape[dim]; i++, j++) {
                     int f_element = ds.getFeatures().tensorAlongDimension(tensorNum, dim).getInt(i);
                     int f_next_element = ds.getFeatures().tensorAlongDimension(tensorNum, dim).getInt(j);
                     int f_element_diff = f_next_element - f_element;
-                    assertTrue(f_element_diff == ds_data.stride(dim));
+                    assertEquals(f_element_diff, ds_data.stride(dim));
                 }
             }
         }
@@ -655,13 +775,13 @@ public class DataSetTest extends BaseNd4jTest {
         //Checking 2d, features
         int dim = 1;
         //get tensor along dimension - the order in every dimension but zero should be preserved
-        for (int tensorNum = 0; tensorNum < ds_labels.tensorssAlongDimension(dim); tensorNum++) {
+        for (int tensorNum = 0; tensorNum < ds_labels.tensorsAlongDimension(dim); tensorNum++) {
             //the difference between consecutive elements should be equal to the stride
             for (int i = 0, j = 1; j < nLabels; i++, j++) {
                 int l_element = ds.getLabels().tensorAlongDimension(tensorNum, dim).getInt(i);
                 int l_next_element = ds.getLabels().tensorAlongDimension(tensorNum, dim).getInt(j);
                 int l_element_diff = l_next_element - l_element;
-                assertTrue(l_element_diff == ds_labels.stride(dim));
+                assertEquals(l_element_diff, ds_labels.stride(dim));
             }
         }
     }
@@ -704,7 +824,7 @@ public class DataSetTest extends BaseNd4jTest {
     public void testLabelNames() {
         List<String> names = Arrays.asList("label1", "label2", "label3", "label0");
         INDArray features = Nd4j.ones(10);
-        INDArray labels = Nd4j.linspace(0, 3, 4);
+        INDArray labels = Nd4j.linspace(0, 3, 4, DataType.DOUBLE);
         org.nd4j.linalg.dataset.api.DataSet ds = new DataSet(features, labels);
         ds.setLabelNames(names);
         assertEquals("label1", ds.getLabelName(0));
@@ -749,8 +869,8 @@ public class DataSetTest extends BaseNd4jTest {
         Nd4j.getRandom().setSeed(12345);
         List<DataSet> list = new ArrayList<>(numExamples);
         for (int i = 0; i < numExamples; i++) {
-            INDArray in = Nd4j.rand(new long[] {1, inSize, minTSLength + i});
-            INDArray out = Nd4j.rand(new long[] {1, labelSize, minTSLength + i});
+            INDArray in = Nd4j.rand(DataType.DOUBLE, 1, inSize, minTSLength + i);
+            INDArray out = Nd4j.rand(DataType.DOUBLE, 1, labelSize, minTSLength + i);
             list.add(new DataSet(in, out));
         }
 
@@ -761,8 +881,9 @@ public class DataSetTest extends BaseNd4jTest {
         //The feature mask does not have to be equal to the label mask, just in this ex it should be
         assertEquals(newDs.getLabelsMaskArray(), newDs.getFeaturesMaskArray());
         //System.out.println(newDs);
-        assertEquals(Nd4j.linspace(numExamples + from, numExamples + to - 1, to - from),
-                        newDs.getLabelsMaskArray().sum(1));
+        INDArray exp = Nd4j.linspace(numExamples + from, numExamples + to - 1, to - from, DataType.DOUBLE);
+        INDArray act = newDs.getLabelsMaskArray().sum(1);
+        assertEquals(exp, act);
     }
 
     @Test
@@ -806,10 +927,10 @@ public class DataSetTest extends BaseNd4jTest {
 
         boolean[] b = new boolean[] {true, false};
 
-        INDArray f = Nd4j.linspace(1, 24, 24).reshape('c', 4, 3, 2);
-        INDArray l = Nd4j.linspace(24, 48, 24).reshape('c', 4, 3, 2);
-        INDArray fm = Nd4j.linspace(100, 108, 8).reshape('c', 4, 2);
-        INDArray lm = Nd4j.linspace(108, 116, 8).reshape('c', 4, 2);
+        INDArray f = Nd4j.linspace(1, 24, 24, DataType.DOUBLE).reshape('c', 4, 3, 2);
+        INDArray l = Nd4j.linspace(24, 48, 24, DataType.DOUBLE).reshape('c', 4, 3, 2);
+        INDArray fm = Nd4j.linspace(100, 108, 8, DataType.DOUBLE).reshape('c', 4, 2);
+        INDArray lm = Nd4j.linspace(108, 116, 8, DataType.DOUBLE).reshape('c', 4, 2);
 
         for (boolean features : b) {
             for (boolean labels : b) {
@@ -841,7 +962,7 @@ public class DataSetTest extends BaseNd4jTest {
                             assertEquals(ds, ds2);
 
                             if (labelsSameAsFeatures)
-                                assertTrue(ds2.getFeatureMatrix() == ds2.getLabels()); //Expect same object
+                                assertTrue(ds2.getFeatures() == ds2.getLabels()); //Expect same object
                         }
                     }
                 }
@@ -853,10 +974,10 @@ public class DataSetTest extends BaseNd4jTest {
     @Test
     public void testDataSetSaveLoadSingle() throws IOException {
 
-        INDArray f = Nd4j.linspace(1, 24, 24).reshape('c', 4, 3, 2);
-        INDArray l = Nd4j.linspace(24, 48, 24).reshape('c', 4, 3, 2);
-        INDArray fm = Nd4j.linspace(100, 108, 8).reshape('c', 4, 2);
-        INDArray lm = Nd4j.linspace(108, 116, 8).reshape('c', 4, 2);
+        INDArray f = Nd4j.linspace(1, 24, 24, DataType.DOUBLE).reshape('c', 4, 3, 2);
+        INDArray l = Nd4j.linspace(24, 48, 24, DataType.DOUBLE).reshape('c', 4, 3, 2);
+        INDArray fm = Nd4j.linspace(100, 108, 8, DataType.DOUBLE).reshape('c', 4, 2);
+        INDArray lm = Nd4j.linspace(108, 116, 8, DataType.DOUBLE).reshape('c', 4, 2);
 
         boolean features = true;
         boolean labels = false;
@@ -885,17 +1006,17 @@ public class DataSetTest extends BaseNd4jTest {
         assertEquals(ds, ds2);
 
         if (labelsSameAsFeatures)
-            assertTrue(ds2.getFeatureMatrix() == ds2.getLabels()); //Expect same object
+            assertTrue(ds2.getFeatures() == ds2.getLabels()); //Expect same object
     }
 
     @Test
     public void testMdsShuffle(){
 
-        MultiDataSet orig = new MultiDataSet(Nd4j.linspace(1,100,100).reshape('c',10,10),
-                Nd4j.linspace(100,200,100).reshape('c',10,10));
+        MultiDataSet orig = new MultiDataSet(Nd4j.linspace(1,100,100, DataType.DOUBLE).reshape('c',10,10),
+                Nd4j.linspace(100,200,100, DataType.DOUBLE).reshape('c',10,10));
 
-        MultiDataSet mds = new MultiDataSet(Nd4j.linspace(1,100,100).reshape('c',10,10),
-                Nd4j.linspace(100,200,100).reshape('c',10,10));
+        MultiDataSet mds = new MultiDataSet(Nd4j.linspace(1,100,100, DataType.DOUBLE).reshape('c',10,10),
+                Nd4j.linspace(100,200,100, DataType.DOUBLE).reshape('c',10,10));
         mds.shuffle();
 
         assertNotEquals(orig, mds);
@@ -933,7 +1054,7 @@ public class DataSetTest extends BaseNd4jTest {
 
         assertNotEquals(next1, next2);
 
-        INDArray arr = Nd4j.create(4,1,5,5);
+        INDArray arr = Nd4j.create(DataType.DOUBLE, 4,1,5,5);
         for( int i=0; i<4; i++ ){
             arr.get(point(i), all(), all(), all()).assign(i);
         }
@@ -943,11 +1064,72 @@ public class DataSetTest extends BaseNd4jTest {
         Nd4j.getRandom().setSeed(12345);
         DataSet ds2 = ds.sample(2);
 
-        assertEquals(Nd4j.valueArrayOf(new long[]{1, 5, 5}, next1), ds2.getFeatures().get(point(0), all(), all(), all()));
-        assertEquals(Nd4j.valueArrayOf(new long[]{1, 5, 5}, next2), ds2.getFeatures().get(point(1), all(), all(), all()));
+        assertEquals(Nd4j.valueArrayOf(new long[]{1, 5, 5}, (double)next1), ds2.getFeatures().get(point(0), all(), all(), all()));
+        assertEquals(Nd4j.valueArrayOf(new long[]{1, 5, 5}, (double)next2), ds2.getFeatures().get(point(1), all(), all(), all()));
 
-        assertEquals(Nd4j.valueArrayOf(new long[]{1, 5, 5}, next1), ds2.getLabels().get(point(0), all(), all(), all()));
-        assertEquals(Nd4j.valueArrayOf(new long[]{1, 5, 5}, next2), ds2.getLabels().get(point(1), all(), all(), all()));
+        assertEquals(Nd4j.valueArrayOf(new long[]{1, 5, 5}, (double)next1), ds2.getLabels().get(point(0), all(), all(), all()));
+        assertEquals(Nd4j.valueArrayOf(new long[]{1, 5, 5}, (double)next2), ds2.getLabels().get(point(1), all(), all(), all()));
+    }
+
+    @Test
+    public void testDataSetMetaDataSerialization() throws IOException {
+
+        for(boolean withMeta : new boolean[]{false, true}) {
+            // create simple data set with meta data object
+            INDArray f = Nd4j.linspace(1, 3, 3, DataType.DOUBLE).reshape(3, 1);
+            INDArray l = Nd4j.linspace(10, 30, 3, DataType.DOUBLE).reshape(3, 1);
+            DataSet ds = new DataSet(f, l);
+
+            if(withMeta) {
+                List<String> metaData = Arrays.asList("1", "2", "3");
+                ds.setExampleMetaData(metaData);
+            }
+
+            // check if the meta data was serialized and deserialized
+            File dir = testDir.newFolder();
+            File saved = new File(dir, "ds.bin");
+            ds.save(saved);
+            DataSet loaded = new DataSet();
+            loaded.load(saved);
+            if(withMeta) {
+                List<String> metaData = Arrays.asList("1", "2", "3");
+                assertNotNull(loaded.getExampleMetaData());
+                assertEquals(metaData, loaded.getExampleMetaData());
+            }
+            assertEquals(f, loaded.getFeatures());
+            assertEquals(l, loaded.getLabels());
+        }
+    }
+
+    @Test
+    public void testMultiDataSetMetaDataSerialization() throws IOException {
+
+        for(boolean withMeta : new boolean[]{false, true}) {
+            // create simple data set with meta data object
+            INDArray f = Nd4j.linspace(1, 3, 3, DataType.DOUBLE).reshape(3, 1);
+            INDArray l = Nd4j.linspace(10, 30, 3, DataType.DOUBLE).reshape(3, 1);
+            MultiDataSet ds = new MultiDataSet(f, l);
+            if(withMeta) {
+                List<String> metaData = Arrays.asList("1", "2", "3");
+                ds.setExampleMetaData(metaData);
+            }
+
+            // check if the meta data was serialized and deserialized
+            File dir = testDir.newFolder();
+            File saved = new File(dir, "ds.bin");
+            ds.save(saved);
+            MultiDataSet loaded = new MultiDataSet();
+            loaded.load(saved);
+
+            if(withMeta) {
+                List<String> metaData = Arrays.asList("1", "2", "3");
+                assertNotNull(loaded.getExampleMetaData());
+                assertEquals(metaData, loaded.getExampleMetaData());
+            }
+            assertEquals(f, loaded.getFeatures(0));
+            assertEquals(l, loaded.getLabels(0));
+        }
+
     }
 
 

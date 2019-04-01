@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.clustering.kmeans;
 
 import org.deeplearning4j.clustering.cluster.ClusterSet;
@@ -30,7 +46,7 @@ public class KMeansTest {
         Nd4j.getRandom().setSeed(7);
         int numClusters = 5;
         KMeansClustering kMeansClustering = KMeansClustering.setup(numClusters, 1000, "cosinesimilarity", true);
-        List<Point> points = Point.toPoints(Nd4j.randn(5, 5));
+        List<Point> points = Point.toPoints(Nd4j.rand(5, 5));
         ClusterSet clusterSet = kMeansClustering.applyTo(points);
         PointClassification pointClassification = clusterSet.classifyPoint(points.get(0));
 

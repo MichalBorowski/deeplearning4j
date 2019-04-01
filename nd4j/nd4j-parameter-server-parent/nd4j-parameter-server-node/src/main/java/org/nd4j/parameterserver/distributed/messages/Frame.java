@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.parameterserver.distributed.messages;
 
 import lombok.AccessLevel;
@@ -6,7 +22,7 @@ import lombok.NonNull;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.agrona.concurrent.UnsafeBuffer;
-import org.apache.commons.lang3.SerializationUtils;
+import org.nd4j.linalg.util.SerializationUtils;
 import org.nd4j.parameterserver.distributed.conf.VoidConfiguration;
 import org.nd4j.parameterserver.distributed.enums.NodeRole;
 import org.nd4j.parameterserver.distributed.logic.completion.Clipboard;
@@ -26,6 +42,7 @@ import java.util.List;
  * @author raver119@gmail.com
  */
 @Slf4j
+@Deprecated
 public class Frame<T extends TrainingMessage> implements Serializable, Iterable<T>, VoidMessage {
 
     @Getter(AccessLevel.PROTECTED)
@@ -146,7 +163,7 @@ public class Frame<T extends TrainingMessage> implements Serializable, Iterable<
 
     @Override
     public byte[] asBytes() {
-        return SerializationUtils.serialize(this);
+        return SerializationUtils.toByteArray(this);
     }
 
     @Override

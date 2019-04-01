@@ -1,8 +1,23 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.zoo.model;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
-import lombok.NoArgsConstructor;
 import org.deeplearning4j.nn.api.Model;
 import org.deeplearning4j.nn.api.OptimizationAlgorithm;
 import org.deeplearning4j.nn.conf.*;
@@ -11,7 +26,6 @@ import org.deeplearning4j.nn.conf.distribution.NormalDistribution;
 import org.deeplearning4j.nn.conf.inputs.InputType;
 import org.deeplearning4j.nn.conf.layers.*;
 import org.deeplearning4j.nn.multilayer.MultiLayerNetwork;
-import org.deeplearning4j.nn.weights.WeightInit;
 import org.deeplearning4j.zoo.ModelMetaData;
 import org.deeplearning4j.zoo.PretrainedType;
 import org.deeplearning4j.zoo.ZooModel;
@@ -27,10 +41,10 @@ import org.nd4j.linalg.lossfunctions.LossFunctions;
  *
  * Dl4j's AlexNet model interpretation based on the original paper ImageNet Classification with Deep Convolutional Neural Networks
  * and the imagenetExample code referenced.
- *
- * References:
- * http://papers.nips.cc/paper/4824-imagenet-classification-with-deep-convolutional-neural-networks.pdf
- * https://github.com/BVLC/caffe/blob/master/models/bvlc_alexnet/train_val.prototxt
+ *<br>
+ * References:<br>
+ * <a href="http://papers.nips.cc/paper/4824-imagenet-classification-with-deep-convolutional-neural-networks.pdf">http://papers.nips.cc/paper/4824-imagenet-classification-with-deep-convolutional-neural-networks.pdf</a>
+ * <a href="https://github.com/BVLC/caffe/blob/master/models/bvlc_alexnet/train_val.prototxt">https://github.com/BVLC/caffe/blob/master/models/bvlc_alexnet/train_val.prototxt</a>
  *
  * Model is built in dl4j based on available functionality and notes indicate where there are gaps waiting for enhancements.
  *
@@ -138,13 +152,13 @@ public class AlexNet extends ZooModel {
                         .name("ffn1")
                         .nIn(256*6*6)
                         .nOut(4096)
-                        .dist(new GaussianDistribution(0, 0.005))
+                        .weightInit(new NormalDistribution(0, 0.005))
                         .biasInit(nonZeroBias)
                         .build())
                 .layer(11, new DenseLayer.Builder()
                         .name("ffn2")
                         .nOut(4096)
-                        .weightInit(WeightInit.DISTRIBUTION).dist(new GaussianDistribution(0, 0.005))
+                        .weightInit(new NormalDistribution(0, 0.005))
                         .biasInit(nonZeroBias)
                         .dropOut(0.5)
                         .build())
@@ -152,11 +166,11 @@ public class AlexNet extends ZooModel {
                         .name("output")
                         .nOut(numClasses)
                         .activation(Activation.SOFTMAX)
-                        .weightInit(WeightInit.DISTRIBUTION).dist(new GaussianDistribution(0, 0.005))
+                        .weightInit(new NormalDistribution(0, 0.005))
                         .biasInit(0.1)
                         .build())
-                .backprop(true)
-                .pretrain(false)
+
+
                 .setInputType(InputType.convolutional(inputShape[2], inputShape[1], inputShape[0]))
                 .build();
 

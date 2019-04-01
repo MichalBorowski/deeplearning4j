@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.datasets.fetchers;
 
 import lombok.extern.slf4j.Slf4j;
@@ -33,21 +49,25 @@ public abstract class CacheableExtractableDataSetFetcher implements CacheableDat
     public void downloadAndExtract(DataSetType set) throws IOException {
         String localFilename = new File(remoteDataUrl(set)).getName();
         File tmpFile = new File(System.getProperty("java.io.tmpdir"), localFilename);
-        File LOCAL_CACHE = getLocalCacheDir();
-        File cachedFile = new File(LOCAL_CACHE, localFilename);
+        File localCacheDir = getLocalCacheDir();
 
         // check empty cache
-        if(LOCAL_CACHE.exists()) {
-            if(LOCAL_CACHE.listFiles().length<1) LOCAL_CACHE.delete();
+        if(localCacheDir.exists()) {
+            File[] list = localCacheDir.listFiles();
+            if(list == null || list.length == 0)
+                localCacheDir.delete();
         }
 
-        if(!new File(LOCAL_CACHE, dataSetName(set)).exists()) {
-            LOCAL_CACHE.mkdirs();
+        File localDestinationDir = new File(localCacheDir, dataSetName(set));
+        if(!localDestinationDir.exists()) {
+            localCacheDir.mkdirs();
             tmpFile.delete();
             log.info("Downloading dataset to " + tmpFile.getAbsolutePath());
             FileUtils.copyURLToFile(new URL(remoteDataUrl(set)), tmpFile);
         } else {
-            log.info("Using cached dataset at " + cachedFile.toString());
+            //Directory exists and is non-empty - assume OK
+            log.info("Using cached dataset at " + localCacheDir.getAbsolutePath());
+            return;
         }
 
         if(expectedChecksum(set) != 0L) {
@@ -59,13 +79,20 @@ public abstract class CacheableExtractableDataSetFetcher implements CacheableDat
 
             if(expectedChecksum(set) != localChecksum) {
                 log.error("Checksums do not match. Cleaning up files and failing...");
-                cachedFile.delete();
-                throw new IllegalStateException(
-                        "Dataset file failed checksum. If this error persists, please open an issue at https://github.com/deeplearning4j/deeplearning4j.");
+                tmpFile.delete();
+                throw new IllegalStateException( "Dataset file failed checksum: " + tmpFile + " - expected checksum " + expectedChecksum(set)
+                + " vs. actual checksum " + localChecksum + ". If this error persists, please open an issue at https://github.com/deeplearning4j/deeplearning4j.");
             }
         }
 
-        ArchiveUtils.unzipFileTo(tmpFile.getAbsolutePath(), LOCAL_CACHE.getAbsolutePath());
+        try {
+            ArchiveUtils.unzipFileTo(tmpFile.getAbsolutePath(), localCacheDir.getAbsolutePath());
+        } catch (Throwable t){
+            //Catch any errors during extraction, and delete the directory to avoid leaving the dir in an invalid state
+            if(localCacheDir.exists())
+                FileUtils.deleteDirectory(localCacheDir);
+            throw t;
+        }
     }
 
     protected File getLocalCacheDir(){

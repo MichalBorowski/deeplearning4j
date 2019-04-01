@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.zoo.model;
 
 import lombok.AllArgsConstructor;
@@ -28,10 +44,10 @@ import static org.deeplearning4j.zoo.model.helper.DarknetHelper.addLayers;
 
 /**
  * Tiny YOLO
- *  Reference: https://arxiv.org/pdf/1612.08242.pdf
+ *  Reference: <a href="https://arxiv.org/pdf/1612.08242.pdf">https://arxiv.org/pdf/1612.08242.pdf</a>
  *
  * <p>ImageNet+VOC weights for this model are available and have been converted from https://pjreddie.com/darknet/yolo/
- * using https://github.com/allanzelener/YAD2K and the following code.</p>
+ * using <a href="https://github.com/allanzelener/YAD2K">https://github.com/allanzelener/YAD2K</a> and the following code.</p>
  *
  * <pre>{@code
  *     String filename = "tiny-yolo-voc.h5";
@@ -160,7 +176,7 @@ public class TinyYOLO extends ZooModel {
                                 .boundingBoxPriors(priors)
                                 .build(),
                         "convolution2d_" + layerNumber)
-                .setOutputs("outputs").backprop(true).pretrain(false);
+                .setOutputs("outputs");
 
         return graphBuilder.build();
     }

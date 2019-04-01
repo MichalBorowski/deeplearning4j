@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.linalg.api.ops.impl.layers.convolution;
 
 import lombok.Builder;
@@ -7,7 +23,9 @@ import lombok.val;
 import onnx.OnnxProto3;
 import org.nd4j.autodiff.samediff.SDVariable;
 import org.nd4j.autodiff.samediff.SameDiff;
+import org.nd4j.base.Preconditions;
 import org.nd4j.imports.descriptors.properties.PropertyMapping;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.api.ops.DynamicCustomOp;
 import org.nd4j.linalg.api.ops.impl.layers.convolution.config.Pooling2DConfig;
@@ -61,14 +79,26 @@ public class MaxPooling2D extends DynamicCustomOp {
         return "config";
     }
 
-    @Override
-    public void setValueFor(Field target, Object value) {
-        config.setValueFor(target, value);
-    }
-
 
     @Override
     public Map<String, Object> propertiesForFunction() {
+        if(config == null && iArguments.size() > 0){
+            //Perhaps loaded from FlatBuffers - hence we have IArgs but not Config object
+            config = Pooling2DConfig.builder()
+                    .kH(iArguments.get(0))
+                    .kW(iArguments.get(1))
+                    .sH(iArguments.get(2))
+                    .sW(iArguments.get(3))
+                    .pH(iArguments.get(4))
+                    .pW(iArguments.get(5))
+                    .dH(iArguments.get(6))
+                    .dW(iArguments.get(7))
+                    .isSameMode(iArguments.get(8) == 1)
+                    .extra(iArguments.get(9))
+                    .isNHWC(iArguments.get(10) == 1)
+                    .type(Pooling2D.Pooling2DType.MAX)
+                    .build();
+        }
         return config.toProperties();
     }
 
@@ -181,9 +211,6 @@ public class MaxPooling2D extends DynamicCustomOp {
                 .build();
         this.config = pooling2DConfig;
         addArgs();
-        log.debug("Pooling: k: [{},{}]; s: [{}, {}], padding: {}", kH, kW, sH, sW, aPadding);
-
-
     }
 
     @Override
@@ -274,4 +301,9 @@ public class MaxPooling2D extends DynamicCustomOp {
         return "MaxPool";
     }
 
+    @Override
+    public List<DataType> calculateOutputDataTypes(List<DataType> inputDataTypes){
+        Preconditions.checkState(inputDataTypes != null && inputDataTypes.size() == 1, "Expected 1 input data type for %s, got %s", getClass(), inputDataTypes);
+        return Collections.singletonList(inputDataTypes.get(0));
+    }
 }

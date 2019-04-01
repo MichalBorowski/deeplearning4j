@@ -1,20 +1,18 @@
-/*-
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
  *
- *  * Copyright 2015 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
  *
- */
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.deeplearning4j.nn.conf.layers;
 
@@ -37,11 +35,11 @@ import java.util.*;
 
 /**
  * Bidirectional LSTM recurrent net, based on Graves: Supervised Sequence Labelling with Recurrent Neural Networks
- * http://www.cs.toronto.edu/~graves/phd.pdf
+ * <a href="http://www.cs.toronto.edu/~graves/phd.pdf">http://www.cs.toronto.edu/~graves/phd.pdf</a>
  *
- * @deprecated use {@link org.deeplearning4j.nn.conf.layers.recurrent.Bidirectional} instead. With the
- * Bidirectional layer wrapper you can make any recurrent layer bidirectional, in particular GravesLSTM.
- * Note that this layer adds the output of both directions, which translates into "ADD" mode in Bidirectional.
+ * @deprecated use {@link org.deeplearning4j.nn.conf.layers.recurrent.Bidirectional} instead. With the Bidirectional
+ * layer wrapper you can make any recurrent layer bidirectional, in particular GravesLSTM. Note that this layer adds the
+ * output of both directions, which translates into "ADD" mode in Bidirectional.
  *
  * Usage: {@code .layer(new Bidirectional(Bidirectional.Mode.ADD, new GravesLSTM.Builder()....build()))}
  */
@@ -64,10 +62,10 @@ public class GravesBidirectionalLSTM extends BaseRecurrentLayer {
     }
 
     @Override
-    protected void initializeConstraints(org.deeplearning4j.nn.conf.layers.Layer.Builder<?> builder){
+    protected void initializeConstraints(org.deeplearning4j.nn.conf.layers.Layer.Builder<?> builder) {
         super.initializeConstraints(builder);
-        if(((Builder)builder).recurrentConstraints != null){
-            if(constraints == null){
+        if (((Builder) builder).recurrentConstraints != null) {
+            if (constraints == null) {
                 constraints = new ArrayList<>();
             }
             for (LayerConstraint c : ((Builder) builder).recurrentConstraints) {
@@ -101,60 +99,41 @@ public class GravesBidirectionalLSTM extends BaseRecurrentLayer {
     }
 
     @Override
-    public double getL1ByParam(String paramName) {
-        switch (paramName) {
-            case GravesBidirectionalLSTMParamInitializer.INPUT_WEIGHT_KEY_FORWARDS:
-            case GravesBidirectionalLSTMParamInitializer.RECURRENT_WEIGHT_KEY_FORWARDS:
-            case GravesBidirectionalLSTMParamInitializer.INPUT_WEIGHT_KEY_BACKWARDS:
-            case GravesBidirectionalLSTMParamInitializer.RECURRENT_WEIGHT_KEY_BACKWARDS:
-                return l1;
-            case GravesBidirectionalLSTMParamInitializer.BIAS_KEY_FORWARDS:
-            case GravesBidirectionalLSTMParamInitializer.BIAS_KEY_BACKWARDS:
-                return l1Bias;
-            default:
-                throw new IllegalArgumentException("Unknown parameter name: \"" + paramName + "\"");
-        }
-    }
-
-    @Override
-    public double getL2ByParam(String paramName) {
-        switch (paramName) {
-            case GravesBidirectionalLSTMParamInitializer.INPUT_WEIGHT_KEY_FORWARDS:
-            case GravesBidirectionalLSTMParamInitializer.RECURRENT_WEIGHT_KEY_FORWARDS:
-            case GravesBidirectionalLSTMParamInitializer.INPUT_WEIGHT_KEY_BACKWARDS:
-            case GravesBidirectionalLSTMParamInitializer.RECURRENT_WEIGHT_KEY_BACKWARDS:
-                return l2;
-            case GravesBidirectionalLSTMParamInitializer.BIAS_KEY_FORWARDS:
-            case GravesBidirectionalLSTMParamInitializer.BIAS_KEY_BACKWARDS:
-                return l2Bias;
-            default:
-                throw new IllegalArgumentException("Unknown parameter name: \"" + paramName + "\"");
-        }
-    }
-
-    @Override
     public LayerMemoryReport getMemoryReport(InputType inputType) {
         return LSTMHelpers.getMemoryReport(this, inputType);
     }
 
     @AllArgsConstructor
     @NoArgsConstructor
+    @Getter
+    @Setter
     public static class Builder extends BaseRecurrentLayer.Builder<Builder> {
 
+        /**
+         * Set forget gate bias initalizations. Values in range 1-5 can potentially help with learning or longer-term
+         * dependencies.
+         */
         private double forgetGateBiasInit = 1.0;
+
+        /**
+         * Activation function for the LSTM gates. Note: This should be bounded to range 0-1: sigmoid or hard sigmoid,
+         * for example
+         *
+         */
         private IActivation gateActivationFn = new ActivationSigmoid();
 
-        /** Set forget gate bias initalizations. Values in range 1-5 can potentially
-         * help with learning or longer-term dependencies.
+        /**
+         * Set forget gate bias initalizations. Values in range 1-5 can potentially help with learning or longer-term
+         * dependencies.
          */
         public Builder forgetGateBiasInit(double biasInit) {
-            this.forgetGateBiasInit = biasInit;
+            this.setForgetGateBiasInit(biasInit);
             return this;
         }
 
         /**
-         * Activation function for the LSTM gates.
-         * Note: This should be bounded to range 0-1: sigmoid or hard sigmoid, for example
+         * Activation function for the LSTM gates. Note: This should be bounded to range 0-1: sigmoid or hard sigmoid,
+         * for example
          *
          * @param gateActivationFn Activation function for the LSTM gates
          */
@@ -163,8 +142,8 @@ public class GravesBidirectionalLSTM extends BaseRecurrentLayer {
         }
 
         /**
-         * Activation function for the LSTM gates.
-         * Note: This should be bounded to range 0-1: sigmoid or hard sigmoid, for example
+         * Activation function for the LSTM gates. Note: This should be bounded to range 0-1: sigmoid or hard sigmoid,
+         * for example
          *
          * @param gateActivationFn Activation function for the LSTM gates
          */
@@ -173,13 +152,13 @@ public class GravesBidirectionalLSTM extends BaseRecurrentLayer {
         }
 
         /**
-         * Activation function for the LSTM gates.
-         * Note: This should be bounded to range 0-1: sigmoid or hard sigmoid, for example
+         * Activation function for the LSTM gates. Note: This should be bounded to range 0-1: sigmoid or hard sigmoid,
+         * for example
          *
          * @param gateActivationFn Activation function for the LSTM gates
          */
         public Builder gateActivationFunction(IActivation gateActivationFn) {
-            this.gateActivationFn = gateActivationFn;
+            this.setGateActivationFn(gateActivationFn);
             return this;
         }
 

@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.linalg.api.ops.custom;
 
 import lombok.NonNull;
@@ -6,6 +22,7 @@ import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.api.ops.CustomOp;
 import org.nd4j.linalg.api.ops.CustomOpDescriptor;
 import org.nd4j.linalg.api.ops.DynamicCustomOp;
+import org.nd4j.linalg.api.shape.LongShapeDescriptor;
 import org.nd4j.linalg.exception.ND4JIllegalStateException;
 import org.nd4j.linalg.factory.Nd4j;
 
@@ -42,10 +59,10 @@ public class ScatterUpdate implements CustomOp {
         for (val v: indices)
             iargs.add(v);
 
-        if (updates.tensorAlongDimension(0, dimension).lengthLong() != original.tensorAlongDimension(0, dimension).lengthLong())
+        if (updates.tensorAlongDimension(0, dimension).length() != original.tensorAlongDimension(0, dimension).length())
             throw new ND4JIllegalStateException("ScatterUpdate requires equal shaped tensors for operation along given dimension(s)");
 
-        long numTensors = original.tensorssAlongDimension(dimension);
+        long numTensors = original.tensorsAlongDimension(dimension);
         for (val idx: indices)
             if (idx >= numTensors)
                 throw new ND4JIllegalStateException("Can't update index higher then num tensors");
@@ -108,6 +125,11 @@ public class ScatterUpdate implements CustomOp {
     }
 
     @Override
+    public boolean[] bArgs() {
+        return op.bArgs();
+    }
+
+    @Override
     public void addIArgument(int... arg) {
         op.addIArgument(arg);
     }
@@ -118,8 +140,18 @@ public class ScatterUpdate implements CustomOp {
     }
 
     @Override
+    public void addBArgument(boolean... arg) {
+        op.addBArgument(arg);
+    }
+
+    @Override
     public void removeIArgument(Integer arg) {
         op.removeIArgument(arg);
+    }
+
+    @Override
+    public Boolean getBArgument(int index) {
+        return op.getBArgument(index);
     }
 
     @Override
@@ -150,6 +182,11 @@ public class ScatterUpdate implements CustomOp {
     @Override
     public int numTArguments() {
         return op.numTArguments();
+    }
+
+    @Override
+    public int numBArguments() {
+        return 0;
     }
 
     @Override
@@ -193,7 +230,7 @@ public class ScatterUpdate implements CustomOp {
     }
 
     @Override
-    public List<long[]> calculateOutputShape() {
+    public List<LongShapeDescriptor> calculateOutputShape() {
         return Nd4j.getExecutioner().calculateOutputShape(this);
     }
 
@@ -204,11 +241,6 @@ public class ScatterUpdate implements CustomOp {
 
     @Override
     public void assertValidForExecution() {
-
-    }
-
-    @Override
-    public void populateInputsAndOutputsFromSameDiff() {
 
     }
 }

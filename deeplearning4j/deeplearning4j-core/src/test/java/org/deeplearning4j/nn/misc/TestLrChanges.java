@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.nn.misc;
 
 import org.deeplearning4j.BaseDL4JTest;
@@ -17,6 +33,7 @@ import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.learning.config.Adam;
 import org.nd4j.linalg.learning.config.NoOp;
 import org.nd4j.linalg.learning.config.RmsProp;
+import org.nd4j.linalg.learning.config.Sgd;
 import org.nd4j.linalg.lossfunctions.LossFunctions;
 import org.nd4j.linalg.schedule.ExponentialSchedule;
 import org.nd4j.linalg.schedule.ScheduleType;
@@ -59,7 +76,9 @@ public class TestLrChanges extends BaseDL4JTest {
         conf2.setIterationCount(conf.getIterationCount());
         net2.setParams(net.params().dup());
 
+        assertEquals(0.1, net.getLearningRate(0).doubleValue(), 0.0);
         net.setLearningRate(0, 0.5);  //Set LR for layer 0 to 0.5
+        assertEquals(0.5, net.getLearningRate(0).doubleValue(), 0.0);
 
         assertEquals(conf, conf2);
         assertEquals(conf.toJson(), conf2.toJson());
@@ -123,6 +142,35 @@ public class TestLrChanges extends BaseDL4JTest {
     }
 
     @Test
+    public void testChangeLSGD() {
+        //Simple test for no updater nets
+        MultiLayerConfiguration conf = new NeuralNetConfiguration.Builder()
+                .activation(Activation.TANH)
+                .seed(12345)
+                .updater(new Sgd(0.1))
+                .list()
+                .layer(new DenseLayer.Builder().nIn(10).nOut(10).build())
+                .layer(new DenseLayer.Builder().nIn(10).nOut(10).build())
+                .layer(new OutputLayer.Builder().nIn(10).nOut(10).lossFunction(LossFunctions.LossFunction.MSE).build())
+                .build();
+
+        MultiLayerNetwork net = new MultiLayerNetwork(conf);
+        net.init();
+        net.setLearningRate(1.0);
+        net.setLearningRate(1, 0.5);
+        assertEquals(1.0, net.getLearningRate(0), 0.0);
+        assertEquals(0.5, net.getLearningRate(1), 0.0);
+
+
+        ComputationGraph cg = net.toComputationGraph();
+        cg.setLearningRate(2.0);
+        cg.setLearningRate("1", 2.5);
+        assertEquals(2.0, cg.getLearningRate("0"), 0.0);
+        assertEquals(2.5, cg.getLearningRate("1"), 0.0);
+
+    }
+
+    @Test
     public void testChangeLrMLNSchedule(){
         //First: Set LR for a *single* layer and compare vs. equivalent net config
         MultiLayerConfiguration conf = new NeuralNetConfiguration.Builder()
@@ -132,7 +180,7 @@ public class TestLrChanges extends BaseDL4JTest {
                 .list()
                 .layer(new DenseLayer.Builder().nIn(10).nOut(10).build())
                 .layer(new DenseLayer.Builder().nIn(10).nOut(10).build())
-                .layer(new OutputLayer.Builder().nIn(10).nOut(10).build())
+                .layer(new OutputLayer.Builder().nIn(10).nOut(10).activation(Activation.SOFTMAX).build())
                 .build();
 
         MultiLayerNetwork net = new MultiLayerNetwork(conf);
@@ -150,7 +198,7 @@ public class TestLrChanges extends BaseDL4JTest {
                 .list()
                 .layer(new DenseLayer.Builder().nIn(10).nOut(10).build())
                 .layer(new DenseLayer.Builder().nIn(10).nOut(10).build())
-                .layer(new OutputLayer.Builder().nIn(10).nOut(10).build())
+                .layer(new OutputLayer.Builder().nIn(10).nOut(10).activation(Activation.SOFTMAX).build())
                 .build();
         MultiLayerNetwork net2 = new MultiLayerNetwork(conf2);
         net2.init();
@@ -222,7 +270,9 @@ public class TestLrChanges extends BaseDL4JTest {
         conf2.setIterationCount(conf.getIterationCount());
         net2.setParams(net.params().dup());
 
+        assertEquals(0.1, net.getLearningRate("0").doubleValue(), 0.0);
         net.setLearningRate("0", 0.5);  //Set LR for layer 0 to 0.5
+        assertEquals(0.5, net.getLearningRate("0").doubleValue(), 0.0);
 
         assertEquals(conf, conf2);
         assertEquals(conf.toJson(), conf2.toJson());
@@ -296,7 +346,7 @@ public class TestLrChanges extends BaseDL4JTest {
                 .addInputs("in")
                 .addLayer("0", new DenseLayer.Builder().nIn(10).nOut(10).build(), "in")
                 .addLayer("1", new DenseLayer.Builder().nIn(10).nOut(10).build(), "0")
-                .addLayer("2", new OutputLayer.Builder().nIn(10).nOut(10).build(), "1")
+                .addLayer("2", new OutputLayer.Builder().nIn(10).nOut(10).activation(Activation.SOFTMAX).build(), "1")
                 .setOutputs("2")
                 .build();
 
@@ -316,7 +366,7 @@ public class TestLrChanges extends BaseDL4JTest {
                 .addInputs("in")
                 .addLayer("0", new DenseLayer.Builder().nIn(10).nOut(10).build(), "in")
                 .addLayer("1", new DenseLayer.Builder().nIn(10).nOut(10).build(), "0")
-                .layer("2", new OutputLayer.Builder().nIn(10).nOut(10).build(), "1")
+                .layer("2", new OutputLayer.Builder().nIn(10).nOut(10).activation(Activation.SOFTMAX).build(), "1")
                 .setOutputs("2")
                 .build();
         ComputationGraph net2 = new ComputationGraph(conf2);

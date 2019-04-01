@@ -1,20 +1,18 @@
-/*-
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
  *
- *  * Copyright 2015 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
  *
- */
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.deeplearning4j.nn.conf.layers;
 
@@ -27,6 +25,7 @@ import org.deeplearning4j.nn.conf.memory.LayerMemoryReport;
 import org.deeplearning4j.nn.conf.memory.MemoryReport;
 import org.deeplearning4j.nn.params.CenterLossParamInitializer;
 import org.deeplearning4j.optimize.api.TrainingListener;
+import org.nd4j.linalg.activations.impl.ActivationSoftmax;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.learning.config.IUpdater;
 import org.nd4j.linalg.learning.config.NoOp;
@@ -37,13 +36,12 @@ import java.util.Collection;
 import java.util.Map;
 
 /**
- * Center loss is similar to triplet loss except that it enforces
- * intraclass consistency and doesn't require feed forward of multiple
- * examples. Center loss typically converges faster for training
- * ImageNet-based convolutional networks.
+ * Center loss is similar to triplet loss except that it enforces intraclass consistency and doesn't require feed
+ * forward of multiple examples. Center loss typically converges faster for training ImageNet-based convolutional
+ * networks.
  *
- * "If example x is in class Y, ensure that embedding(x) is close to
- * average(embedding(y)) for all examples y in Y"
+ * "If example x is in class Y, ensure that embedding(x) is close to {@code average(embedding(y))} for all examples y in
+ * Y"
  *
  * @author Justin Long (@crockpotveggies)
  * @author Alex Black (@AlexDBlack)
@@ -53,6 +51,7 @@ import java.util.Map;
 @ToString(callSuper = true)
 @EqualsAndHashCode(callSuper = true)
 public class CenterLossOutputLayer extends BaseOutputLayer {
+
     protected double alpha;
     protected double lambda;
     protected boolean gradientCheck;
@@ -93,34 +92,6 @@ public class CenterLossOutputLayer extends BaseOutputLayer {
                 return new NoOp();
             default:
                 return iUpdater;
-        }
-    }
-
-    @Override
-    public double getL1ByParam(String paramName) {
-        switch (paramName) {
-            case CenterLossParamInitializer.WEIGHT_KEY:
-                return l1;
-            case CenterLossParamInitializer.BIAS_KEY:
-                return l1Bias;
-            case CenterLossParamInitializer.CENTER_KEY:
-                return 0.0;
-            default:
-                throw new IllegalStateException("Unknown parameter: \"" + paramName + "\"");
-        }
-    }
-
-    @Override
-    public double getL2ByParam(String paramName) {
-        switch (paramName) {
-            case CenterLossParamInitializer.WEIGHT_KEY:
-                return l2;
-            case CenterLossParamInitializer.BIAS_KEY:
-                return l2Bias;
-            case CenterLossParamInitializer.CENTER_KEY:
-                return 0.0;
-            default:
-                throw new IllegalStateException("Unknown parameter: \"" + paramName + "\"");
         }
     }
 
@@ -175,32 +146,38 @@ public class CenterLossOutputLayer extends BaseOutputLayer {
                         .build();
     }
 
-    @NoArgsConstructor
+    @Getter
+    @Setter
     public static class Builder extends BaseOutputLayer.Builder<Builder> {
+
         protected double alpha = 0.05;
         protected double lambda = 2e-4;
         protected boolean gradientCheck = false;
+
+        public Builder(){
+            this.setActivationFn(new ActivationSoftmax());
+        }
 
         public Builder(LossFunction lossFunction) {
             super.lossFunction(lossFunction);
         }
 
         public Builder(ILossFunction lossFunction) {
-            this.lossFn = lossFunction;
+            this.setLossFn(lossFunction);
         }
 
         public Builder alpha(double alpha) {
-            this.alpha = alpha;
+            this.setAlpha(alpha);
             return this;
         }
 
         public Builder lambda(double lambda) {
-            this.lambda = lambda;
+            this.setLambda(lambda);
             return this;
         }
 
         public Builder gradientCheck(boolean isGradientCheck) {
-            this.gradientCheck = isGradientCheck;
+            this.setGradientCheck(isGradientCheck);
             return this;
         }
 

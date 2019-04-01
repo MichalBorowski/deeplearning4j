@@ -1,9 +1,26 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.jdbc.hsql;
 
 import org.hsqldb.jdbc.JDBCDataSource;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.factory.Nd4j;
 
@@ -70,7 +87,7 @@ public class HSqlLoaderTest {
             statement.execute(String.format("CREATE TABLE %s (%s INT NOT NULL,"
                     + " %s BLOB NOT NULL, PRIMARY KEY (id))",TABLE_NAME,ID_COLUMN_NAME,COLUMN_NAME));
             connection.commit();
-            hsqlLoader.save(Nd4j.linspace(1,4,4),"1");
+            hsqlLoader.save(Nd4j.linspace(1,4,4, Nd4j.dataType()),"1");
             connection.commit();
         }
     }
@@ -108,7 +125,7 @@ public class HSqlLoaderTest {
 
         INDArray load = hsqlLoader.load(hsqlLoader.loadForID("1"));
         assertNotNull(load);
-        assertEquals(Nd4j.linspace(1,4,4),load);
+        assertEquals(Nd4j.linspace(1,4,4, Nd4j.dataType()),load);
 
 
     }

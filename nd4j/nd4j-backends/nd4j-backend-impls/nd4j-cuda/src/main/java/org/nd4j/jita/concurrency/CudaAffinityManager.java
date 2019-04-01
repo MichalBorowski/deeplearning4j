@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.jita.concurrency;
 
 import lombok.NonNull;
@@ -137,9 +153,14 @@ public class CudaAffinityManager extends BasicAffinityManager {
      */
     @Override
     public void attachThreadToDevice(long threadId, Integer deviceId) {
+        val t = org.apache.commons.lang3.ThreadUtils.findThreadById(threadId);
+        String name = "N/A";
+        if (t != null)
+            name = t.getName();
+
         List<Integer> devices = new ArrayList<>(CudaEnvironment.getInstance().getConfiguration().getAvailableDevices());
-        logger.debug("Manually mapping thread [{}] to device [{}], out of [{}] devices...", threadId, deviceId,
-                        devices.size());
+        logger.trace("Manually mapping thread [{} - {}] to device [{}], out of [{}] devices...", threadId,
+                name, deviceId, devices.size());
         affinityMap.put(threadId, deviceId);
     }
 
@@ -160,7 +181,8 @@ public class CudaAffinityManager extends BasicAffinityManager {
                 if (devPtr.get() >= CudaEnvironment.getInstance().getConfiguration().getAvailableDevices().size())
                     devPtr.set(0);
 
-                logger.debug("Mapping thread [{}] to device [{}], out of [{}] devices...", threadId, device,
+                logger.debug("Mapping thread [{} - {}] to device [{}], out of [{}] devices...", threadId,
+                        org.apache.commons.lang3.ThreadUtils.findThreadById(threadId).getName(),
                         CudaEnvironment.getInstance().getConfiguration().getAvailableDevices().size());
             }
         } else {
@@ -244,6 +266,7 @@ public class CudaAffinityManager extends BasicAffinityManager {
         val elementWiseStride = array.elementWiseStride();
         val ordering = array.ordering();
         val length = array.length();
+        val dtype = array.dataType();
 
         // we use this call to get device memory updated
         AtomicAllocator.getInstance().getPointer(array,
@@ -256,8 +279,7 @@ public class CudaAffinityManager extends BasicAffinityManager {
 
 
         DataBuffer newDataBuffer = replicateToDevice(deviceId, array.data());
-        DataBuffer newShapeBuffer = Nd4j.getShapeInfoProvider().createShapeInformation(shape, stride, 0,
-                        elementWiseStride, ordering).getFirst();
+        DataBuffer newShapeBuffer = Nd4j.getShapeInfoProvider().createShapeInformation(shape, stride, elementWiseStride, ordering, dtype).getFirst();
         INDArray result = Nd4j.createArrayFromShapeBuffer(newDataBuffer, newShapeBuffer);
 
         attachThreadToDevice(Thread.currentThread().getId(), currentDeviceId);

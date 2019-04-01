@@ -1,14 +1,32 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.nn.conf.layers.wrapper;
 
 import lombok.Data;
-import lombok.NonNull;
 import org.deeplearning4j.nn.api.ParamInitializer;
+import org.deeplearning4j.nn.conf.GradientNormalization;
 import org.deeplearning4j.nn.conf.InputPreProcessor;
 import org.deeplearning4j.nn.conf.inputs.InputType;
-import org.deeplearning4j.nn.conf.layers.BaseLayer;
 import org.deeplearning4j.nn.conf.layers.Layer;
 import org.deeplearning4j.nn.conf.memory.LayerMemoryReport;
 import org.deeplearning4j.nn.params.WrapperLayerParamInitializer;
+import org.nd4j.linalg.learning.regularization.Regularization;
+
+import java.util.List;
 
 /**
  * Base wrapper layer: the idea is to pass through all methods to the underlying layer, and selectively override
@@ -21,9 +39,13 @@ public abstract class BaseWrapperLayer extends Layer {
 
     protected Layer underlying;
 
-    protected BaseWrapperLayer(){ }
+    protected BaseWrapperLayer(Builder builder) {
+        super(builder);
+    }
 
-    public BaseWrapperLayer(Layer underlying){
+    protected BaseWrapperLayer() {}
+
+    public BaseWrapperLayer(Layer underlying) {
         this.underlying = underlying;
     }
 
@@ -48,13 +70,18 @@ public abstract class BaseWrapperLayer extends Layer {
     }
 
     @Override
-    public double getL1ByParam(String paramName) {
-        return underlying.getL1ByParam(paramName);
+    public List<Regularization> getRegularizationByParam(String paramName){
+        return underlying.getRegularizationByParam(paramName);
     }
 
     @Override
-    public double getL2ByParam(String paramName) {
-        return underlying.getL2ByParam(paramName);
+    public GradientNormalization getGradientNormalization() {
+        return underlying.getGradientNormalization();
+    }
+
+    @Override
+    public double getGradientNormalizationThreshold() {
+        return underlying.getGradientNormalizationThreshold();
     }
 
     @Override
@@ -68,9 +95,9 @@ public abstract class BaseWrapperLayer extends Layer {
     }
 
     @Override
-    public void setLayerName(String layerName){
+    public void setLayerName(String layerName) {
         super.setLayerName(layerName);
-        if(underlying != null){
+        if (underlying != null) {
             //May be null at some points during JSON deserialization
             underlying.setLayerName(layerName);
         }

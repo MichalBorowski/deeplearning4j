@@ -1,27 +1,23 @@
-/*-
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
  *
- *  * Copyright 2015 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
  *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
  *
- */
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.nd4j.linalg.convolution;
 
 
 import lombok.val;
-import org.nd4j.linalg.api.complex.IComplexNDArray;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.api.ops.impl.layers.convolution.Col2Im;
 import org.nd4j.linalg.api.ops.impl.layers.convolution.Im2col;
@@ -82,7 +78,7 @@ public class Convolution {
         if (col.rank() != 6)
             throw new IllegalArgumentException("col2im input array must be rank 6");
 
-        INDArray output = Nd4j.create(new long[]{col.size(0), col.size(1), kH, kW});
+        INDArray output = Nd4j.create(col.dataType(), new long[]{col.size(0), col.size(1), kH, kW});
 
         val cfg = Conv2DConfig.builder()
                 .sH(sH)
@@ -101,7 +97,7 @@ public class Convolution {
                 .conv2DConfig(cfg)
                 .build();
 
-        Nd4j.getExecutioner().exec(col2Im);
+        Nd4j.getExecutioner().execAndReturn(col2Im);
         return col2Im.outputArguments()[0];
     }
 
@@ -126,7 +122,7 @@ public class Convolution {
                         .build())
                 .build();
 
-        Nd4j.getExecutioner().exec(col2Im);
+        Nd4j.getExecutioner().execAndReturn(col2Im);
 
         return z;
     }
@@ -191,7 +187,7 @@ public class Convolution {
                         .isSameMode(isSameMode)
                         .build()).build();
 
-        Nd4j.getExecutioner().exec(im2col);
+        Nd4j.getExecutioner().execAndReturn(im2col);
         return im2col.outputArguments()[0];
     }
 
@@ -212,7 +208,7 @@ public class Convolution {
                         .isSameMode(isSameMode)
                         .build()).build();
 
-        Nd4j.getExecutioner().exec(im2col);
+        Nd4j.getExecutioner().execAndReturn(im2col);
         return im2col.outputArguments()[0];
     }
 
@@ -259,7 +255,7 @@ public class Convolution {
                         .divisor(divisor)
                         .build())
                 .build();
-        Nd4j.getExecutioner().exec(pooling);
+        Nd4j.getExecutioner().execAndReturn(pooling);
         return out;
     }
 
@@ -285,13 +281,13 @@ public class Convolution {
             int oH = (int) Math.ceil(img.size(2) * 1.f / sy);
             int oW = (int) Math.ceil(img.size(3) * 1.f / sx);
 
-            output = Nd4j.createUninitialized(new long[]{img.size(0), img.size(1), kh, kw, oH, oW}, 'c');
+            output = Nd4j.createUninitialized(img.dataType(), new long[]{img.size(0), img.size(1), kh, kw, oH, oW}, 'c');
         } else {
             // FIXME: int cast
             int oH = ((int) img.size(2) - (kh + (kh - 1) * (1 - 1)) + 2 * ph) / sy + 1;
             int oW = ((int) img.size(3) - (kw + (kw - 1) * (1 - 1)) + 2 * pw) / sx + 1;
 
-            output = Nd4j.createUninitialized(new long[]{img.size(0), img.size(1), kh, kw, oH, oW}, 'c');
+            output = Nd4j.createUninitialized(img.dataType(), new long[]{img.size(0), img.size(1), kh, kw, oH, oW}, 'c');
         }
 
         Im2col im2col = Im2col.builder()
@@ -309,7 +305,7 @@ public class Convolution {
                         .isSameMode(isSameMode)
                         .build()).build();
 
-        Nd4j.getExecutioner().exec(im2col);
+        Nd4j.getExecutioner().execAndReturn(im2col);
         return im2col.outputArguments()[0];
     }
 
@@ -361,16 +357,6 @@ public class Convolution {
     }
 
     /**
-     * @param input
-     * @param kernel
-     * @param type
-     * @return
-     */
-    public static INDArray conv2d(IComplexNDArray input, IComplexNDArray kernel, Type type) {
-        return Nd4j.getConvolution().conv2d(input, kernel, type);
-    }
-
-    /**
      * ND Convolution
      *
      * @param input  the input to op
@@ -389,36 +375,9 @@ public class Convolution {
      * @param input  the input to op
      * @param kernel the kernel to op with
      * @param type   the opType of convolution
-     * @param axes   the axes to do the convolution along
-     * @return the convolution of the given input and kernel
-     */
-    public static IComplexNDArray convn(IComplexNDArray input, IComplexNDArray kernel, Type type, int[] axes) {
-        return Nd4j.getConvolution().convn(input, kernel, type, axes);
-    }
-
-    /**
-     * ND Convolution
-     *
-     * @param input  the input to op
-     * @param kernel the kernel to op with
-     * @param type   the opType of convolution
      * @return the convolution of the given input and kernel
      */
     public static INDArray convn(INDArray input, INDArray kernel, Type type) {
         return Nd4j.getConvolution().convn(input, kernel, type);
     }
-
-    /**
-     * ND Convolution
-     *
-     * @param input  the input to op
-     * @param kernel the kernel to op with
-     * @param type   the opType of convolution
-     * @return the convolution of the given input and kernel
-     */
-    public static IComplexNDArray convn(IComplexNDArray input, IComplexNDArray kernel, Type type) {
-        return Nd4j.getConvolution().convn(input, kernel, type);
-    }
-
-
 }

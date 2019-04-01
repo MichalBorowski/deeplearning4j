@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 //
 //  @author raver119@gmail.com
 //
@@ -19,41 +35,48 @@ namespace ops {
             axis = INT_ARG(0);
         } else if (block.width() > 2){
             auto _a = INPUT_VARIABLE(2);
-            axis = _a->getScalar(0);
+            axis = _a->e<int>(0);
         } 
 
         if (axis < 0)
             axis += input->rankOf();
 
-        std::vector<int> dims = ShapeUtils<T>::convertAxisToTadTarget(input->rankOf(), {axis});
-        //auto tads = NDArrayFactory<T>::allTensorsAlongDimension(input, dims);
+        std::vector<int> dims = ShapeUtils::convertAxisToTadTarget(input->rankOf(), {axis});
 
         int pos = 0;
+        std::vector<Nd4jLong> indices(2 * input->rankOf());
+        
         for (int e = 0; e < sizes->lengthOf(); e++) {
-            int c_size = (int) sizes->getScalar(e);
-            IndicesList indices;
-
+            int c_size = sizes->e<int>(e);
+            
             for (int d = 0; d < input->rankOf(); d++) {
-                if (d == axis) {
-                    indices.push_back(NDIndex::interval(pos, pos+c_size));
-                } else 
-                    indices.push_back(NDIndex::all());
+                if (d == axis)                          
+                    indices[2*d + 1] = (indices[2*d] = pos) + c_size;                
+                else 
+                    indices[2*d] = indices[2*d + 1] = 0;
             }
 
             auto output = OUTPUT_VARIABLE(e);
+            REQUIRE_TRUE(output->dataType() == input->dataType(), 0, "SplitV: all outputs must have same data type as input");
 
-            auto sub = input->subarray(indices);
+            auto sub = (*input)(indices);
 
             output->assign(sub);
 
-            pos += c_size;
-            delete sub;
+            pos += c_size;            
         }
 
         //delete tads;
-        return ND4J_STATUS_OK;
+        return Status::OK();
     }
 
+    DECLARE_TYPES(split_v) {
+        getOpDescriptor()
+                ->setAllowedInputTypes(0, {ALL_INTS, ALL_FLOATS})
+                ->setAllowedInputTypes(1, {ALL_INTS})
+                ->setAllowedInputTypes(2, {ALL_INTS})
+                ->setAllowedOutputTypes({ALL_INTS, ALL_FLOATS});
+    }
 
     DECLARE_SHAPE_FN(split_v) {
         auto input = inputShape->at(0);
@@ -69,7 +92,7 @@ namespace ops {
             axis = INT_ARG(0);
         else if (block.width() > 2) {
             auto _a = INPUT_VARIABLE(2);
-            axis = _a->getScalar(0);
+            axis = _a->e<int>(0);
         }
 
         if (axis < 0)
@@ -81,7 +104,7 @@ namespace ops {
         auto length = sizes->lengthOf();
         int pos = 0;
         for (int e = 0; e < length; e++) {
-            int c_size = sizes->getScalar(e);
+            int c_size = sizes->e<int>(e);
             Nd4jLong *newShape;
             ALLOCATE(newShape, block.getWorkspace(), shape::shapeInfoLength(input), Nd4jLong);
 
@@ -95,9 +118,9 @@ namespace ops {
             }
 
             if (shape::order(input) == 'c')
-                shape::shapeBuffer(shape.size(), shape.data(), newShape);
+                shape::shapeBuffer(shape.size(), ArrayOptions::dataType(input), shape.data(), newShape);
             else
-                shape::shapeBufferFortran(shape.size(), shape.data(), newShape);
+                shape::shapeBufferFortran(shape.size(), ArrayOptions::dataType(input), shape.data(), newShape);
 
             shapeList->push_back(newShape);
         }

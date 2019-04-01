@@ -1,20 +1,18 @@
-/*-
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
  *
- *  * Copyright 2016 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
  *
- */
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.deeplearning4j.nn.conf.graph;
 
@@ -30,14 +28,19 @@ import org.nd4j.shade.jackson.annotation.JsonProperty;
 
 /**
  * An ElementWiseVertex is used to combine the activations of two or more layer in an element-wise manner<br>
- * For example, the activations may be combined by addition, subtraction or multiplication or by selecting the maximum.
- * Addition, Average, Max and Product may use an arbitrary number of input arrays. Note that in the case of subtraction, only two inputs may be used.
+ * For example, the activations may be combined by addition, subtraction, multiplication (product), average or by
+ * selecting the maximum.<br>
+ * Addition, Average, Max and Product may use an arbitrary number of input arrays. Note that in the case of subtraction,
+ * only two inputs may be used.
  *
  * @author Alex Black
  */
 @Data
 public class ElementWiseVertex extends GraphVertex {
 
+    /**
+     * @param op The operation to perform on the inputs
+     */
     public ElementWiseVertex(@JsonProperty("op") Op op) {
         this.op = op;
     }
@@ -66,7 +69,7 @@ public class ElementWiseVertex extends GraphVertex {
     }
 
     @Override
-    public int numParams(boolean backprop) {
+    public long numParams(boolean backprop) {
         return 0;
     }
 

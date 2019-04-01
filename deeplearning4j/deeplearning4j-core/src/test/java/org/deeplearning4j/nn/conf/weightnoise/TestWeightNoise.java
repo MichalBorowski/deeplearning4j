@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.nn.conf.weightnoise;
 
 import lombok.AllArgsConstructor;
@@ -17,8 +33,9 @@ import org.deeplearning4j.nn.graph.ComputationGraph;
 import org.deeplearning4j.nn.multilayer.MultiLayerNetwork;
 import org.deeplearning4j.nn.weights.WeightInit;
 import org.junit.Test;
+import org.nd4j.linalg.activations.Activation;
 import org.nd4j.linalg.api.ndarray.INDArray;
-import org.nd4j.linalg.api.ops.impl.accum.MatchCondition;
+import org.nd4j.linalg.api.ops.impl.reduce.longer.MatchCondition;
 import org.nd4j.linalg.dataset.DataSet;
 import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.indexing.conditions.Conditions;
@@ -48,7 +65,7 @@ public class TestWeightNoise extends BaseDL4JTest {
                     .list()
                     .layer(new DenseLayer.Builder().nIn(10).nOut(10).build())
                     .layer(new DenseLayer.Builder().nIn(10).nOut(10).weightNoise(new DropConnect(0.25)).build())
-                    .layer(new OutputLayer.Builder().nIn(10).nOut(10).build())
+                    .layer(new OutputLayer.Builder().nIn(10).nOut(10).activation(Activation.SOFTMAX).build())
                     .build();
 
             MultiLayerNetwork net = new MultiLayerNetwork(conf);
@@ -67,7 +84,7 @@ public class TestWeightNoise extends BaseDL4JTest {
                     .addInputs("in")
                     .layer("0", new DenseLayer.Builder().nIn(10).nOut(10).build(), "in")
                     .layer("1", new DenseLayer.Builder().nIn(10).nOut(10).weightNoise(new DropConnect(0.25)).build(), "0")
-                    .layer("2", new OutputLayer.Builder().nIn(10).nOut(10).build(), "1")
+                    .layer("2", new OutputLayer.Builder().nIn(10).nOut(10).activation(Activation.SOFTMAX).build(), "1")
                     .setOutputs("2")
                     .build();
 
@@ -79,6 +96,8 @@ public class TestWeightNoise extends BaseDL4JTest {
             assertEquals(wn, ((BaseLayer) graph.getLayer(2).conf().getLayer()).getWeightNoise());
 
             TestUtils.testModelSerialization(graph);
+
+            graph.fit(new DataSet(Nd4j.create(1,10), Nd4j.create(1,10)));
         }
     }
 
@@ -125,7 +144,7 @@ public class TestWeightNoise extends BaseDL4JTest {
                 .list()
                 .layer(new DenseLayer.Builder().nIn(10).nOut(10).weightNoise(wn1).build())
                 .layer(new DenseLayer.Builder().nIn(10).nOut(10).weightNoise(wn2).build())
-                .layer(new OutputLayer.Builder().nIn(10).nOut(10).weightNoise(wn3).build())
+                .layer(new OutputLayer.Builder().nIn(10).nOut(10).activation(Activation.SOFTMAX).weightNoise(wn3).build())
                 .build();
 
         MultiLayerNetwork net = new MultiLayerNetwork(conf);
@@ -150,7 +169,7 @@ public class TestWeightNoise extends BaseDL4JTest {
                 .addInputs("in")
                 .layer("0", new DenseLayer.Builder().nIn(10).nOut(10).weightNoise(wn1).build(), "in")
                 .layer("1", new DenseLayer.Builder().nIn(10).nOut(10).weightNoise(wn2).build(), "0")
-                .layer("2", new OutputLayer.Builder().nIn(10).nOut(10).weightNoise(wn3).build(), "1")
+                .layer("2", new OutputLayer.Builder().nIn(10).nOut(10).activation(Activation.SOFTMAX).weightNoise(wn3).build(), "1")
                 .setOutputs("2")
                 .build();
 
@@ -227,7 +246,7 @@ public class TestWeightNoise extends BaseDL4JTest {
         MultiLayerConfiguration conf = new NeuralNetConfiguration.Builder()
                 .weightInit(WeightInit.ONES)
                 .list()
-                .layer(new OutputLayer.Builder().nIn(10).nOut(10).build())
+                .layer(new OutputLayer.Builder().nIn(10).nOut(10).activation(Activation.SOFTMAX).build())
                 .build();
         MultiLayerNetwork net = new MultiLayerNetwork(conf);
         net.init();
@@ -242,8 +261,8 @@ public class TestWeightNoise extends BaseDL4JTest {
 
         assertEquals(l.getParam("W"), Nd4j.ones(10, 10));
 
-        int countZeros = Nd4j.getExecutioner().exec(new MatchCondition(outTrain, Conditions.equals(0))).z().getInt(0);
-        int countOnes = Nd4j.getExecutioner().exec(new MatchCondition(outTrain, Conditions.equals(1))).z().getInt(0);
+        int countZeros = Nd4j.getExecutioner().exec(new MatchCondition(outTrain, Conditions.equals(0))).getInt(0);
+        int countOnes = Nd4j.getExecutioner().exec(new MatchCondition(outTrain, Conditions.equals(1))).getInt(0);
 
         assertEquals(100, countZeros + countOnes);  //Should only be 0 or 2
         //Stochastic, but this should hold for most cases

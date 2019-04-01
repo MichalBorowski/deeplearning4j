@@ -1,32 +1,31 @@
-/*-
- *  * Copyright 2016 Skymind, Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
- */
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.datavec.image.loader;
 
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.FilenameUtils;
-import org.bytedeco.javacpp.opencv_core;
 import org.bytedeco.javacv.OpenCVFrameConverter;
+import org.nd4j.linalg.api.ops.impl.reduce.same.Sum;
 import org.nd4j.linalg.primitives.Pair;
 import org.datavec.image.data.ImageWritable;
 import org.datavec.image.transform.ColorConversionTransform;
 import org.datavec.image.transform.EqualizeHistTransform;
 import org.datavec.image.transform.ImageTransform;
 import org.nd4j.linalg.api.ndarray.INDArray;
-import org.nd4j.linalg.api.ops.impl.accum.Sum;
 import org.nd4j.linalg.dataset.DataSet;
 import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.util.FeatureUtil;
@@ -35,9 +34,10 @@ import java.io.*;
 import java.nio.ByteBuffer;
 import java.util.*;
 
-import static org.bytedeco.javacpp.opencv_core.CV_8UC;
-import static org.bytedeco.javacpp.opencv_core.Mat;
-import static org.bytedeco.javacpp.opencv_imgproc.COLOR_BGR2YCrCb;
+import org.bytedeco.opencv.opencv_core.*;
+import org.bytedeco.opencv.opencv_imgproc.*;
+import static org.bytedeco.opencv.global.opencv_core.*;
+import static org.bytedeco.opencv.global.opencv_imgproc.*;
 
 /**
  * CifarLoader is loader specific for the Cifar10 dataset
@@ -45,7 +45,7 @@ import static org.bytedeco.javacpp.opencv_imgproc.COLOR_BGR2YCrCb;
  * Reference: Learning Multiple Layers of Features from Tiny Images, Alex Krizhevsky, 2009.
  *
  * There is a special preProcessor used to normalize the dataset based on Sergey Zagoruyko example
- * https://github.com/szagoruyko/cifar.torch
+ * <a href="https://github.com/szagoruyko/cifar.torch">https://github.com/szagoruyko/cifar.torch</a>
  */
 public class CifarLoader extends NativeImageLoader implements Serializable {
     public static final int NUM_TRAIN_IMAGES = 50000;
@@ -262,9 +262,9 @@ public class CifarLoader extends NativeImageLoader implements Serializable {
 
     /**
      * Preprocess and store cifar based on successful Torch approach by Sergey Zagoruyko
-     * Reference: https://github.com/szagoruyko/cifar.torch
+     * Reference: <a href="https://github.com/szagoruyko/cifar.torch">https://github.com/szagoruyko/cifar.torch</a>
      */
-    public opencv_core.Mat convertCifar(Mat orgImage) {
+    public Mat convertCifar(Mat orgImage) {
         numExamples++;
         Mat resImage = new Mat();
         OpenCVFrameConverter.ToMat converter = new OpenCVFrameConverter.ToMat();
@@ -286,7 +286,7 @@ public class CifarLoader extends NativeImageLoader implements Serializable {
 
     /**
      * Normalize and store cifar based on successful Torch approach by Sergey Zagoruyko
-     * Reference: https://github.com/szagoruyko/cifar.torch
+     * Reference: <a href="https://github.com/szagoruyko/cifar.torch">https://github.com/szagoruyko/cifar.torch</a>
      */
     public void normalizeCifar(File fileName) {
         DataSet result = new DataSet();
@@ -316,7 +316,7 @@ public class CifarLoader extends NativeImageLoader implements Serializable {
             }
         }
         for (int i = 0; i < result.numExamples(); i++) {
-            INDArray newFeatures = result.get(i).getFeatureMatrix();
+            INDArray newFeatures = result.get(i).getFeatures();
             newFeatures.tensorAlongDimension(0, new int[] {0, 2, 3}).divi(255);
             newFeatures.tensorAlongDimension(1, new int[] {0, 2, 3}).subi(uMean).divi(uStd);
             newFeatures.tensorAlongDimension(2, new int[] {0, 2, 3}).subi(vMean).divi(vStd);
@@ -325,9 +325,9 @@ public class CifarLoader extends NativeImageLoader implements Serializable {
         result.save(fileName);
     }
 
-    public Pair<INDArray, opencv_core.Mat> convertMat(byte[] byteFeature) {
+    public Pair<INDArray, Mat> convertMat(byte[] byteFeature) {
         INDArray label = FeatureUtil.toOutcomeVector(byteFeature[0], NUM_LABELS);; // first value in the 3073 byte array
-        opencv_core.Mat image = new opencv_core.Mat(HEIGHT, WIDTH, CV_8UC(CHANNELS)); // feature are 3072
+        Mat image = new Mat(HEIGHT, WIDTH, CV_8UC(CHANNELS)); // feature are 3072
         ByteBuffer imageData = image.createBuffer();
 
         for (int i = 0; i < HEIGHT * WIDTH; i++) {
@@ -345,7 +345,7 @@ public class CifarLoader extends NativeImageLoader implements Serializable {
     public DataSet convertDataSet(int num) {
         int batchNumCount = 0;
         List<DataSet> dataSets = new ArrayList<>();
-        Pair<INDArray, opencv_core.Mat> matConversion;
+        Pair<INDArray, Mat> matConversion;
         byte[] byteFeature = new byte[BYTEFILELEN];
 
         try {
@@ -383,10 +383,10 @@ public class CifarLoader extends NativeImageLoader implements Serializable {
                     vTempMean = vChannel.meanNumber().doubleValue();
                     vStd += varManual(vChannel, vTempMean);
                     vMean += vTempMean;
-                    data.setFeatures(data.getFeatureMatrix().div(255));
+                    data.setFeatures(data.getFeatures().div(255));
                 } else {
                     // normalize if just input stream and not special preprocess
-                    data.setFeatures(data.getFeatureMatrix().div(255));
+                    data.setFeatures(data.getFeatures().div(255));
                 }
             } catch (IllegalArgumentException e) {
                 throw new IllegalStateException("The number of channels must be 3 to special preProcess Cifar with.");

@@ -1,20 +1,18 @@
-/*-
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
  *
- *  * Copyright 2015 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
  *
- */
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.deeplearning4j.nn.layers;
 
@@ -48,12 +46,7 @@ public class ActivationLayer extends AbstractLayer<org.deeplearning4j.nn.conf.la
     }
 
     @Override
-    public double calcL2(boolean backpropParamsOnly) {
-        return 0;
-    }
-
-    @Override
-    public double calcL1(boolean backpropParamsOnly) {
+    public double calcRegularizationScore(boolean backpropParamsOnly){
         return 0;
     }
 
@@ -73,7 +66,6 @@ public class ActivationLayer extends AbstractLayer<org.deeplearning4j.nn.conf.la
         }
 
         delta = workspaceMgr.leverageTo(ArrayType.ACTIVATION_GRAD, delta);  //Usually a no-op (except for perhaps identity)
-        delta = backpropDropOutIfPresent(delta);
         Gradient ret = new DefaultGradient();
         return new Pair<>(ret, delta);
     }
@@ -81,7 +73,6 @@ public class ActivationLayer extends AbstractLayer<org.deeplearning4j.nn.conf.la
     @Override
     public INDArray activate(boolean training, LayerWorkspaceMgr mgr) {
         assertInputSet(false);
-        applyDropOutIfNecessary(training, mgr);
 
         INDArray in;
         if (training) {
@@ -92,16 +83,6 @@ public class ActivationLayer extends AbstractLayer<org.deeplearning4j.nn.conf.la
         }
 
         return layerConf().getActivationFn().getActivation(in, training);
-    }
-
-    @Override
-    public Layer transpose() {
-        throw new UnsupportedOperationException("Not supported - " + layerId());
-    }
-
-    @Override
-    public Layer clone() {
-        return new ActivationLayer(conf.clone());
     }
 
     @Override

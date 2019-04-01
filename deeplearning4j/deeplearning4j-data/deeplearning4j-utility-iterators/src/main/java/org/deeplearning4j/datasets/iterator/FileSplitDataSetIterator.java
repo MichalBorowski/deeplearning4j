@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.datasets.iterator;
 
 import lombok.NonNull;
@@ -13,7 +29,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Simple iterator working with list of files.
- * File -> DataSet conversion will be handled via provided FileCallback implementation
+ * File to DataSet conversion will be handled via provided FileCallback implementation
  *
  * @author raver119@gmail.com
  */
@@ -26,6 +42,10 @@ public class FileSplitDataSetIterator implements DataSetIterator {
     private AtomicInteger counter = new AtomicInteger(0);
     private FileCallback callback;
 
+    /**
+     * @param files    List of files to iterate over
+     * @param callback Callback for loading the files
+     */
     public FileSplitDataSetIterator(@NonNull List<File> files, @NonNull FileCallback callback) {
         this.files = files;
         this.numFiles = files.size();

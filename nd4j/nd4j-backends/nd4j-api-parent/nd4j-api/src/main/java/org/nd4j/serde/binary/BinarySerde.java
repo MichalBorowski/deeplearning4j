@@ -1,9 +1,26 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.serde.binary;
 
 import lombok.extern.slf4j.Slf4j;
 import lombok.val;
 import org.bytedeco.javacpp.BytePointer;
 import org.nd4j.linalg.api.buffer.DataBuffer;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.concurrency.AffinityManager;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.api.shape.Shape;
@@ -55,7 +72,7 @@ public class BinarySerde {
      * @return
      */
     public static Pair<INDArray, ByteBuffer> toArrayAndByteBuffer(ByteBuffer buffer, int offset) {
-        ByteBuffer byteBuffer = buffer == null ? ByteBuffer.allocateDirect(buffer.array().length).put(buffer.array())
+        ByteBuffer byteBuffer = buffer.hasArray() ? ByteBuffer.allocateDirect(buffer.array().length).put(buffer.array())
                 .order(ByteOrder.nativeOrder()) : buffer.order(ByteOrder.nativeOrder());
         //bump the byte buffer to the proper position
         byteBuffer.position(offset);
@@ -68,13 +85,13 @@ public class BinarySerde {
         DataBuffer shapeBuff = Nd4j.createBufferDetached(new int[shapeBufferLength]);
 
         //compute the databuffer opType from the index
-        DataBuffer.Type type = DataBuffer.Type.values()[byteBuffer.getInt()];
+        DataType type = DataType.values()[byteBuffer.getInt()];
         for (int i = 0; i < shapeBufferLength; i++) {
             shapeBuff.put(i, byteBuffer.getLong());
         }
 
         //after the rank,data opType, shape buffer (of length shape buffer length) * sizeof(int)
-        if (type != DataBuffer.Type.COMPRESSED) {
+        if (type != DataType.COMPRESSED) {
             ByteBuffer slice = byteBuffer.slice();
             //wrap the data buffer for the last bit
             // FIXME: int cast

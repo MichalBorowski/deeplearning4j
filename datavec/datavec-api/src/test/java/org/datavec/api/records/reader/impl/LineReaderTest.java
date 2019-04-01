@@ -1,18 +1,18 @@
-/*-
- *  * Copyright 2016 Skymind, Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
- */
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.datavec.api.records.reader.impl;
 
@@ -26,7 +26,9 @@ import org.datavec.api.split.FileSplit;
 import org.datavec.api.split.InputSplit;
 import org.datavec.api.split.InputStreamInputSplit;
 import org.datavec.api.writable.Writable;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -48,7 +50,8 @@ import static org.junit.Assert.assertEquals;
  */
 public class LineReaderTest {
 
-    private static Logger log = LoggerFactory.getLogger(LineReaderTest.class);
+    @Rule
+    public TemporaryFolder testDir = new TemporaryFolder();
 
     @Test
     public void testLineReader() throws Exception {
@@ -91,11 +94,7 @@ public class LineReaderTest {
 
     @Test
     public void testLineReaderMetaData() throws Exception {
-        String tempDir = System.getProperty("java.io.tmpdir");
-        File tmpdir = new File(tempDir, "tmpdir-testLineReader");
-        if (tmpdir.exists())
-            tmpdir.delete();
-        tmpdir.mkdir();
+        File tmpdir = testDir.newFolder();
 
         File tmp1 = new File(FilenameUtils.concat(tmpdir.getPath(), "tmp1.txt"));
         File tmp2 = new File(FilenameUtils.concat(tmpdir.getPath(), "tmp2.txt"));
@@ -157,9 +156,7 @@ public class LineReaderTest {
 
     @Test
     public void testLineReaderWithInputStreamInputSplit() throws Exception {
-        String tempDir = System.getProperty("java.io.tmpdir");
-        File tmpdir = new File(tempDir, "tmpdir");
-        tmpdir.mkdir();
+        File tmpdir = testDir.newFolder();
 
         File tmp1 = new File(tmpdir, "tmp1.txt.gz");
 

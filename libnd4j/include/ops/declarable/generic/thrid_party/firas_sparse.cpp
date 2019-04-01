@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 //
 // This file contains operations added by 3rd parties
 //
@@ -18,7 +34,6 @@
 #include <ops/declarable/DeclarableOp.h>
 #include <ops/declarable/OpRegistrator.h>
 #include <ops/declarable/CustomOperations.h>
-#include <NDArrayFactory.h>
 
 namespace nd4j {
     namespace ops {
@@ -48,30 +63,30 @@ namespace nd4j {
                 sparse2dense.insert(pair);
             }
 
-            std::unique_ptr<ResultSet<T>> rows(NDArrayFactory<T>::allTensorsAlongDimension(x, {1}));
+            std::unique_ptr<ResultSet> rows(x->allTensorsAlongDimension({1}));
 
-#pragma omp parallel for schedule(dynamic) proc_bind(close)
+            PRAGMA_OMP_PARALLEL_FOR
             for (int r = 0; r < batchSize; r++) {
                 auto row = rows->at(r);
 
                 for (int e = 0; e < numColumns; e += 2) {
-                    int idx = row->getIndexedScalar(e);
+                    int idx = row->e<int>(e);
                     if (idx < 0)
                         break;
 
                     int denseIdx = sparse2dense.at(idx);
 
 
-                    T value = row->getIndexedScalar(e + 1);
-                    T current = z->getScalar(r, denseIdx);
-                    z->putScalar(r, denseIdx, value + current);
+                    float value = row->e<float>(e + 1);
+                    float current = z->e<float>(r, denseIdx);
+                    z->p(r, denseIdx, value + current);
                 }
             }
 
 
             STORE_RESULT(*z);
 
-            return ND4J_STATUS_OK;
+            return Status::OK();
         }
 
         DECLARE_SHAPE_FN(firas_sparse) {
@@ -81,9 +96,15 @@ namespace nd4j {
             ALLOCATE(newShape, block.getWorkspace(), shape::shapeInfoLength(2), Nd4jLong);
 
             std::vector<Nd4jLong> shape({shape::shapeOf(inP)[0], (Nd4jLong) block.getIArguments()->size()});
-            shape::shapeBuffer(2, shape.data(), newShape);
+            shape::shapeBuffer(2, block.dataType(), shape.data(), newShape);
 
             return SHAPELIST(newShape);
+        }
+
+        DECLARE_TYPES(firas_sparse) {
+            getOpDescriptor()
+                    ->setAllowedInputTypes(nd4j::DataType::ANY)
+                    ->setAllowedOutputTypes({ALL_FLOATS});
         }
     }
 }

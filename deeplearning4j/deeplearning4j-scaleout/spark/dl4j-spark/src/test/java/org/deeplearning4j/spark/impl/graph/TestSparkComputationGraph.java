@@ -1,5 +1,23 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.spark.impl.graph;
 
+import lombok.val;
+import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -10,13 +28,11 @@ import org.deeplearning4j.datasets.datavec.RecordReaderMultiDataSetIterator;
 import org.deeplearning4j.datasets.iterator.IteratorMultiDataSetIterator;
 import org.deeplearning4j.datasets.iterator.impl.IrisDataSetIterator;
 import org.deeplearning4j.datasets.iterator.impl.ListDataSetIterator;
-import org.deeplearning4j.eval.Evaluation;
-import org.deeplearning4j.eval.IEvaluation;
-import org.deeplearning4j.eval.ROC;
 import org.deeplearning4j.nn.api.OptimizationAlgorithm;
 import org.deeplearning4j.nn.conf.ComputationGraphConfiguration;
 import org.deeplearning4j.nn.conf.NeuralNetConfiguration;
 import org.deeplearning4j.nn.conf.Updater;
+import org.deeplearning4j.nn.conf.graph.ElementWiseVertex;
 import org.deeplearning4j.nn.conf.layers.DenseLayer;
 import org.deeplearning4j.nn.conf.layers.OutputLayer;
 import org.deeplearning4j.nn.graph.ComputationGraph;
@@ -24,11 +40,16 @@ import org.deeplearning4j.nn.weights.WeightInit;
 import org.deeplearning4j.optimize.api.TrainingListener;
 import org.deeplearning4j.optimize.listeners.ScoreIterationListener;
 import org.deeplearning4j.spark.BaseSparkTest;
+import org.deeplearning4j.spark.api.RDDTrainingApproach;
 import org.deeplearning4j.spark.api.Repartition;
 import org.deeplearning4j.spark.api.TrainingMaster;
 import org.deeplearning4j.spark.impl.paramavg.ParameterAveragingTrainingMaster;
 import org.junit.Test;
+import org.nd4j.evaluation.IEvaluation;
+import org.nd4j.evaluation.classification.Evaluation;
+import org.nd4j.evaluation.classification.ROC;
 import org.nd4j.linalg.activations.Activation;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.dataset.DataSet;
 import org.nd4j.linalg.dataset.api.MultiDataSet;
@@ -36,6 +57,7 @@ import org.nd4j.linalg.dataset.api.iterator.DataSetIterator;
 import org.nd4j.linalg.dataset.api.iterator.MultiDataSetIterator;
 import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.io.ClassPathResource;
+import org.nd4j.linalg.learning.config.Adam;
 import org.nd4j.linalg.learning.config.Nesterovs;
 import org.nd4j.linalg.learning.config.Sgd;
 import org.nd4j.linalg.lossfunctions.LossFunctions;
@@ -84,7 +106,7 @@ public class TestSparkComputationGraph extends BaseSparkTest {
                                         new OutputLayer.Builder(LossFunctions.LossFunction.MCXENT).nIn(2).nOut(3)
                                                         .build(),
                                         "dense")
-                        .setOutputs("out").pretrain(false).backprop(true).build();
+                        .setOutputs("out").build();
 
         ComputationGraph cg = new ComputationGraph(config);
         cg.init();
@@ -120,7 +142,7 @@ public class TestSparkComputationGraph extends BaseSparkTest {
                                         LossFunctions.LossFunction.MCXENT).nIn(3).nOut(nOut)
                                                         .activation(Activation.SOFTMAX).build(),
                                         "0")
-                        .setOutputs("1").backprop(true).pretrain(false).build();
+                        .setOutputs("1").build();
 
         TrainingMaster tm = new ParameterAveragingTrainingMaster(true, numExecutors(), 1, 10, 1, 0);
 
@@ -199,7 +221,7 @@ public class TestSparkComputationGraph extends BaseSparkTest {
                                         LossFunctions.LossFunction.MCXENT).nIn(4).nOut(3).activation(Activation.SOFTMAX)
                                                         .build(),
                                         "0")
-                        .setOutputs("1").pretrain(false).backprop(true).build();
+                        .setOutputs("1").build();
 
         Nd4j.getRandom().setSeed(12345);
         ComputationGraph n1 = new ComputationGraph(conf.clone());
@@ -258,107 +280,157 @@ public class TestSparkComputationGraph extends BaseSparkTest {
     }
 
 
-    @Test
+    @Test(timeout = 60000L)
     public void testEvaluationAndRoc() {
-        DataSetIterator iter = new IrisDataSetIterator(5, 150);
+        for( int evalWorkers : new int[]{1, 4, 8}) {
+            DataSetIterator iter = new IrisDataSetIterator(5, 150);
 
-        //Make a 2-class version of iris:
-        List<DataSet> l = new ArrayList<>();
-        iter.reset();
-        while (iter.hasNext()) {
-            DataSet ds = iter.next();
-            INDArray newL = Nd4j.create(ds.getLabels().size(0), 2);
-            newL.putColumn(0, ds.getLabels().getColumn(0));
-            newL.putColumn(1, ds.getLabels().getColumn(1));
-            newL.getColumn(1).addi(ds.getLabels().getColumn(2));
-            ds.setLabels(newL);
-            l.add(ds);
+            //Make a 2-class version of iris:
+            List<DataSet> l = new ArrayList<>();
+            iter.reset();
+            while (iter.hasNext()) {
+                DataSet ds = iter.next();
+                INDArray newL = Nd4j.create(ds.getLabels().size(0), 2);
+                newL.putColumn(0, ds.getLabels().getColumn(0));
+                newL.putColumn(1, ds.getLabels().getColumn(1));
+                newL.getColumn(1).addi(ds.getLabels().getColumn(2));
+                ds.setLabels(newL);
+                l.add(ds);
+            }
+
+            iter = new ListDataSetIterator<>(l);
+
+            ComputationGraph cg = getBasicNetIris2Class();
+
+            Evaluation e = cg.evaluate(iter);
+            ROC roc = cg.evaluateROC(iter, 32);
+
+
+            SparkComputationGraph scg = new SparkComputationGraph(sc, cg, null);
+            scg.setDefaultEvaluationWorkers(evalWorkers);
+
+
+            JavaRDD<DataSet> rdd = sc.parallelize(l);
+            rdd = rdd.repartition(20);
+
+            Evaluation e2 = scg.evaluate(rdd);
+            ROC roc2 = scg.evaluateROC(rdd);
+
+
+            assertEquals(e2.accuracy(), e.accuracy(), 1e-3);
+            assertEquals(e2.f1(), e.f1(), 1e-3);
+            assertEquals(e2.getNumRowCounter(), e.getNumRowCounter(), 1e-3);
+            assertEquals(e2.falseNegatives(), e.falseNegatives());
+            assertEquals(e2.falsePositives(), e.falsePositives());
+            assertEquals(e2.trueNegatives(), e.trueNegatives());
+            assertEquals(e2.truePositives(), e.truePositives());
+            assertEquals(e2.precision(), e.precision(), 1e-3);
+            assertEquals(e2.recall(), e.recall(), 1e-3);
+            assertEquals(e2.getConfusionMatrix(), e.getConfusionMatrix());
+
+            assertEquals(roc.calculateAUC(), roc2.calculateAUC(), 1e-5);
+            assertEquals(roc.calculateAUCPR(), roc2.calculateAUCPR(), 1e-5);
         }
-
-        iter = new ListDataSetIterator<>(l);
-
-        ComputationGraph cg = getBasicNetIris2Class();
-
-        Evaluation e = cg.evaluate(iter);
-        ROC roc = cg.evaluateROC(iter, 32);
-
-
-        SparkComputationGraph scg = new SparkComputationGraph(sc, cg, null);
-
-
-
-        JavaRDD<DataSet> rdd = sc.parallelize(l);
-        rdd = rdd.repartition(20);
-
-        Evaluation e2 = scg.evaluate(rdd);
-        ROC roc2 = scg.evaluateROC(rdd);
-
-
-        assertEquals(e2.accuracy(), e.accuracy(), 1e-3);
-        assertEquals(e2.f1(), e.f1(), 1e-3);
-        assertEquals(e2.getNumRowCounter(), e.getNumRowCounter(), 1e-3);
-        assertEquals(e2.falseNegatives(), e.falseNegatives());
-        assertEquals(e2.falsePositives(), e.falsePositives());
-        assertEquals(e2.trueNegatives(), e.trueNegatives());
-        assertEquals(e2.truePositives(), e.truePositives());
-        assertEquals(e2.precision(), e.precision(), 1e-3);
-        assertEquals(e2.recall(), e.recall(), 1e-3);
-        assertEquals(e2.getConfusionMatrix(), e.getConfusionMatrix());
-
-        assertEquals(roc.calculateAUC(), roc2.calculateAUC(), 1e-5);
-        assertEquals(roc.calculateAUCPR(), roc2.calculateAUCPR(), 1e-5);
     }
 
     @Test
     public void testEvaluationAndRocMDS() {
-        DataSetIterator iter = new IrisDataSetIterator(5, 150);
+        for( int evalWorkers : new int[]{1, 4, 8}) {
 
-        //Make a 2-class version of iris:
-        List<MultiDataSet> l = new ArrayList<>();
-        iter.reset();
-        while (iter.hasNext()) {
-            DataSet ds = iter.next();
-            INDArray newL = Nd4j.create(ds.getLabels().size(0), 2);
-            newL.putColumn(0, ds.getLabels().getColumn(0));
-            newL.putColumn(1, ds.getLabels().getColumn(1));
-            newL.getColumn(1).addi(ds.getLabels().getColumn(2));
+            DataSetIterator iter = new IrisDataSetIterator(5, 150);
 
-            MultiDataSet mds = new org.nd4j.linalg.dataset.MultiDataSet(ds.getFeatures(), newL);
-            l.add(mds);
+            //Make a 2-class version of iris:
+            List<MultiDataSet> l = new ArrayList<>();
+            iter.reset();
+            while (iter.hasNext()) {
+                DataSet ds = iter.next();
+                INDArray newL = Nd4j.create(ds.getLabels().size(0), 2);
+                newL.putColumn(0, ds.getLabels().getColumn(0));
+                newL.putColumn(1, ds.getLabels().getColumn(1));
+                newL.getColumn(1).addi(ds.getLabels().getColumn(2));
+
+                MultiDataSet mds = new org.nd4j.linalg.dataset.MultiDataSet(ds.getFeatures(), newL);
+                l.add(mds);
+            }
+
+            MultiDataSetIterator mdsIter = new IteratorMultiDataSetIterator(l.iterator(), 5);
+
+            ComputationGraph cg = getBasicNetIris2Class();
+
+            IEvaluation[] es = cg.doEvaluation(mdsIter, new Evaluation(), new ROC(32));
+            Evaluation e = (Evaluation) es[0];
+            ROC roc = (ROC) es[1];
+
+
+            SparkComputationGraph scg = new SparkComputationGraph(sc, cg, null);
+            scg.setDefaultEvaluationWorkers(evalWorkers);
+
+            JavaRDD<MultiDataSet> rdd = sc.parallelize(l);
+            rdd = rdd.repartition(20);
+
+            IEvaluation[] es2 = scg.doEvaluationMDS(rdd, 5, new Evaluation(), new ROC(32));
+            Evaluation e2 = (Evaluation) es2[0];
+            ROC roc2 = (ROC) es2[1];
+
+
+            assertEquals(e2.accuracy(), e.accuracy(), 1e-3);
+            assertEquals(e2.f1(), e.f1(), 1e-3);
+            assertEquals(e2.getNumRowCounter(), e.getNumRowCounter(), 1e-3);
+            assertEquals(e2.falseNegatives(), e.falseNegatives());
+            assertEquals(e2.falsePositives(), e.falsePositives());
+            assertEquals(e2.trueNegatives(), e.trueNegatives());
+            assertEquals(e2.truePositives(), e.truePositives());
+            assertEquals(e2.precision(), e.precision(), 1e-3);
+            assertEquals(e2.recall(), e.recall(), 1e-3);
+            assertEquals(e2.getConfusionMatrix(), e.getConfusionMatrix());
+
+            assertEquals(roc.calculateAUC(), roc2.calculateAUC(), 1e-5);
+            assertEquals(roc.calculateAUCPR(), roc2.calculateAUCPR(), 1e-5);
         }
-
-        MultiDataSetIterator mdsIter = new IteratorMultiDataSetIterator(l.iterator(), 5);
-
-        ComputationGraph cg = getBasicNetIris2Class();
-
-        IEvaluation[] es = cg.doEvaluation(mdsIter, new Evaluation(), new ROC(32));
-        Evaluation e = (Evaluation) es[0];
-        ROC roc = (ROC) es[1];
-
-
-        SparkComputationGraph scg = new SparkComputationGraph(sc, cg, null);
-
-        JavaRDD<MultiDataSet> rdd = sc.parallelize(l);
-        rdd = rdd.repartition(20);
-
-        IEvaluation[] es2 = scg.doEvaluationMDS(rdd, 5, new Evaluation(), new ROC(32));
-        Evaluation e2 = (Evaluation) es2[0];
-        ROC roc2 = (ROC) es2[1];
-
-
-        assertEquals(e2.accuracy(), e.accuracy(), 1e-3);
-        assertEquals(e2.f1(), e.f1(), 1e-3);
-        assertEquals(e2.getNumRowCounter(), e.getNumRowCounter(), 1e-3);
-        assertEquals(e2.falseNegatives(), e.falseNegatives());
-        assertEquals(e2.falsePositives(), e.falsePositives());
-        assertEquals(e2.trueNegatives(), e.trueNegatives());
-        assertEquals(e2.truePositives(), e.truePositives());
-        assertEquals(e2.precision(), e.precision(), 1e-3);
-        assertEquals(e2.recall(), e.recall(), 1e-3);
-        assertEquals(e2.getConfusionMatrix(), e.getConfusionMatrix());
-
-        assertEquals(roc.calculateAUC(), roc2.calculateAUC(), 1e-5);
-        assertEquals(roc.calculateAUCPR(), roc2.calculateAUCPR(), 1e-5);
     }
 
+    @Test
+    public void testIssue7068() throws Exception {
+
+        val batchSize = 5;
+        val featSize = 10;
+        val labelSize = 2;
+        val random = new Random(0);
+
+        List<org.nd4j.linalg.dataset.api.MultiDataSet> l = new ArrayList<>();
+        for( int i=0; i<10; i++ ) {
+            org.nd4j.linalg.dataset.MultiDataSet mds = new org.nd4j.linalg.dataset.MultiDataSet(
+                    new INDArray[]{Nd4j.rand(batchSize, featSize).castTo(DataType.DOUBLE), Nd4j.rand(batchSize, featSize).castTo(DataType.DOUBLE)},
+                    new INDArray[]{Nd4j.rand(batchSize, labelSize).castTo(DataType.DOUBLE)});
+            l.add(mds);
+        }
+        JavaRDD<org.nd4j.linalg.dataset.api.MultiDataSet> rdd = sc.parallelize(l);
+
+        // simple model
+        val modelConf = new NeuralNetConfiguration.Builder()
+                .updater(new Adam(0.01))
+                .weightInit(WeightInit.XAVIER_UNIFORM)
+                .biasInit(0)
+                .graphBuilder()
+                .addInputs("input1", "input2")
+                .addVertex("avg",new ElementWiseVertex(ElementWiseVertex.Op.Average),"input1","input2")
+                .addLayer("dense",new DenseLayer.Builder().dropOut(0.9).nIn(featSize).nOut(featSize / 2).build(),"avg")
+                .addLayer("output",new OutputLayer.Builder().nIn(featSize / 2).nOut(2).lossFunction(LossFunctions.LossFunction.MCXENT).activation(Activation.SOFTMAX).hasBias(false).build(),"dense")
+                .setOutputs("output")
+                .build();
+
+        val model = new ComputationGraph(modelConf);
+        model.init();
+
+        val trainingMaster =
+                new ParameterAveragingTrainingMaster.Builder(batchSize)
+                        .rddTrainingApproach(RDDTrainingApproach.Direct)
+                        .build();
+        val sparkModel =
+                new SparkComputationGraph(sc, model, trainingMaster);
+
+        for( int i=0; i<3; i++ ){
+            sparkModel.fitMultiDataSet(rdd);
+        }
+    }
 }

@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 //
 // Created by raver119 on 17.10.2017.
 //
@@ -27,7 +43,7 @@ namespace nd4j {
             int dX = INT_ARG(7);			//Dilation in width/x dimension
 
             LaunchContext ctx;
-            nd4j::ops::helpers::_col2im(ctx, z->specialBuffer(), x->specialBuffer(), z->specialShapeInfo(), x->specialShapeInfo(), strideY, strideX, padHeight, padWidth, imgHeight, imgWidth, dY, dX);
+            helpers::col2im(ctx, *x, *z, strideY, strideX, padHeight, padWidth, imgHeight, imgWidth, dY, dX);
 
             STORE_RESULT(*z);
 
@@ -58,13 +74,19 @@ namespace nd4j {
             zShape[3] = inY;
             zShape[4] = inX;
 
-            zShape[shape::shapeInfoLength(zShape) - 3] = 0;
             zShape[shape::shapeInfoLength(zShape) - 2] = 1;
             zShape[shape::shapeInfoLength(zShape) - 1] = 99;
 
-            shape::updateStrides(zShape, 'c');
+            ShapeUtils::updateStridesAndType(zShape, inShape, 'c');            
 
             return SHAPELIST(zShape);
+        }
+
+        DECLARE_TYPES(col2im) {
+            getOpDescriptor()
+                    ->setAllowedInputTypes(0, DataType::ANY)
+                    ->setAllowedOutputTypes(0, DataType::INHERIT)
+                    ->setSameMode(true);
         }
     }
 }

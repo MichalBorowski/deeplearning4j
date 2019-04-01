@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.parallelism.parameterserver;
 
 import lombok.extern.slf4j.Slf4j;
@@ -55,7 +71,7 @@ public class ParameterServerParallelWrapperTest {
                         .layer(4, new DenseLayer.Builder().activation(Activation.RELU).nOut(500).build())
                         .layer(5, new OutputLayer.Builder(LossFunctions.LossFunction.NEGATIVELOGLIKELIHOOD)
                                         .nOut(outputNum).activation(Activation.SOFTMAX).build())
-                        .setInputType(InputType.convolutionalFlat(28, 28, 1)).backprop(true).pretrain(false);
+                        .setInputType(InputType.convolutionalFlat(28, 28, 1));
 
         MultiLayerConfiguration conf = builder.build();
         MultiLayerNetwork model = new MultiLayerNetwork(conf);
@@ -67,7 +83,7 @@ public class ParameterServerParallelWrapperTest {
                                         .reportScoreAfterAveraging(true).prefetchBuffer(3).build();
         parameterServerParallelWrapper.fit(mnistTrain);
 
-        Thread.sleep(60000);
+        Thread.sleep(2000);
         parameterServerParallelWrapper.close();
 
 

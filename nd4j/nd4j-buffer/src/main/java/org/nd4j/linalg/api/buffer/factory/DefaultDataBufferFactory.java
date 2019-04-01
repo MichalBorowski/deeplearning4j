@@ -1,24 +1,22 @@
-/*-
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
  *
- *  * Copyright 2015 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
  *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
  *
- */
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.nd4j.linalg.api.buffer.factory;
 
+import lombok.NonNull;
 import org.bytedeco.javacpp.DoublePointer;
 import org.bytedeco.javacpp.FloatPointer;
 import org.bytedeco.javacpp.IntPointer;
@@ -63,15 +61,25 @@ public class DefaultDataBufferFactory implements DataBufferFactory {
 
     @Override
     public DataBuffer create(DataBuffer underlyingBuffer, long offset, long length) {
-        if (underlyingBuffer.dataType() == DataBuffer.Type.DOUBLE) {
+        if (underlyingBuffer.dataType() == DataType.DOUBLE) {
             return new DoubleBuffer(underlyingBuffer, length, offset);
-        } else if (underlyingBuffer.dataType() == DataBuffer.Type.FLOAT) {
+        } else if (underlyingBuffer.dataType() == DataType.FLOAT) {
             return new FloatBuffer(underlyingBuffer, length, offset);
 
-        } else if (underlyingBuffer.dataType() == DataBuffer.Type.INT) {
+        } else if (underlyingBuffer.dataType() == DataType.INT) {
             return new IntBuffer(underlyingBuffer, length, offset);
-        } else if (underlyingBuffer.dataType() == DataBuffer.Type.LONG) {
+        } else if (underlyingBuffer.dataType() == DataType.LONG) {
             return new LongBuffer(underlyingBuffer, length, offset);
+        } else if (underlyingBuffer.dataType() == DataType.BOOL) {
+            return new BoolBuffer(underlyingBuffer, length, offset);
+        } else if (underlyingBuffer.dataType() == DataType.SHORT) {
+            return new Int16Buffer(underlyingBuffer, length, offset);
+        } else if (underlyingBuffer.dataType() == DataType.BYTE) {
+            return new Int8Buffer(underlyingBuffer, length, offset);
+        } else if (underlyingBuffer.dataType() == DataType.UBYTE) {
+            return new UInt8Buffer(underlyingBuffer, length, offset);
+        } else if (underlyingBuffer.dataType() == DataType.HALF) {
+            return new HalfBuffer(underlyingBuffer, length, offset);
         }
         return null;
     }
@@ -265,6 +273,60 @@ public class DefaultDataBufferFactory implements DataBufferFactory {
     }
 
     @Override
+    public DataBuffer create(@NonNull DataType dataType, long length, boolean initialize) {
+        switch (dataType) {
+            case DOUBLE:
+                return new DoubleBuffer(length, initialize);
+            case FLOAT:
+                return new FloatBuffer(length, initialize);
+            case HALF:
+                return new HalfBuffer(length, initialize);
+            case LONG:
+                return new LongBuffer(length, initialize);
+            case INT:
+                return new IntBuffer(length, initialize);
+            case SHORT:
+                return new Int16Buffer(length, initialize);
+            case UBYTE:
+                return new UInt8Buffer(length, initialize);
+            case BYTE:
+                return new Int8Buffer(length, initialize);
+            case BOOL:
+                return new BoolBuffer(length, initialize);
+            default:
+                throw new IllegalStateException("Unknown datatype used: [" + dataType + "]");
+
+        }
+
+    }
+
+    @Override
+    public DataBuffer create(DataType dataType, long length, boolean initialize, MemoryWorkspace workspace) {
+        switch (dataType) {
+            case DOUBLE:
+                return new DoubleBuffer(length, initialize, workspace);
+            case FLOAT:
+                return new FloatBuffer(length, initialize, workspace);
+            case HALF:
+                return new HalfBuffer(length, initialize, workspace);
+            case LONG:
+                return new LongBuffer(length, initialize, workspace);
+            case INT:
+                return new IntBuffer(length, initialize, workspace);
+            case SHORT:
+                return new Int16Buffer(length, initialize, workspace);
+            case UBYTE:
+                return new UInt8Buffer(length, initialize, workspace);
+            case BYTE:
+                return new Int8Buffer(length, initialize, workspace);
+            case BOOL:
+                return new BoolBuffer(length, initialize, workspace);
+            default:
+                throw new IllegalStateException("Unknown datatype used: [" + dataType + "]");
+        }
+    }
+
+    @Override
     public DataBuffer createInt(long length) {
         return new IntBuffer(length);
     }
@@ -287,18 +349,7 @@ public class DefaultDataBufferFactory implements DataBufferFactory {
      */
     @Override
     public DataBuffer createSame(DataBuffer buffer, boolean init) {
-        switch (buffer.dataType()) {
-            case INT:
-                return createInt(buffer.length(), init);
-            case FLOAT:
-                return createFloat(buffer.length(), init);
-            case DOUBLE:
-                return createDouble(buffer.length(), init);
-            case HALF:
-                return createHalf(buffer.length(), init);
-            default:
-                throw new UnsupportedOperationException("Unknown dataType: " + buffer.dataType());
-        }
+        return create(buffer.dataType(), buffer.length(), init);
     }
 
     /**
@@ -310,18 +361,7 @@ public class DefaultDataBufferFactory implements DataBufferFactory {
      */
     @Override
     public DataBuffer createSame(DataBuffer buffer, boolean init, MemoryWorkspace workspace) {
-        switch (buffer.dataType()) {
-            case INT:
-                return createInt(buffer.length(), init, workspace);
-            case FLOAT:
-                return createFloat(buffer.length(), init, workspace);
-            case DOUBLE:
-                return createDouble(buffer.length(), init, workspace);
-            case HALF:
-                return createHalf(buffer.length(), init, workspace);
-            default:
-                throw new UnsupportedOperationException("Unknown dataType: " + buffer.dataType());
-        }
+        return create(buffer.dataType(), buffer.length(), init, workspace);
     }
 
     @Override
@@ -523,16 +563,26 @@ public class DefaultDataBufferFactory implements DataBufferFactory {
      * opType and length.
      */
     @Override
-    public DataBuffer create(Pointer pointer, DataBuffer.Type type, long length, Indexer indexer) {
+    public DataBuffer create(Pointer pointer, DataType type, long length, @NonNull Indexer indexer) {
         switch (type) {
+            case BOOL:
+                return new BoolBuffer(pointer, indexer, length);
+            case BYTE:
+                return new Int8Buffer(pointer, indexer, length);
+            case UBYTE:
+                return new UInt8Buffer(pointer, indexer, length);
+            case SHORT:
+                return new Int16Buffer(pointer, indexer, length);
             case INT:
                 return new IntBuffer(pointer, indexer, length);
-            case DOUBLE:
-                return new DoubleBuffer(pointer, indexer, length);
-            case FLOAT:
-                return new FloatBuffer(pointer, indexer, length);
             case LONG:
                 return new LongBuffer(pointer, indexer, length);
+            case HALF:
+                return new HalfBuffer(pointer, indexer, length);
+            case FLOAT:
+                return new FloatBuffer(pointer, indexer, length);
+            case DOUBLE:
+                return new DoubleBuffer(pointer, indexer, length);
         }
         throw new IllegalArgumentException("Invalid opType " + type);
     }

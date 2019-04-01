@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.linalg.dataset;
 
 import lombok.Getter;
@@ -7,7 +23,9 @@ import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.nd4j.linalg.BaseNd4jTest;
 import org.nd4j.linalg.dataset.api.preprocessor.*;
-import org.nd4j.linalg.dataset.api.preprocessor.serializer.*;
+import org.nd4j.linalg.dataset.api.preprocessor.serializer.CustomSerializerStrategy;
+import org.nd4j.linalg.dataset.api.preprocessor.serializer.NormalizerSerializer;
+import org.nd4j.linalg.dataset.api.preprocessor.serializer.NormalizerType;
 import org.nd4j.linalg.dataset.api.preprocessor.stats.DistributionStats;
 import org.nd4j.linalg.dataset.api.preprocessor.stats.MinMaxStats;
 import org.nd4j.linalg.dataset.api.preprocessor.stats.NormalizerStats;
@@ -53,8 +71,8 @@ public class NormalizerSerializerTest extends BaseNd4jTest {
 
     @Test
     public void testNormalizerStandardizeNotFitLabels() throws Exception {
-        NormalizerStandardize original = new NormalizerStandardize(Nd4j.create(new double[] {0.5, 1.5}),
-                        Nd4j.create(new double[] {2.5, 3.5}));
+        NormalizerStandardize original = new NormalizerStandardize(Nd4j.create(new double[] {0.5, 1.5}).reshape(1, -1),
+                        Nd4j.create(new double[] {2.5, 3.5}).reshape(1, -1));
 
         SUT.write(original, tmpFile);
         NormalizerStandardize restored = SUT.restore(tmpFile);
@@ -64,9 +82,9 @@ public class NormalizerSerializerTest extends BaseNd4jTest {
 
     @Test
     public void testNormalizerStandardizeFitLabels() throws Exception {
-        NormalizerStandardize original = new NormalizerStandardize(Nd4j.create(new double[] {0.5, 1.5}),
-                        Nd4j.create(new double[] {2.5, 3.5}), Nd4j.create(new double[] {4.5, 5.5}),
-                        Nd4j.create(new double[] {6.5, 7.5}));
+        NormalizerStandardize original = new NormalizerStandardize(Nd4j.create(new double[] {0.5, 1.5}).reshape(1, -1),
+                        Nd4j.create(new double[] {2.5, 3.5}).reshape(1, -1), Nd4j.create(new double[] {4.5, 5.5}).reshape(1, -1),
+                        Nd4j.create(new double[] {6.5, 7.5}).reshape(1, -1));
         original.fitLabel(true);
 
         SUT.write(original, tmpFile);
@@ -78,7 +96,7 @@ public class NormalizerSerializerTest extends BaseNd4jTest {
     @Test
     public void testNormalizerMinMaxScalerNotFitLabels() throws Exception {
         NormalizerMinMaxScaler original = new NormalizerMinMaxScaler(0.1, 0.9);
-        original.setFeatureStats(Nd4j.create(new double[] {0.5, 1.5}), Nd4j.create(new double[] {2.5, 3.5}));
+        original.setFeatureStats(Nd4j.create(new double[] {0.5, 1.5}).reshape(1, -1), Nd4j.create(new double[] {2.5, 3.5}).reshape(1, -1));
 
         SUT.write(original, tmpFile);
         NormalizerMinMaxScaler restored = SUT.restore(tmpFile);
@@ -103,10 +121,10 @@ public class NormalizerSerializerTest extends BaseNd4jTest {
     public void testMultiNormalizerStandardizeNotFitLabels() throws Exception {
         MultiNormalizerStandardize original = new MultiNormalizerStandardize();
         original.setFeatureStats(asList(
-                        new DistributionStats(Nd4j.create(new double[] {0.5, 1.5}),
-                                        Nd4j.create(new double[] {2.5, 3.5})),
-                        new DistributionStats(Nd4j.create(new double[] {4.5, 5.5, 6.5}),
-                                        Nd4j.create(new double[] {7.5, 8.5, 9.5}))));
+                        new DistributionStats(Nd4j.create(new double[] {0.5, 1.5}).reshape(1, -1),
+                                        Nd4j.create(new double[] {2.5, 3.5}).reshape(1, -1)),
+                        new DistributionStats(Nd4j.create(new double[] {4.5, 5.5, 6.5}).reshape(1, -1),
+                                        Nd4j.create(new double[] {7.5, 8.5, 9.5}).reshape(1, -1))));
 
         SUT.write(original, tmpFile);
         MultiNormalizerStandardize restored = SUT.restore(tmpFile);
@@ -118,16 +136,16 @@ public class NormalizerSerializerTest extends BaseNd4jTest {
     public void testMultiNormalizerStandardizeFitLabels() throws Exception {
         MultiNormalizerStandardize original = new MultiNormalizerStandardize();
         original.setFeatureStats(asList(
-                        new DistributionStats(Nd4j.create(new double[] {0.5, 1.5}),
-                                        Nd4j.create(new double[] {2.5, 3.5})),
-                        new DistributionStats(Nd4j.create(new double[] {4.5, 5.5, 6.5}),
-                                        Nd4j.create(new double[] {7.5, 8.5, 9.5}))));
+                        new DistributionStats(Nd4j.create(new double[] {0.5, 1.5}).reshape(1, -1),
+                                        Nd4j.create(new double[] {2.5, 3.5}).reshape(1, -1)),
+                        new DistributionStats(Nd4j.create(new double[] {4.5, 5.5, 6.5}).reshape(1, -1),
+                                        Nd4j.create(new double[] {7.5, 8.5, 9.5}).reshape(1, -1))));
         original.setLabelStats(asList(
-                        new DistributionStats(Nd4j.create(new double[] {0.5, 1.5}),
-                                        Nd4j.create(new double[] {2.5, 3.5})),
-                        new DistributionStats(Nd4j.create(new double[] {4.5}), Nd4j.create(new double[] {7.5})),
-                        new DistributionStats(Nd4j.create(new double[] {4.5, 5.5, 6.5}),
-                                        Nd4j.create(new double[] {7.5, 8.5, 9.5}))));
+                        new DistributionStats(Nd4j.create(new double[] {0.5, 1.5}).reshape(1, -1),
+                                        Nd4j.create(new double[] {2.5, 3.5}).reshape(1, -1)),
+                        new DistributionStats(Nd4j.create(new double[] {4.5}).reshape(1, -1), Nd4j.create(new double[] {7.5}).reshape(1, -1)),
+                        new DistributionStats(Nd4j.create(new double[] {4.5, 5.5, 6.5}).reshape(1, -1),
+                                        Nd4j.create(new double[] {7.5, 8.5, 9.5}).reshape(1, -1))));
         original.fitLabel(true);
 
         SUT.write(original, tmpFile);
@@ -187,12 +205,12 @@ public class NormalizerSerializerTest extends BaseNd4jTest {
         MultiNormalizerHybrid original = new MultiNormalizerHybrid().minMaxScaleAllInputs().standardizeAllOutputs();
 
         Map<Integer, NormalizerStats> inputStats = new HashMap<>();
-        inputStats.put(0, new MinMaxStats(Nd4j.create(new float[] {1, 2}), Nd4j.create(new float[] {3, 4})));
-        inputStats.put(0, new MinMaxStats(Nd4j.create(new float[] {5, 6}), Nd4j.create(new float[] {7, 8})));
+        inputStats.put(0, new MinMaxStats(Nd4j.create(new float[] {1, 2}).reshape(1, -1), Nd4j.create(new float[] {3, 4}).reshape(1, -1)));
+        inputStats.put(0, new MinMaxStats(Nd4j.create(new float[] {5, 6}).reshape(1, -1), Nd4j.create(new float[] {7, 8}).reshape(1, -1)));
 
         Map<Integer, NormalizerStats> outputStats = new HashMap<>();
-        outputStats.put(0, new DistributionStats(Nd4j.create(new float[] {9, 10}), Nd4j.create(new float[] {11, 12})));
-        outputStats.put(0, new DistributionStats(Nd4j.create(new float[] {13, 14}), Nd4j.create(new float[] {15, 16})));
+        outputStats.put(0, new DistributionStats(Nd4j.create(new float[] {9, 10}).reshape(1, -1), Nd4j.create(new float[] {11, 12}).reshape(1, -1)));
+        outputStats.put(0, new DistributionStats(Nd4j.create(new float[] {13, 14}).reshape(1, -1), Nd4j.create(new float[] {15, 16}).reshape(1, -1)));
 
         original.setInputStats(inputStats);
         original.setOutputStats(outputStats);
@@ -209,12 +227,12 @@ public class NormalizerSerializerTest extends BaseNd4jTest {
                         .minMaxScaleAllOutputs(-10, 10).standardizeOutput(1);
 
         Map<Integer, NormalizerStats> inputStats = new HashMap<>();
-        inputStats.put(0, new MinMaxStats(Nd4j.create(new float[] {1, 2}), Nd4j.create(new float[] {3, 4})));
-        inputStats.put(1, new DistributionStats(Nd4j.create(new float[] {5, 6}), Nd4j.create(new float[] {7, 8})));
+        inputStats.put(0, new MinMaxStats(Nd4j.create(new float[] {1, 2}).reshape(1, -1), Nd4j.create(new float[] {3, 4}).reshape(1, -1)));
+        inputStats.put(1, new DistributionStats(Nd4j.create(new float[] {5, 6}).reshape(1, -1), Nd4j.create(new float[] {7, 8}).reshape(1, -1)));
 
         Map<Integer, NormalizerStats> outputStats = new HashMap<>();
-        outputStats.put(0, new MinMaxStats(Nd4j.create(new float[] {9, 10}), Nd4j.create(new float[] {11, 12})));
-        outputStats.put(1, new DistributionStats(Nd4j.create(new float[] {13, 14}), Nd4j.create(new float[] {15, 16})));
+        outputStats.put(0, new MinMaxStats(Nd4j.create(new float[] {9, 10}).reshape(1, -1), Nd4j.create(new float[] {11, 12}).reshape(1, -1)));
+        outputStats.put(1, new DistributionStats(Nd4j.create(new float[] {13, 14}).reshape(1, -1), Nd4j.create(new float[] {15, 16}).reshape(1, -1)));
 
         original.setInputStats(inputStats);
         original.setOutputStats(outputStats);

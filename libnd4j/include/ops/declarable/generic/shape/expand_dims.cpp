@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 //
 // Created by raver119 on 02.11.2017.
 //
@@ -9,20 +25,19 @@
 
 namespace nd4j {
     namespace ops {
-        CUSTOM_OP_IMPL(expand_dims, 1, 1, false, 0, 1) {
+        CUSTOM_OP_IMPL(expand_dims, 1, 1, false, 0, -2) {
             auto input = INPUT_VARIABLE(0);
             auto output = OUTPUT_VARIABLE(0);
 
             if (input->isScalar()) {
-                output->assign(input->getScalar(0));
-                return ND4J_STATUS_OK;
+                output->assign(input);
+                return Status::OK();
             }
 
-            auto axis = INT_ARG(0);
+            Nd4jLong axis = block.numI() > 0 ? INT_ARG(0) : INPUT_VARIABLE(1)->e<int>(0);
 
             if (axis < 0)
                 axis += input->rankOf() + 1;
-
 
             REQUIRE_TRUE(axis >= 0 && axis <= input->rankOf()+1, 0, "ExpandDims: axis should be in range of 0...%i in this case, but got %i instead", input->rankOf() + 1, axis);
 
@@ -39,8 +54,15 @@ namespace nd4j {
 
             STORE_RESULT(output);
 
-            return ND4J_STATUS_OK;
+            return Status::OK();
         }
+
+        DECLARE_TYPES(expand_dims) {
+            getOpDescriptor()
+                    ->setAllowedInputTypes(nd4j::DataType::ANY)
+                    ->setSameMode(true);
+        }
+
         DECLARE_SHAPE_FN(expand_dims) {
             auto inShape = inputShape->at(0);
 
@@ -50,7 +72,7 @@ namespace nd4j {
                 ALLOCATE(newShape, block.getWorkspace(), shape::shapeInfoLength(1), Nd4jLong);
 
                 Nd4jLong x = 1;
-                shape::shapeBuffer(1, &x, newShape);
+                shape::shapeBuffer(1, ArrayOptions::dataType(inShape), &x, newShape);
                 return SHAPELIST(newShape);
             }
 
@@ -59,14 +81,14 @@ namespace nd4j {
                 Nd4jLong* newShape;
                 ALLOCATE(newShape, block.getWorkspace(), shape::shapeInfoLength(inShape), Nd4jLong);
 
-                shape::shapeBuffer(2, shape::shapeOf(inShape), newShape);
+                shape::shapeBuffer(2, ArrayOptions::dataType(inShape), shape::shapeOf(inShape), newShape);
                 return SHAPELIST(newShape);
             }
 
             auto x_rank = shape::rank(inShape);
             char order = shape::order(inShape);
 
-            auto axis = INT_ARG(0);
+            Nd4jLong axis = block.numI() > 0 ? INT_ARG(0) : INPUT_VARIABLE(1)->e<int>(0);
 
             if (axis < 0)
                 axis += x_rank + 1;
@@ -81,9 +103,9 @@ namespace nd4j {
             shape.insert(shape.begin() + axis, 1);
 
             if (order == 'c')
-                shape::shapeBuffer(x_rank+1, shape.data(), newShape);
+                shape::shapeBuffer(x_rank+1, ArrayOptions::dataType(inShape), shape.data(), newShape);
             else
-                shape::shapeBufferFortran(x_rank+1, shape.data(), newShape);
+                shape::shapeBufferFortran(x_rank+1, ArrayOptions::dataType(inShape), shape.data(), newShape);
 
 
             return SHAPELIST(newShape);

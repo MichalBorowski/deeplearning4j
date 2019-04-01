@@ -3,7 +3,7 @@ Eclipse Deeplearning4J: Neural Networks for Java/JVM
 
 [![Join the chat at https://gitter.im/deeplearning4j/deeplearning4j](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/deeplearning4j/deeplearning4j?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 [![Maven Central](https://maven-badges.herokuapp.com/maven-central/org.deeplearning4j/deeplearning4j-core/badge.svg)](https://maven-badges.herokuapp.com/maven-central/org.deeplearning4j/deeplearning4j-core)
-[![Javadoc](https://javadoc-emblem.rhcloud.com/doc/org.deeplearning4j/deeplearning4j-core/badge.svg)](http://deeplearning4j.org/doc) 
+[![Javadoc](https://javadoc-badge.appspot.com/org.deeplearning4j/deeplearning4j-core.svg)](https://deeplearning4j.org/api/latest/)
 
 Eclipse Deeplearning4J is part of the [Skymind Intelligence Layer](https://docs.skymind.ai/docs), along with ND4J, DataVec, Arbiter and RL4J. It is an Apache 2.0-licensed, open-source, distributed neural net library written in Java and Scala. By contributing code to this repository, you agree to make your contribution available under an Apache 2.0 license.
 
@@ -16,7 +16,7 @@ For more info, see: https://docs.skymind.ai/docs
 ---
 ## Using Eclipse Deeplearning4j
 
-To get started using Deeplearning4j, please go to our [Quickstart](http://deeplearning4j.org/quickstart.html). You'll need to be familiar with a Java automated build tool such as Maven and an IDE such as IntelliJ.
+To get started using Deeplearning4j, please go to our [Quickstart](https://deeplearning4j.org/docs/latest/deeplearning4j-quickstart). You'll need to be familiar with a Java automated build tool such as Maven and an IDE such as IntelliJ.
 
 ## Main Features
 - Versatile n-dimensional array class
@@ -34,11 +34,11 @@ To get started using Deeplearning4j, please go to our [Quickstart](http://deeple
     - spark = integration with Apache Spark versions 1.3 to 1.6 (Spark 2.0 coming soon)
     - parallel-wraper = Single machine model parallelism (for multi-GPU systems, etc)
     - aws = loading data to and from aws resources EC2 and S3
-- ui = provides visual interfaces for tuning models. [Details here](https://deeplearning4j.org/visualization)
+- ui = provides visual interfaces for tuning models. [Details here](https://deeplearning4j.org/docs/latest/deeplearning4j-nn-visualization)
 
 ---
 ## Documentation
-Documentation is available at [deeplearning4j.org](https://deeplearning4j.org/overview) and [JavaDocs](http://deeplearning4j.org/doc). Open-source contributors can help us improve our documentation for Deeplearning4j by sending pull requests for the DL4J website [here](https://github.com/deeplearning4j/deeplearning4j/tree/gh-pages) and ND4J [here](https://github.com/deeplearning4j/nd4j/tree/gh-pages).
+Documentation is available at [deeplearning4j.org](https://deeplearning4j.org/overview) and [JavaDocs](https://deeplearning4j.org/api/latest/). Open-source contributors can help us improve our documentation for Deeplearning4j by sending pull requests for the DL4J website [here](https://github.com/deeplearning4j/deeplearning4j/tree/gh-pages) and ND4J [here](https://github.com/deeplearning4j/nd4j/tree/gh-pages).
 
 ## Support
 
@@ -46,7 +46,7 @@ We are not supporting Stackoverflow right now. Github issues should focus on bug
 
 ## Installation
 
-To install Deeplearning4J, see our [Quickstart](http://deeplearning4j.org/quickstart.html) and below. More information can be found on the [ND4J web site](http://nd4j.org/getstarted.html) as well as [here](http://deeplearning4j.org/gettingstarted.html).
+To install Deeplearning4J, see our [Quickstart](https://deeplearning4j.org/docs/latest/deeplearning4j-quickstart) and below. More information can be found on the [ND4J web site](http://nd4j.org/getstarted.html) as well as [here](https://deeplearning4j.org/tutorials/00-quickstart-for-deeplearning4j).
 
 #### Use Maven Central Repository
 
@@ -90,7 +90,7 @@ Note, be sure to install the ND4J modules you need first, especially the backend
    with two modifications: 120-char column wrap and 4-spaces indentation. You
    can format your code to this format by typing `mvn formatter:format` in the
    subproject you work on, by using the `contrib/formatter.xml` at the root of
-   the repository to configure the Eclipse formatter, or by [using the INtellij
+   the repository to configure the Eclipse formatter, or by [using the Intellij
    plugin](https://github.com/HPI-Information-Systems/Metanome/wiki/Installing-the-google-styleguide-settings-in-intellij-and-eclipse).
 6. Send a pull request and bug us on Gitter until it gets merged and published. :)
 7. Add technical documentation on the [Deeplearning4j website](https://github.com/deeplearning4j/deeplearning4j/tree/gh-pages) and fix any typos you see.

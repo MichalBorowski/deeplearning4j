@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.ui.play;
 
 import com.beust.jcommander.JCommander;
@@ -9,6 +25,8 @@ import org.deeplearning4j.api.storage.StatsStorage;
 import org.deeplearning4j.api.storage.StatsStorageEvent;
 import org.deeplearning4j.api.storage.StatsStorageListener;
 import org.deeplearning4j.api.storage.StatsStorageRouter;
+import org.deeplearning4j.config.DL4JSystemProperties;
+import org.deeplearning4j.ui.SameDiffModule;
 import org.deeplearning4j.ui.api.Route;
 import org.deeplearning4j.ui.api.UIModule;
 import org.deeplearning4j.ui.api.UIServer;
@@ -22,9 +40,12 @@ import org.deeplearning4j.ui.module.tsne.TsneModule;
 import org.deeplearning4j.ui.play.misc.FunctionUtil;
 import org.deeplearning4j.ui.play.staticroutes.Assets;
 import org.deeplearning4j.ui.play.staticroutes.I18NRoute;
+import org.deeplearning4j.ui.play.staticroutes.MultiSessionI18NRoute;
 import org.deeplearning4j.ui.storage.FileStatsStorage;
 import org.deeplearning4j.ui.storage.InMemoryStatsStorage;
 import org.deeplearning4j.ui.storage.impl.QueueStatsStorageListener;
+import org.deeplearning4j.util.DL4JFileUtils;
+import org.nd4j.linalg.function.Function;
 import org.nd4j.linalg.primitives.Pair;
 import play.Mode;
 import play.api.routing.Router;
@@ -39,7 +60,6 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import static play.mvc.Results.ok;
 
 /**
  * A UI server based on the Play framework
@@ -51,21 +71,16 @@ import static play.mvc.Results.ok;
 public class PlayUIServer extends UIServer {
 
     /**
-     * System property for setting the UI port. Defaults to 9000.
-     * Set to 0 to use a random port
+     * @deprecated Use {@link DL4JSystemProperties#UI_SERVER_PORT_PROPERTY}
      */
-    public static final String UI_SERVER_PORT_PROPERTY = "org.deeplearning4j.ui.port";
+    @Deprecated
+    public static final String UI_SERVER_PORT_PROPERTY = DL4JSystemProperties.UI_SERVER_PORT_PROPERTY;
     public static final int DEFAULT_UI_PORT = 9000;
-
-    /**
-     * System property to enable classpath scanning for custom UI modules. Disabled by default.
-     */
-    public static final String UI_CUSTOM_MODULE_PROPERTY = "org.deeplearning4j.ui.custommodule.enable";
-
 
     public static final String ASSETS_ROOT_DIRECTORY = "deeplearning4jUiAssets/";
 
     private Server server;
+    private boolean stopped;
     private final BlockingQueue<StatsStorageEvent> eventQueue = new LinkedBlockingQueue<>();
     private List<Pair<StatsStorage, StatsStorageListener>> listeners = new CopyOnWriteArrayList<>();
     private List<StatsStorage> statsStorageInstances = new CopyOnWriteArrayList<>();
@@ -89,14 +104,39 @@ public class PlayUIServer extends UIServer {
     @Parameter(names = {"-f", "--customStatsFile"}, description = "Path to create custom stats file (remote only)", arity = 1)
     private String customStatsFile;
 
+    @Parameter(names = {"-m", "--multiSession"}, description = "Whether to enable multiple separate browser sessions or not", arity = 1)
+    private boolean multiSession;
+
+    private StatsStorageLoader statsStorageLoader;
+
     public PlayUIServer() {
         this(DEFAULT_UI_PORT);
     }
 
     public PlayUIServer(int port) {
-        this.port = port;
+        this(port, false);
     }
 
+    /**
+     * Create {@code PlayUIServer} at given port in given mode. Note: to start the server, run {@link #runMain(String[])}
+     * @param port port that the server will listen on
+     * @param multiSession in multi-session mode, multiple training sessions can be visualized in separate browser tabs.
+     *                     <br/>URL path will include session ID as a parameter, i.e.: /train becomes /train/:sessionId
+     */
+    public PlayUIServer(int port, boolean multiSession) {
+        this.port = port;
+        this.multiSession = multiSession;
+    }
+
+    /**
+     * Auto-attach StatsStorage if an unknown session ID is passed as URL path parameter in multi-session mode
+     * @param statsStorageProvider function that returns a StatsStorage containing the given session ID
+     */
+    public void autoAttachStatsStorageBySessionId(Function<String, StatsStorage> statsStorageProvider) {
+        if (statsStorageProvider != null) {
+            this.statsStorageLoader = new StatsStorageLoader(statsStorageProvider);
+        }
+    }
 
     public void runMain(String[] args) {
         JCommander jcmdr = new JCommander(this);
@@ -114,9 +154,14 @@ public class PlayUIServer extends UIServer {
         }
 
         if(((DefaultI18N)I18NProvider.getInstance()).noI18NData()){
+            Throwable t = ((DefaultI18N)I18NProvider.getInstance()).getLanguageLoadingException();
+            if(t != null){
+                throw new RuntimeException("Exception encountered during loading UI Language (Internationalization) data", t);
+            }
+
             log.error("Error loading UI Language (Internationalization) data: no language resource data files were" +
                     "found on the classpath. This usually occurs when running DL4J's UI from an uber-jar, which was " +
-                    "built incorrectly (without language resource files). See https://deeplearning4j.org/visualization#issues" +
+                    "built incorrectly (without language resource files). See https://deeplearning4j.org/docs/latest/deeplearning4j-nn-visualization#issues" +
                     "for more details");
             System.exit(1);
         }
@@ -128,14 +173,18 @@ public class PlayUIServer extends UIServer {
         // definitions (i.e., Java Supplier, Function etc interfaces) to the Play-specific versions
         //This way, routing is not directly dependent ot Play API. Furthermore, Play 2.5 switches to using these Java interfaces
         // anyway; thus switching 2.5 should be as simple as removing the FunctionUtil calls...
-        routingDsl.GET("/setlang/:to").routeTo(FunctionUtil.function(new I18NRoute()));
-        routingDsl.GET("/lang/getCurrent").routeTo(() -> ok(I18NProvider.getInstance().getDefaultLanguage()));
+        if (multiSession) {
+            routingDsl.GET("/setlang/:sessionId/:to").routeTo(FunctionUtil.biFunction(new MultiSessionI18NRoute()));
+        } else {
+            routingDsl.GET("/setlang/:to").routeTo(FunctionUtil.function(new I18NRoute()));
+        }
         routingDsl.GET("/assets/*file").routeTo(FunctionUtil.function(new Assets(ASSETS_ROOT_DIRECTORY)));
 
-        uiModules.add(new DefaultModule()); //For: navigation page "/"
-        uiModules.add(new TrainModule());
+        uiModules.add(new DefaultModule(multiSession)); //For: navigation page "/"
+        uiModules.add(new TrainModule(multiSession, statsStorageLoader, this::getAddress));
         uiModules.add(new ConvolutionalListenerModule());
         uiModules.add(new TsneModule());
+        uiModules.add(new SameDiffModule());
         remoteReceiverModule = new RemoteReceiverModule();
         uiModules.add(remoteReceiverModule);
 
@@ -154,6 +203,8 @@ public class PlayUIServer extends UIServer {
                         ppm.routeTo(FunctionUtil.function(r.getFunction()));
                         break;
                     case BiFunction:
+                        ppm.routeTo(FunctionUtil.biFunction(r.getFunction2()));
+                        break;
                     case Function3:
                     default:
                         throw new RuntimeException("Not yet implemented");
@@ -172,12 +223,12 @@ public class PlayUIServer extends UIServer {
             }
         }
 
-        String portProperty = System.getProperty(UI_SERVER_PORT_PROPERTY);
+        String portProperty = System.getProperty(DL4JSystemProperties.UI_SERVER_PORT_PROPERTY);
         if (portProperty != null) {
             try {
                 port = Integer.parseInt(portProperty);
             } catch (NumberFormatException e) {
-                log.warn("Could not parse UI port property \"{}\" with value \"{}\"", UI_SERVER_PORT_PROPERTY,
+                log.warn("Could not parse UI port property \"{}\" with value \"{}\"", DL4JSystemProperties.UI_SERVER_PORT_PROPERTY,
                                 portProperty, e);
             }
         }
@@ -203,7 +254,7 @@ public class PlayUIServer extends UIServer {
                 log.error("Error starting UI server due to missing play.crypto.provider config: This usually occurs due to missing" +
                         " application.conf file. DL4J's UI (based on the Play framework) requires this file in order" +
                         " to run. File can be missing due to incorrect creation of uber-jars that do not include resource" +
-                        " files. See https://deeplearning4j.org/visualization#issues for more information", e);
+                        " files. See https://deeplearning4j.org/docs/latest/deeplearning4j-nn-visualization#issues for more information", e);
             } else {
                 log.error("Unknown error when starting UI server",e);
             }
@@ -220,7 +271,7 @@ public class PlayUIServer extends UIServer {
         }
         else if(enableRemote) {
             try {
-                File tempStatsFile = File.createTempFile("dl4j", "UIstats");
+                File tempStatsFile = DL4JFileUtils.createTempFile("dl4j", "UIstats");
                 tempStatsFile.delete();
                 tempStatsFile.deleteOnExit();
                 enableRemoteListener(new FileStatsStorage(tempStatsFile), true);
@@ -229,6 +280,8 @@ public class PlayUIServer extends UIServer {
                 System.exit(1);
             }
         }
+
+        setStopped(false);
     }
 
     @Override
@@ -309,12 +362,16 @@ public class PlayUIServer extends UIServer {
             Pair<StatsStorage, StatsStorageListener> p = iterator.next();
             if (p.getFirst() == statsStorage) { //Same object, not equality
                 statsStorage.deregisterStatsStorageListener(p.getSecond());
-                iterator.remove();
+                listeners.remove(p);
                 found = true;
             }
         }
+        statsStorageInstances.remove(statsStorage);
         for (UIModule uiModule : uiModules) {
             uiModule.onDetach(statsStorage);
+        }
+        for (String sessionId : statsStorage.listSessionIDs()) {
+            I18NProvider.removeInstance(sessionId);
         }
         if (found) {
             log.info("StatsStorage instance detached from UI: {}", statsStorage);
@@ -361,8 +418,11 @@ public class PlayUIServer extends UIServer {
 
     @Override
     public void stop() {
-        if (server != null)
+        if (server != null) {
             server.stop();
+            setStopped(true);
+        }
+
     }
 
 
@@ -392,13 +452,16 @@ public class PlayUIServer extends UIServer {
                     List<String> callbackTypes = m.getCallbackTypeIDs();
                     List<StatsStorageEvent> out = new ArrayList<>();
                     for (StatsStorageEvent e : events) {
-                        if (callbackTypes.contains(e.getTypeID())) {
+                        if (callbackTypes.contains(e.getTypeID())
+                                && statsStorageInstances.contains(e.getStatsStorage())) {
                             out.add(e);
                         }
                     }
 
                     m.reportStorageEvents(out);
                 }
+
+                events.clear();
 
                 try {
                     Thread.sleep(uiProcessingDelay);
@@ -411,4 +474,36 @@ public class PlayUIServer extends UIServer {
             }
         }
     }
+
+    /**
+     * Loader that attaches {@code StatsStorage} provided by {@code #statsStorageProvider} for the given session ID
+     */
+    private class StatsStorageLoader implements Function<String, Boolean> {
+
+        Function<String, StatsStorage> statsStorageProvider;
+
+        StatsStorageLoader(Function<String, StatsStorage> statsStorageProvider) {
+            this.statsStorageProvider = statsStorageProvider;
+        }
+
+        @Override
+        public Boolean apply(String sessionId) {
+            log.info("Loading StatsStorage via StatsStorageProvider for session ID (" + sessionId + ").");
+            StatsStorage statsStorage = statsStorageProvider.apply(sessionId);
+            if (statsStorage != null) {
+                if (statsStorage.sessionExists(sessionId)) {
+                    attach(statsStorage);
+                    return true;
+                }
+                log.info("Failed to load StatsStorage via StatsStorageProvider for session ID. " +
+                        "Session ID (" + sessionId + ") does not exist in StatsStorage.");
+                return false;
+            } else {
+                log.info("Failed to load StatsStorage via StatsStorageProvider for session ID (" + sessionId + "). " +
+                        "StatsStorageProvider returned null.");
+                return false;
+            }
+        }
+    }
+
 }

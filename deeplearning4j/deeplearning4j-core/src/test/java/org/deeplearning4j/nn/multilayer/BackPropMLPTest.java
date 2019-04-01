@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.nn.multilayer;
 
 import org.deeplearning4j.BaseDL4JTest;
@@ -15,8 +31,8 @@ import org.junit.Test;
 import org.nd4j.linalg.activations.Activation;
 import org.nd4j.linalg.api.iter.NdIndexIterator;
 import org.nd4j.linalg.api.ndarray.INDArray;
-import org.nd4j.linalg.api.ops.impl.transforms.SigmoidDerivative;
-import org.nd4j.linalg.api.ops.impl.transforms.TanhDerivative;
+import org.nd4j.linalg.api.ops.impl.transforms.strict.SigmoidDerivative;
+import org.nd4j.linalg.api.ops.impl.transforms.strict.TanhDerivative;
 import org.nd4j.linalg.dataset.DataSet;
 import org.nd4j.linalg.dataset.api.iterator.DataSetIterator;
 import org.nd4j.linalg.factory.Nd4j;
@@ -90,7 +106,7 @@ public class BackPropMLPTest extends BaseDL4JTest {
 
         while (iris.hasNext()) {
             DataSet data = iris.next();
-            INDArray x = data.getFeatureMatrix();
+            INDArray x = data.getFeatures();
             INDArray y = data.getLabels();
             float[] xFloat = asFloat(x);
             float[] yFloat = asFloat(y);
@@ -227,7 +243,7 @@ public class BackPropMLPTest extends BaseDL4JTest {
 
         while (iris.hasNext()) {
             DataSet data = iris.next();
-            INDArray x = data.getFeatureMatrix();
+            INDArray x = data.getFeatures();
             INDArray y = data.getLabels();
 
             //Do forward pass:
@@ -264,7 +280,7 @@ public class BackPropMLPTest extends BaseDL4JTest {
                 INDArray prevActivations = (i == 0 ? x : layerActivations[i - 1]);
                 //Raw gradients, so not yet divided by mini-batch size (division is done in BaseUpdater)
                 dLdw[i] = deltas[i].transpose().mmul(prevActivations).transpose(); //Shape: [nIn, nOut]
-                dLdb[i] = deltas[i].sum(0); //Shape: [1,nOut]
+                dLdb[i] = deltas[i].sum(true, 0); //Shape: [1,nOut]
 
                 int nIn = (i == 0 ? 4 : hiddenLayerSizes[i - 1]);
                 int nOut = (i < nLayers - 1 ? hiddenLayerSizes[i] : 3);
@@ -317,7 +333,6 @@ public class BackPropMLPTest extends BaseDL4JTest {
                                         .activation(activationFunction.equals(Activation.IDENTITY) ? Activation.IDENTITY
                                                         : Activation.SOFTMAX)
                                         .build());
-        lb.pretrain(false).backprop(true);
 
         return lb.build();
     }
@@ -386,15 +401,6 @@ public class BackPropMLPTest extends BaseDL4JTest {
         return out;
     }
 
-    public static INDArray doTanh(INDArray input) {
-        return Nd4j.getExecutioner().execAndReturn(Nd4j.getOpFactory().createTransform("tanh", input.dup()));
-    }
-
-    public static INDArray doTanhDerivative(INDArray input) {
-        return Nd4j.getExecutioner()
-                        .execAndReturn(new TanhDerivative(input.dup()));
-    }
-
     public static INDArray doSoftmax(INDArray input) {
         return Transforms.softmax(input, true);
     }
@@ -404,7 +410,7 @@ public class BackPropMLPTest extends BaseDL4JTest {
     }
 
     public static INDArray doSigmoidDerivative(INDArray input) {
-        return Nd4j.getExecutioner().execAndReturn(new SigmoidDerivative(input.dup()));
+        return Nd4j.getExecutioner().exec(new SigmoidDerivative(input.dup()));
     }
 
 }

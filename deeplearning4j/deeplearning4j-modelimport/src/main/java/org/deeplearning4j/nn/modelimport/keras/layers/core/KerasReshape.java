@@ -1,20 +1,19 @@
-/*-
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
  *
- *  * Copyright 2017 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
  *
- */
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.nn.modelimport.keras.layers.core;
 
 
@@ -115,7 +114,24 @@ public class KerasReshape extends KerasLayer {
                     targetShape = new long[]{targetShape[2], targetShape[0], targetShape[1]};
                 preprocessor = new ReshapePreprocessor(inputShape, targetShape);
             }
-        } else if (inputType[0] instanceof InputType.InputTypeRecurrent) {
+
+        } else if (inputType[0] instanceof InputType.InputTypeConvolutional3D) {
+            InputType.InputTypeConvolutional3D it = (InputType.InputTypeConvolutional3D) inputType[0];
+            val inputShape = new long[] { it.getDepth(), it.getHeight(), it.getWidth(), it.getChannels() };
+            val dimOrder = getDimOrder();
+            if (dimOrder == DimOrder.THEANO || dimOrder == DimOrder.NONE && kerasMajorVersion == 1) {
+                if (targetShape.length == 3) { // Keras edge case
+                    targetShape = new long[] { targetShape[1], targetShape[0], targetShape[2] };
+                } else {
+                    targetShape = new long[] { targetShape[2], targetShape[1], targetShape[0], targetShape[3] };
+                }
+                preprocessor = new ReshapePreprocessor(inputShape, targetShape);
+            } else {
+                if (inputShape[0] != targetShape[0])
+                    targetShape = new long[] { targetShape[3], targetShape[0], targetShape[1], targetShape[2] };
+                preprocessor = new ReshapePreprocessor(inputShape, targetShape);
+            }
+        }  else if (inputType[0] instanceof InputType.InputTypeRecurrent) {
             InputType.InputTypeRecurrent it = (InputType.InputTypeRecurrent) inputType[0];
             val inputShape = new long[]{it.getSize(), it.getTimeSeriesLength()};
             preprocessor = new ReshapePreprocessor(inputShape, this.targetShape);
@@ -132,7 +148,7 @@ public class KerasReshape extends KerasLayer {
 
     public long[] targetShapeForDimOrder(long[] inputShape, long[] targetShape) {
         if (dimOrder == DimOrder.THEANO || dimOrder == DimOrder.NONE && kerasMajorVersion == 1) {
-            if (dimOrder == DimOrder.NONE) { // weird things happen in the past.
+            if (dimOrder == DimOrder.NONE) {
                 targetShape = new long[]{targetShape[2], targetShape[0], targetShape[1]};
             } else {
                 targetShape = new long[]{targetShape[1], targetShape[2], targetShape[0]};

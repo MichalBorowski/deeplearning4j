@@ -1,20 +1,18 @@
-/*-
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
  *
- *  * Copyright 2015 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
  *
- */
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.nd4j.linalg.util;
 
@@ -82,6 +80,35 @@ public class SerializationUtils {
 
     }
 
+    /**
+     * Deserializes object from byte array
+     * @param bytes
+     * @param <T>
+     * @return
+     */
+    public static <T> T fromByteArray(byte[] bytes) {
+        return readObject(new ByteArrayInputStream(bytes));
+    }
+
+    /**
+     * Deserializes object from byte array
+     * @param bytes
+     * @param <T>
+     * @return
+     */
+    public static <T> T deserialize(byte[] bytes) {
+        return fromByteArray(bytes);
+    }
+
+    /**
+     * Deserializes object from InputStream
+     * @param bytes
+     * @param <T>
+     * @return
+     */
+    public static <T> T deserialize(InputStream is) {
+        return readObject(is);
+    }
 
     /**
      * Writes the object to the output stream
@@ -96,7 +123,16 @@ public class SerializationUtils {
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
+    }
 
+    /**
+     * Writes the object to the output stream
+     * THIS DOES NOT FLUSH THE STREAM
+     * @param toSave the object to save
+     * @param writeTo the output stream to write to
+     */
+    public static void serialize(Serializable object, OutputStream os) {
+        writeObject(object, os);
     }
 
     public static void saveObject(Object toSave, File saveTo) {

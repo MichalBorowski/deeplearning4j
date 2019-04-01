@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.nn.conf.layers;
 
 import lombok.Data;
@@ -21,12 +37,12 @@ import java.util.Collection;
 import java.util.Map;
 
 /**
- * Recurrent Neural Network Loss Layer.<br>
- * Handles calculation of gradients etc for various objective functions.<br>
- * NOTE: Unlike {@link RnnOutputLayer} this RnnLossLayer does not have any parameters - i.e., there is no time
- * distributed dense component here. Consequently, the output activations size is equal to the input size.<br>
+ * Recurrent Neural Network Loss Layer.<br> Handles calculation of gradients etc for various objective (loss)
+ * functions.<br> Note: Unlike {@link RnnOutputLayer} this RnnLossLayer does not have any parameters - i.e., there is no
+ * time distributed dense component here. Consequently, the output activations size is equal to the input size.<br>
  * Input and output activations are same as other RNN layers: 3 dimensions with shape
- * [miniBatchSize,nIn,timeSeriesLength] and [miniBatchSize,nOut,timeSeriesLength] respectively.
+ * [miniBatchSize,nIn,timeSeriesLength] and [miniBatchSize,nOut,timeSeriesLength] respectively.<br> Note that
+ * RnnLossLayer also has the option to configure an activation function
  *
  * @author Alex Black
  * @see RnnOutputLayer
@@ -41,7 +57,7 @@ public class RnnLossLayer extends FeedForwardLayer {
 
     private RnnLossLayer(Builder builder) {
         super(builder);
-        this.lossFn = builder.lossFn;
+        this.setLossFn(builder.lossFn);
     }
 
     @Override
@@ -81,9 +97,9 @@ public class RnnLossLayer extends FeedForwardLayer {
     public LayerMemoryReport getMemoryReport(InputType inputType) {
         //During inference and training: dup the input array. But, this counts as *activations* not working memory
         return new LayerMemoryReport.Builder(layerName, LossLayer.class, inputType, inputType).standardMemory(0, 0) //No params
-                .workingMemory(0, 0, 0, 0)
-                .cacheMemory(MemoryReport.CACHE_MODE_ALL_ZEROS, MemoryReport.CACHE_MODE_ALL_ZEROS) //No caching
-                .build();
+                        .workingMemory(0, 0, 0, 0)
+                        .cacheMemory(MemoryReport.CACHE_MODE_ALL_ZEROS, MemoryReport.CACHE_MODE_ALL_ZEROS) //No caching
+                        .build();
     }
 
     @Override
@@ -98,12 +114,18 @@ public class RnnLossLayer extends FeedForwardLayer {
 
         }
 
+        /**
+         * @param lossFunction Loss function for the loss layer
+         */
         public Builder(LossFunctions.LossFunction lossFunction) {
             lossFunction(lossFunction);
         }
 
+        /**
+         * @param lossFunction Loss function for the loss layer
+         */
         public Builder(ILossFunction lossFunction) {
-            this.lossFn = lossFunction;
+            this.setLossFn(lossFunction);
         }
 
         @Override
@@ -116,6 +138,18 @@ public class RnnLossLayer extends FeedForwardLayer {
         @SuppressWarnings("unchecked")
         public Builder nOut(int nOut) {
             throw new UnsupportedOperationException("Ths layer has no parameters, thus nIn will always equal nOut.");
+        }
+
+        @Override
+        public void setNIn(int nIn){
+            throw new UnsupportedOperationException(
+                    "This layer has no parameters, thus nIn will always equal nOut.");
+        }
+
+        @Override
+        public void setNOut(int nOut){
+            throw new UnsupportedOperationException(
+                    "This layer has no parameters, thus nIn will always equal nOut.");
         }
 
         @Override

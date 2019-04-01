@@ -1,21 +1,18 @@
-/*-
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
  *
- *  * Copyright 2015 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
  *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
  *
- */
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.nd4j.linalg.api.ops.impl.shape;
 
@@ -24,9 +21,11 @@ import lombok.val;
 import onnx.OnnxProto3;
 import org.nd4j.autodiff.samediff.SDVariable;
 import org.nd4j.autodiff.samediff.SameDiff;
+import org.nd4j.base.Preconditions;
 import org.nd4j.imports.descriptors.properties.PropertyMapping;
 import org.nd4j.imports.graphmapper.onnx.OnnxGraphMapper;
 import org.nd4j.imports.graphmapper.tf.TFGraphMapper;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.api.ops.DynamicCustomOp;
 import org.nd4j.linalg.exception.ND4JIllegalStateException;
@@ -123,39 +122,8 @@ public class Reshape extends DynamicCustomOp {
             if (this.shape != null) {
                 addIArgument(this.shape);
             }
-
         }
-
-
     }
-
-    @Override
-    public void resolvePropertiesFromSameDiffBeforeExecution() {
-        super.resolvePropertiesFromSameDiffBeforeExecution();
-        if (arrName != null) {
-            val args = args();
-            val firstInputShape = args[0].getShape();
-            val shapeInput = args[1].getArr().data().asLong();
-            for (int i = 0; i < shapeInput.length; i++) {
-                if (shapeInput[i] < 0) {
-                    shapeInput[i] = firstInputShape[i];
-                }
-            }
-
-            this.shape = shapeInput;
-            addIArgument(shapeInput);
-        }
-
-
-    }
-
-    @Override
-    public Map<String, Object> propertiesForFunction() {
-        Map<String, Object> ret = new LinkedHashMap<>();
-        ret.put("shape", shape);
-        return ret;
-    }
-
 
     @Override
     public void initFromOnnx(OnnxProto3.NodeProto node, SameDiff initWith, Map<String, OnnxProto3.AttributeProto> attributesForNode, OnnxProto3.GraphProto graph) {
@@ -202,13 +170,15 @@ public class Reshape extends DynamicCustomOp {
 
     @Override
     public List<SDVariable> doDiff(List<SDVariable> i_v) {
-        val origShape = arg().getShape();
-        if (origShape == null) {
-            //TODO need a more robust way to do this
-            throw new ND4JIllegalStateException("Cannot reshape: original array input shape is null");
-        }
+        SDVariable origShape = f().shape(arg());
         SDVariable ret = f().reshape(i_v.get(0), origShape);
-        return Arrays.asList(ret);
+        return Collections.singletonList(ret);
+    }
+
+    @Override
+    public List<DataType> calculateOutputDataTypes(List<DataType> dataTypes){
+        //Output type is always same as input type
+        return Collections.singletonList(dataTypes.get(0));
     }
 
 }

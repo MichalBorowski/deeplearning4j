@@ -1,18 +1,18 @@
-/*-
- *  * Copyright 2016 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
- */
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.deeplearning4j.spark.data;
 
@@ -21,6 +21,9 @@ import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.function.Function2;
+import org.apache.spark.broadcast.Broadcast;
+import org.datavec.spark.util.DefaultHadoopConfig;
+import org.datavec.spark.util.SerializableHadoopConfig;
 import org.deeplearning4j.util.UIDProvider;
 import org.nd4j.linalg.dataset.api.MultiDataSet;
 import org.nd4j.linalg.primitives.Pair;
@@ -44,20 +47,30 @@ import java.util.*;
 public class BatchAndExportMultiDataSetsFunction
                 implements Function2<Integer, Iterator<MultiDataSet>, Iterator<String>> {
 
-    private static final Configuration conf = new Configuration();
     private final int minibatchSize;
     private final String exportBaseDirectory;
     private final String jvmuid;
+    private final Broadcast<SerializableHadoopConfig> conf;
 
     /**
      * @param minibatchSize       Minibatch size to combine examples to (if necessary)
      * @param exportBaseDirectory Base directory for exporting
      */
     public BatchAndExportMultiDataSetsFunction(int minibatchSize, String exportBaseDirectory) {
+        this(minibatchSize, exportBaseDirectory, null);
+    }
+
+    /**
+     * @param minibatchSize       Minibatch size to combine examples to (if necessary)
+     * @param exportBaseDirectory Base directory for exporting
+     * @param configuration       Hadoop Configuration
+     */
+    public BatchAndExportMultiDataSetsFunction(int minibatchSize, String exportBaseDirectory, Broadcast<SerializableHadoopConfig> configuration) {
         this.minibatchSize = minibatchSize;
         this.exportBaseDirectory = exportBaseDirectory;
         String fullUID = UIDProvider.getJVMUID();
         this.jvmuid = (fullUID.length() <= 8 ? fullUID : fullUID.substring(0, 8));
+        this.conf = configuration;
     }
 
     @Override
@@ -138,11 +151,14 @@ public class BatchAndExportMultiDataSetsFunction
         URI uri = new URI(exportBaseDirectory
                         + (exportBaseDirectory.endsWith("/") || exportBaseDirectory.endsWith("\\") ? "" : "/")
                         + filename);
-        FileSystem file = FileSystem.get(uri, conf);
+
+        Configuration c = conf == null ? DefaultHadoopConfig.get() : conf.getValue().getConfiguration();
+
+        FileSystem file = FileSystem.get(uri, c);
         try (FSDataOutputStream out = file.create(new Path(uri))) {
             dataSet.save(out);
         }
 
-        return uri.getPath();
+        return uri.toString();
     }
 }

@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.nn.modelimport.keras.layers.recurrent;
 
 import lombok.Data;
@@ -11,6 +27,7 @@ import org.deeplearning4j.nn.conf.layers.InputTypeUtil;
 import org.deeplearning4j.nn.conf.layers.Layer;
 import org.deeplearning4j.nn.conf.layers.recurrent.LastTimeStep;
 import org.deeplearning4j.nn.conf.layers.recurrent.SimpleRnn;
+import org.deeplearning4j.nn.conf.layers.util.MaskZeroLayer;
 import org.deeplearning4j.nn.modelimport.keras.KerasLayer;
 import org.deeplearning4j.nn.modelimport.keras.exceptions.InvalidKerasConfigurationException;
 import org.deeplearning4j.nn.modelimport.keras.exceptions.UnsupportedKerasConfigurationException;
@@ -21,11 +38,12 @@ import org.deeplearning4j.nn.weights.WeightInit;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.primitives.Pair;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
-import static org.deeplearning4j.nn.modelimport.keras.utils.KerasActivationUtils.getActivationFromConfig;
+import static org.deeplearning4j.nn.modelimport.keras.utils.KerasActivationUtils.getIActivationFromConfig;
 import static org.deeplearning4j.nn.modelimport.keras.utils.KerasInitilizationUtils.getWeightInitFromConfig;
 import static org.deeplearning4j.nn.modelimport.keras.utils.KerasLayerUtils.getNOutFromConfig;
 
@@ -62,18 +80,47 @@ public class KerasSimpleRnn extends KerasLayer {
      */
     public KerasSimpleRnn(Map<String, Object> layerConfig)
             throws InvalidKerasConfigurationException, UnsupportedKerasConfigurationException {
-        this(layerConfig, true);
+        this(layerConfig, true,  Collections.<String, KerasLayer>emptyMap());
     }
+
+    /**
+     * Constructor from parsed Keras layer configuration dictionary.
+     *
+     * @param layerConfig dictionary containing Keras layer configuration.
+     * @param previousLayers dictionary containing the previous layers in the topology
+     * @throws InvalidKerasConfigurationException     Invalid Keras config
+     * @throws UnsupportedKerasConfigurationException Unsupported Keras config
+     */
+    public KerasSimpleRnn(Map<String, Object> layerConfig, Map<String, ? extends KerasLayer> previousLayers)
+            throws InvalidKerasConfigurationException, UnsupportedKerasConfigurationException {
+        this(layerConfig, true, previousLayers);
+    }
+
+    /**
+     * Constructor from parsed Keras layer configuration dictionary.
+     *
+     * @param layerConfig           dictionary containing Keras layer configuration.
+     * @param enforceTrainingConfig whether to load Keras training configuration
+     * @throws InvalidKerasConfigurationException     Invalid Keras config
+     * @throws UnsupportedKerasConfigurationException Unsupported Keras config
+     */
+    public KerasSimpleRnn(Map<String, Object> layerConfig, boolean enforceTrainingConfig)
+            throws InvalidKerasConfigurationException, UnsupportedKerasConfigurationException {
+        this(layerConfig, enforceTrainingConfig, Collections.<String, KerasLayer>emptyMap());
+    }
+
 
     /**
      * Constructor from parsed Keras layer configuration dictionary.
      *
      * @param layerConfig           dictionary containing Keras layer configuration
      * @param enforceTrainingConfig whether to enforce training-related configuration options
+     * @param previousLayers dictionary containing the previous layers in the topology
      * @throws InvalidKerasConfigurationException     Invalid Keras config
      * @throws UnsupportedKerasConfigurationException Unsupported Keras config
      */
-    public KerasSimpleRnn(Map<String, Object> layerConfig, boolean enforceTrainingConfig)
+    public KerasSimpleRnn(Map<String, Object> layerConfig, boolean enforceTrainingConfig,
+                          Map<String, ? extends KerasLayer> previousLayers)
             throws InvalidKerasConfigurationException, UnsupportedKerasConfigurationException {
         super(layerConfig, enforceTrainingConfig);
 
@@ -93,6 +140,8 @@ public class KerasSimpleRnn extends KerasLayer {
         KerasRnnUtils.getRecurrentDropout(conf, layerConfig);
         this.unroll = KerasRnnUtils.getUnrollRecurrentLayer(conf, layerConfig);
 
+        Pair<Boolean, Double> maskingConfig = KerasLayerUtils.getMaskingConfiguration(inboundLayerNames, previousLayers);
+
         LayerConstraint biasConstraint = KerasConstraintUtils.getConstraintsFromConfig(
                 layerConfig, conf.getLAYER_FIELD_B_CONSTRAINT(), conf, kerasMajorVersion);
         LayerConstraint weightConstraint = KerasConstraintUtils.getConstraintsFromConfig(
@@ -104,26 +153,26 @@ public class KerasSimpleRnn extends KerasLayer {
                 .name(this.layerName)
                 .nOut(getNOutFromConfig(layerConfig, conf))
                 .dropOut(this.dropout)
-                .activation(getActivationFromConfig(layerConfig, conf))
-                .weightInit(weightInit)
-                .weightInitRecurrent(recurrentWeightInit)
+                .activation(getIActivationFromConfig(layerConfig, conf))
+                .weightInit(weightInit.getWeightInitFunction(distribution))
+                .weightInitRecurrent(recurrentWeightInit.getWeightInitFunction(recurrentDistribution))
                 .biasInit(0.0)
                 .l1(this.weightL1Regularization)
                 .l2(this.weightL2Regularization);
-        if (distribution != null)
-            builder.dist(distribution);
-        if (recurrentDistribution != null)
-            builder.dist(recurrentDistribution);
         if (biasConstraint != null)
             builder.constrainBias(biasConstraint);
         if (weightConstraint != null)
             builder.constrainInputWeights(weightConstraint);
         if (recurrentConstraint != null)
             builder.constrainRecurrent(recurrentConstraint);
-        if (this.returnSequences)
-            this.layer = builder.build();
-        else
-            this.layer = new LastTimeStep(builder.build());
+
+        this.layer = builder.build();
+        if (!returnSequences) {
+            this.layer = new LastTimeStep(this.layer);
+        }
+        if (maskingConfig.getFirst()) {
+            this.layer = new MaskZeroLayer(this.layer, maskingConfig.getSecond());
+        }
     }
 
     /**

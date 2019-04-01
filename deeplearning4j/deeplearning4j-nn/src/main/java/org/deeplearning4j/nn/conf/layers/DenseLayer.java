@@ -1,20 +1,18 @@
-/*-
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
  *
- *  * Copyright 2015 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
  *
- */
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.deeplearning4j.nn.conf.layers;
 
@@ -32,18 +30,22 @@ import org.nd4j.linalg.api.ndarray.INDArray;
 import java.util.Collection;
 import java.util.Map;
 
-/**Dense layer: fully connected feed forward layer trainable by backprop.
+/**
+ * Dense layer: a standard fully connected feed forward layer
  */
 @Data
 @NoArgsConstructor
 @ToString(callSuper = true)
 @EqualsAndHashCode(callSuper = true)
 public class DenseLayer extends FeedForwardLayer {
+
+    private boolean hasLayerNorm = false;
     private boolean hasBias = true;
 
     private DenseLayer(Builder builder) {
         super(builder);
         this.hasBias = builder.hasBias;
+        this.hasLayerNorm = builder.hasLayerNorm;
 
         initializeConstraints(builder);
     }
@@ -101,13 +103,23 @@ public class DenseLayer extends FeedForwardLayer {
                         .build();
     }
 
-    public boolean hasBias(){
+    public boolean hasBias() {
         return hasBias;
     }
 
+    public boolean hasLayerNorm(){
+        return hasLayerNorm;
+    }
+
     @NoArgsConstructor
+    @Getter
+    @Setter
     public static class Builder extends FeedForwardLayer.Builder<Builder> {
 
+        /**
+         * If true (default): include bias parameters in the model. False: no bias.
+         *
+         */
         private boolean hasBias = true;
 
         /**
@@ -115,10 +127,21 @@ public class DenseLayer extends FeedForwardLayer {
          *
          * @param hasBias If true: include bias parameters in this model
          */
-        public Builder hasBias(boolean hasBias){
-            this.hasBias = hasBias;
+        public Builder hasBias(boolean hasBias) {
+            this.setHasBias(hasBias);
             return this;
         }
+
+        /**
+         * If true (default = false): enable layer normalization on this layer
+         *
+         */
+        private boolean hasLayerNorm = false;
+        public Builder hasLayerNorm(boolean hasLayerNorm){
+            this.hasLayerNorm = hasLayerNorm;
+            return this;
+        }
+
 
         @Override
         @SuppressWarnings("unchecked")

@@ -1,19 +1,23 @@
-# Copyright 2016 Skymind,Inc. All Rights Reserved.
+################################################################################
+# Copyright (c) 2015-2018 Skymind, Inc.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
+# This program and the accompanying materials are made available under the
+# terms of the Apache License, Version 2.0 which is available at
+# https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-# ==============================================================================
+# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+# License for the specific language governing permissions and limitations
+# under the License.
+#
+# SPDX-License-Identifier: Apache-2.0
+################################################################################
+
 
 from .op import op
+from ..java_classes import Nd4j
+from ..ndarray import _nparray, ndarray, _indarray
 
 # Array manipulation routines
 # https://docs.scipy.org/doc/numpy-1.13.0/reference/routines.array-manipulation.html
@@ -27,8 +31,15 @@ def reshape(arr, *args):
 
 
 @op
-def transpose(arr):
-    return arr.transpose()
+def transpose(arr, *axis):
+    if len(axis) == 0:
+        return arr.transpose()
+    else:
+        if len(axis) == 1:
+            axis = axis[0]
+        assert set(axis) in [set(list(range(len(axis)))),
+                             set(list(range(len(arr.shape()))))]
+        return arr.permute(*axis)
 
 
 @op
@@ -81,7 +92,7 @@ def permute(arr, *axis):
 
 @op
 def expand_dims(arr, axis):
-    return arr.expandDims(axis)
+    return Nd4j.expandDims(arr, axis)
 
 
 @op
@@ -95,7 +106,7 @@ def squeeze(arr, axis):
 
 
 @op
-def concatenate(arrs, axis):
+def concatenate(arrs, axis=-1):
     return Nd4j.concat(axis, *arrs)
 
 
@@ -120,6 +131,9 @@ def stack(arrs, axis):
 
 @op
 def tile(arr, reps):
+    import numpy as np
+    return _indarray(np.tile(_nparray(arr), reps))
+
     if type(reps) is int:
         return Nd4j.tile(arr, reps)
     else:

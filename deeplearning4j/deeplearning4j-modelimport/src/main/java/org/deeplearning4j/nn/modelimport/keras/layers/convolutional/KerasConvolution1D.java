@@ -1,20 +1,19 @@
-/*-
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
  *
- *  * Copyright 2017 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
  *
- */
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.nn.modelimport.keras.layers.convolutional;
 
 import lombok.Data;
@@ -38,13 +37,11 @@ import org.nd4j.linalg.primitives.Pair;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Set;
 
 import static org.deeplearning4j.nn.modelimport.keras.layers.convolutional.KerasConvolutionUtils.*;
-import static org.deeplearning4j.nn.modelimport.keras.utils.KerasActivationUtils.getActivationFromConfig;
+import static org.deeplearning4j.nn.modelimport.keras.utils.KerasActivationUtils.getIActivationFromConfig;
 import static org.deeplearning4j.nn.modelimport.keras.utils.KerasInitilizationUtils.getWeightInitFromConfig;
-import static org.deeplearning4j.nn.modelimport.keras.utils.KerasLayerUtils.getHasBiasFromConfig;
-import static org.deeplearning4j.nn.modelimport.keras.utils.KerasLayerUtils.getNOutFromConfig;
+import static org.deeplearning4j.nn.modelimport.keras.utils.KerasLayerUtils.*;
 
 /**
  * Imports a 1D Convolution layer from Keras.
@@ -104,22 +101,20 @@ public class KerasConvolution1D extends KerasConvolution {
 
         Convolution1DLayer.Builder builder = new Convolution1DLayer.Builder().name(this.layerName)
                 .nOut(getNOutFromConfig(layerConfig, conf)).dropOut(this.dropout)
-                .activation(getActivationFromConfig(layerConfig, conf))
-                .weightInit(weightInit)
+                .activation(getIActivationFromConfig(layerConfig, conf))
+                .weightInit(weightInit.getWeightInitFunction(distribution))
                 .l1(this.weightL1Regularization).l2(this.weightL2Regularization)
                 .convolutionMode(getConvolutionModeFromConfig(layerConfig, conf))
                 .kernelSize(getKernelSizeFromConfig(layerConfig, 1,  conf, kerasMajorVersion)[0])
                 .hasBias(hasBias)
                 .stride(getStrideFromConfig(layerConfig, 1, conf)[0]);
         int[] padding = getPaddingFromBorderModeConfig(layerConfig, 1, conf, kerasMajorVersion);
-        if (distribution != null)
-            builder.dist(distribution);
         if (hasBias)
             builder.biasInit(0.0);
         if (padding != null)
             builder.padding(padding[0]);
         if (dilationRate != null)
-            builder.dilation(dilationRate);
+            builder.dilation(dilationRate[0]);
         if (biasConstraint != null)
             builder.constrainBias(biasConstraint);
         if (weightConstraint != null)
@@ -189,13 +184,16 @@ public class KerasConvolution1D extends KerasConvolution {
                 case TENSORFLOW:
                     paramValue = kerasParamValue.permute(2, 1, 0);
                     paramValue = paramValue.reshape(
-                            paramValue.size(0), paramValue.size(1), paramValue.size(2), 1);
+                            paramValue.size(0), paramValue.size(1),
+                            paramValue.size(2), 1);
                     break;
+
                 case THEANO:
-                    paramValue = kerasParamValue.reshape(
-                            kerasParamValue.size(0), kerasParamValue.size(1),
-                            kerasParamValue.size(2), 1).dup();
-                    for (int i = 0; i < paramValue.tensorssAlongDimension(2, 3); i++) {
+                    paramValue = kerasParamValue.permute(2, 1, 0);
+                    paramValue = paramValue.reshape(
+                            paramValue.size(0), paramValue.size(1),
+                            paramValue.size(2), 1).dup();
+                    for (int i = 0; i < paramValue.tensorsAlongDimension(2, 3); i++) {
                         INDArray copyFilter = paramValue.tensorAlongDimension(i, 2, 3).dup();
                         double[] flattenedFilter = copyFilter.ravel().data().asDouble();
                         ArrayUtils.reverse(flattenedFilter);
@@ -207,6 +205,7 @@ public class KerasConvolution1D extends KerasConvolution {
                 default:
                     throw new InvalidKerasConfigurationException("Unknown keras backend " + this.getDimOrder());
             }
+
             this.weights.put(ConvolutionParamInitializer.WEIGHT_KEY, paramValue);
         } else
             throw new InvalidKerasConfigurationException(
@@ -219,13 +218,6 @@ public class KerasConvolution1D extends KerasConvolution {
                 throw new InvalidKerasConfigurationException(
                         "Parameter " + conf.getKERAS_PARAM_NAME_B() + " does not exist in weights");
         }
-        if (weights.size() > 2) {
-            Set<String> paramNames = weights.keySet();
-            paramNames.remove(conf.getKERAS_PARAM_NAME_W());
-            paramNames.remove(conf.getKERAS_PARAM_NAME_B());
-            String unknownParamNames = paramNames.toString();
-            log.warn("Attemping to set weights for unknown parameters: "
-                    + unknownParamNames.substring(1, unknownParamNames.length() - 1));
-        }
+        removeDefaultWeights(weights, conf);
     }
 }

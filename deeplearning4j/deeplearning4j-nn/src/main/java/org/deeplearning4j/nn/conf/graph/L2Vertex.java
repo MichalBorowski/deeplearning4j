@@ -1,20 +1,18 @@
-/*-
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
  *
- *  * Copyright 2016 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
  *
- */
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.deeplearning4j.nn.conf.graph;
 
@@ -28,7 +26,11 @@ import org.deeplearning4j.nn.graph.ComputationGraph;
 import org.nd4j.linalg.api.ndarray.INDArray;
 
 /**
- * L2Vertex calculates the L2 least squares error of two inputs.
+ * L2Vertex calculates the L2 (Euclidean) least squares error of two inputs, on a per-example basis.
+ * It outputs a single value for each input - i.e., for input [minibatch,X] it outputs shape [minibatch,1]
+ * where each value {@code out[i,0] = l2Distance(in1[i,...], in2[i,...])}<br>
+ * Note however than epsilon value (1e-8 by default) will be added to inputs to avoid the gradient being undefined
+ * for all zero inputs
  *
  * For example, in Triplet Embedding you can input an anchor and a pos/neg class and use two parallel
  * L2 vertices to calculate two real numbers which can be fed into a LossLayer to calculate TripletLoss.
@@ -38,10 +40,16 @@ import org.nd4j.linalg.api.ndarray.INDArray;
 public class L2Vertex extends GraphVertex {
     protected double eps;
 
+    /**
+     * Constructor with default epsilon value of 1e-8
+     */
     public L2Vertex() {
         this.eps = 1e-8;
     }
 
+    /**
+     * @param eps Epsilon value to add to inputs (to avoid all zeros input and hence undefined gradients)
+     */
     public L2Vertex(double eps) {
         this.eps = eps;
     }
@@ -57,7 +65,7 @@ public class L2Vertex extends GraphVertex {
     }
 
     @Override
-    public int numParams(boolean backprop) {
+    public long numParams(boolean backprop) {
         return 0;
     }
 

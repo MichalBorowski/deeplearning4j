@@ -1,18 +1,18 @@
-/*-
- *  * Copyright 2016 Skymind, Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
- */
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.datavec.api.records.writer.impl;
 
@@ -20,27 +20,23 @@ package org.datavec.api.records.writer.impl;
 import org.datavec.api.conf.Configuration;
 import org.datavec.api.records.writer.RecordWriter;
 import org.datavec.api.split.InputSplit;
-import org.datavec.api.split.partition.PartitionMetaData;
 import org.datavec.api.split.partition.Partitioner;
-import org.datavec.api.writable.Text;
-import org.datavec.api.writable.Writable;
 
-import java.io.*;
+import java.io.DataOutputStream;
+import java.io.IOException;
 import java.nio.charset.Charset;
-import java.util.List;
 
 /**
  * Write to files.
- *
+ * <p>
  * To set the path and configuration via configuration:
  * writeTo: org.datavec.api.records.writer.path
- *
+ * <p>
  * This is the path used to write to
- *
  *
  * @author Adam Gibson
  */
-public class FileRecordWriter implements RecordWriter {
+public abstract class FileRecordWriter implements RecordWriter {
 
     public static final Charset DEFAULT_CHARSET = Charset.forName("UTF-8");
 
@@ -53,12 +49,7 @@ public class FileRecordWriter implements RecordWriter {
 
     protected Configuration conf;
 
-    public FileRecordWriter() {}
-
-
-    @Override
-    public boolean supportsBatch() {
-        return false;
+    public FileRecordWriter() {
     }
 
     @Override
@@ -72,32 +63,8 @@ public class FileRecordWriter implements RecordWriter {
     @Override
     public void initialize(Configuration configuration, InputSplit split, Partitioner partitioner) throws Exception {
         setConf(configuration);
-        partitioner.init(configuration,split);
+        partitioner.init(configuration, split);
         initialize(split, partitioner);
-    }
-
-    @Override
-    public PartitionMetaData write(List<Writable> record) throws IOException {
-        if (!record.isEmpty()) {
-            Text t = (Text) record.iterator().next();
-            t.write(out);
-        }
-
-        return PartitionMetaData.builder().numRecordsUpdated(1).build();
-    }
-
-    @Override
-    public PartitionMetaData writeBatch(List<List<Writable>> batch) throws IOException {
-        for(List<Writable> record : batch) {
-            Text t = (Text) record.iterator().next();
-            try {
-                t.write(out);
-            } catch (IOException e) {
-                throw new IllegalStateException(e);
-            }
-        }
-        return PartitionMetaData.builder().numRecordsUpdated(1).build();
-
     }
 
     @Override

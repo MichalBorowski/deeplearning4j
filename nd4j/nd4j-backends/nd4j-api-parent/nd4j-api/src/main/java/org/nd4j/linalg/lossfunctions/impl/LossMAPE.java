@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.linalg.lossfunctions.impl;
 
 import lombok.EqualsAndHashCode;
@@ -6,17 +22,19 @@ import onnx.OnnxProto3;
 import org.nd4j.autodiff.functions.DifferentialFunction;
 import org.nd4j.autodiff.samediff.SDVariable;
 import org.nd4j.autodiff.samediff.SameDiff;
+import org.nd4j.base.Preconditions;
 import org.nd4j.imports.NoOpNameFoundException;
 import org.nd4j.linalg.activations.IActivation;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.api.ops.Op;
-import org.nd4j.linalg.api.ops.impl.transforms.Abs;
-import org.nd4j.linalg.api.ops.impl.transforms.Sign;
+import org.nd4j.linalg.api.ops.impl.transforms.same.Abs;
+import org.nd4j.linalg.api.ops.impl.transforms.same.Sign;
 import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.lossfunctions.ILossFunction;
 import org.nd4j.linalg.lossfunctions.LossUtil;
 import org.nd4j.linalg.lossfunctions.serde.RowVectorDeserializer;
 import org.nd4j.linalg.lossfunctions.serde.RowVectorSerializer;
+import org.nd4j.linalg.ops.transforms.Transforms;
 import org.nd4j.linalg.primitives.Pair;
 import org.nd4j.shade.jackson.annotation.JsonInclude;
 import org.nd4j.shade.jackson.databind.annotation.JsonDeserialize;
@@ -60,17 +78,13 @@ public class LossMAPE extends DifferentialFunction implements ILossFunction {
 
 
     public INDArray scoreArray(INDArray labels, INDArray preOutput, IActivation activationFn, INDArray mask) {
-        if (labels.size(1) != preOutput.size(1)) {
-            throw new IllegalArgumentException(
-                            "Labels array numColumns (size(1) = " + labels.size(1) + ") does not match output layer"
-                                            + " number of outputs (nOut = " + preOutput.size(1) + ") ");
-
+        if(!labels.equalShapes(preOutput)){
+            Preconditions.throwEx("Labels and preOutput must have equal shapes: got shapes %s vs %s", labels.shape(), preOutput.shape());
         }
         INDArray scoreArr;
-        //INDArray output = Nd4j.getExecutioner().execAndReturn(Nd4j.getOpFactory().createTransform(activationFn, preOutput.dup()));
         INDArray output = activationFn.getActivation(preOutput.dup(), true);
         scoreArr = output.rsubi(labels).divi(labels);
-        Nd4j.getExecutioner().execAndReturn(Nd4j.getOpFactory().createTransform("abs", scoreArr));
+        Transforms.abs(scoreArr, false);
         scoreArr.muli(100.0 / labels.size(1));
 
         //Weighted loss function
@@ -104,22 +118,19 @@ public class LossMAPE extends DifferentialFunction implements ILossFunction {
     @Override
     public INDArray computeScoreArray(INDArray labels, INDArray preOutput, IActivation activationFn, INDArray mask) {
         INDArray scoreArr = scoreArray(labels, preOutput, activationFn, mask);
-        return scoreArr.sum(1);
+        return scoreArr.sum(true,1);
     }
 
     @Override
     public INDArray computeGradient(INDArray labels, INDArray preOutput, IActivation activationFn, INDArray mask) {
-        if (labels.size(1) != preOutput.size(1)) {
-            throw new IllegalArgumentException(
-                            "Labels array numColumns (size(1) = " + labels.size(1) + ") does not match output layer"
-                                            + " number of outputs (nOut = " + preOutput.size(1) + ") ");
-
+        if(!labels.equalShapes(preOutput)){
+            Preconditions.throwEx("Labels and preOutput must have equal shapes: got shapes %s vs %s", labels.shape(), preOutput.shape());
         }
         INDArray output = activationFn.getActivation(preOutput.dup(), true);
 
         INDArray actSubPredicted = labels.sub(output);
-        INDArray dLda = Nd4j.getExecutioner().execAndReturn(new Sign(actSubPredicted));
-        INDArray absLabels = Nd4j.getExecutioner().execAndReturn(new Abs(labels.dup()));
+        INDArray dLda = Nd4j.getExecutioner().exec(new Sign(actSubPredicted));
+        INDArray absLabels = Nd4j.getExecutioner().exec(new Abs(labels.dup()));
         dLda.divi(absLabels).muli(-100.0 / labels.size(1));
 
         //Weighted loss function

@@ -1,20 +1,18 @@
-/*-
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
  *
- *  * Copyright 2016 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
  *
- */
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.deeplearning4j.datasets.datavec;
 
@@ -35,6 +33,7 @@ import org.datavec.api.writable.NDArrayWritable;
 import org.datavec.api.writable.Writable;
 import org.datavec.api.writable.batch.NDArrayRecordBatch;
 import org.deeplearning4j.datasets.datavec.exception.ZeroLengthSequenceException;
+import org.nd4j.base.Preconditions;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.dataset.api.MultiDataSet;
 import org.nd4j.linalg.dataset.api.MultiDataSetPreProcessor;
@@ -168,7 +167,7 @@ public class RecordReaderMultiDataSetIterator implements MultiDataSetIterator, S
                 nextRRValsBatched.put(entry.getKey(), batch);
             } else {
                 //Standard case
-                List<List<Writable>> writables = new ArrayList<>(num);
+                List<List<Writable>> writables = new ArrayList<>(Math.min(num, 100000));    //Min op: in case user puts batch size >> amount of data
                 for (int i = 0; i < num && rr.hasNext(); i++) {
                     List<Writable> record;
                     if (collectMetaData) {
@@ -542,6 +541,15 @@ public class RecordReaderMultiDataSetIterator implements MultiDataSetIterator, S
     }
 
     private void putExample(INDArray arr, INDArray singleExample, int exampleIdx) {
+        Preconditions.checkState(singleExample.size(0) == 1 && singleExample.rank() == arr.rank(), "Cannot put array: array should have leading dimension of 1 " +
+                "and equal rank to output array. Attempting to put array of shape %s into output array of shape %s", singleExample.shape(), arr.shape());
+
+        long[] arrShape = arr.shape();
+        long[] singleShape = singleExample.shape();
+        for( int i=1; i<arr.rank(); i++ ){
+            Preconditions.checkState(arrShape[i] == singleShape[i], "Single example array and output arrays differ at position %s:" +
+                    "single example shape %s, output array shape %s", i, singleShape, arrShape);
+        }
         switch (arr.rank()) {
             case 2:
                 arr.put(new INDArrayIndex[] {NDArrayIndex.point(exampleIdx), NDArrayIndex.all()}, singleExample);
@@ -554,8 +562,12 @@ public class RecordReaderMultiDataSetIterator implements MultiDataSetIterator, S
                 arr.put(new INDArrayIndex[] {NDArrayIndex.point(exampleIdx), NDArrayIndex.all(), NDArrayIndex.all(),
                                 NDArrayIndex.all()}, singleExample);
                 break;
+            case 5:
+                arr.put(new INDArrayIndex[] {NDArrayIndex.point(exampleIdx), NDArrayIndex.all(), NDArrayIndex.all(),
+                        NDArrayIndex.all(), NDArrayIndex.all()}, singleExample);
+                break;
             default:
-                throw new RuntimeException("Unexpected rank: " + arr.rank());
+                throw new RuntimeException("Unexpected array rank: " + arr.rank() + " with shape " + Arrays.toString(arr.shape()) + " input arrays should be rank 2 to 5 inclusive");
         }
     }
 

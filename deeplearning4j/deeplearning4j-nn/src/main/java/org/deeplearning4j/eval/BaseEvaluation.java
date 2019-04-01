@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.eval;
 
 import lombok.EqualsAndHashCode;
@@ -24,13 +40,11 @@ import java.io.Serializable;
 import java.util.List;
 
 /**
- * BaseEvaluation implement common evaluation functionality (for time series, etc) for {@link Evaluation},
- * {@link RegressionEvaluation}, {@link ROC}, {@link ROCMultiClass} etc.
- *
- * @author Alex Black
+ * @deprecated Use {@link org.nd4j.evaluation.BaseEvaluation}
  */
+@Deprecated
 @EqualsAndHashCode
-public abstract class BaseEvaluation<T extends BaseEvaluation> implements IEvaluation<T> {
+public abstract class BaseEvaluation<T extends BaseEvaluation> extends org.nd4j.evaluation.BaseEvaluation<T> {
 
     @Getter
     private static ObjectMapper objectMapper = configureMapper(new ObjectMapper());
@@ -55,106 +69,5 @@ public abstract class BaseEvaluation<T extends BaseEvaluation> implements IEvalu
                 .withSetterVisibility(JsonAutoDetect.Visibility.NONE)
                 .withCreatorVisibility(JsonAutoDetect.Visibility.NONE));
         return ret;
-    }
-
-    @Override
-    public void evalTimeSeries(INDArray labels, INDArray predicted) {
-        evalTimeSeries(labels, predicted, null);
-    }
-
-    @Override
-    public void evalTimeSeries(INDArray labels, INDArray predictions, INDArray labelsMask) {
-        Pair<INDArray, INDArray> pair = EvaluationUtils.extractNonMaskedTimeSteps(labels, predictions, labelsMask);
-        if(pair == null){
-            //No non-masked steps
-            return;
-        }
-        INDArray labels2d = pair.getFirst();
-        INDArray predicted2d = pair.getSecond();
-
-        eval(labels2d, predicted2d);
-    }
-
-    @Override
-    public void eval(INDArray labels, INDArray networkPredictions, List<? extends Serializable> recordMetaData) {
-        eval(labels, networkPredictions);
-    }
-
-    @Override
-    public void eval(INDArray labels, INDArray networkPredictions, INDArray maskArray) {
-        if (maskArray == null) {
-            if (labels.rank() == 3) {
-                evalTimeSeries(labels, networkPredictions, maskArray);
-            } else {
-                eval(labels, networkPredictions);
-            }
-            return;
-        }
-        if (labels.rank() == 3 && maskArray.rank() == 2) {
-            //Per-output masking
-            evalTimeSeries(labels, networkPredictions, maskArray);
-            return;
-        }
-
-        throw new UnsupportedOperationException(
-                this.getClass().getSimpleName() + " does not support per-output masking");
-    }
-
-    /**
-     * @return JSON representation of the evaluation instance
-     */
-    @Override
-    public String toJson() {
-        try {
-            return objectMapper.writeValueAsString(this);
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    /**
-     * @return YAML  representation of the evaluation instance
-     */
-    @Override
-    public String toYaml() {
-        try {
-            return yamlMapper.writeValueAsString(this);
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-
-    /**
-     * @param yaml  YAML representation
-     * @param clazz Class
-     * @param <T>   Type to return
-     * @return Evaluation instance
-     */
-    public static <T extends IEvaluation> T fromYaml(String yaml, Class<T> clazz) {
-        try {
-            return yamlMapper.readValue(yaml, clazz);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    /**
-     * @param json  Jason representation of the evaluation instance
-     * @param clazz Class
-     * @param <T>   Type to return
-     * @return Evaluation instance
-     */
-    public static <T extends IEvaluation> T fromJson(String json, Class<T> clazz) {
-        try {
-            return objectMapper.readValue(json, clazz);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    @Override
-    public String toString() {
-        return stats();
     }
 }

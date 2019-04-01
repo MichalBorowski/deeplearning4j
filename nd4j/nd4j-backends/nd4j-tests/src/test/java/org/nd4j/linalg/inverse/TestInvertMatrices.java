@@ -1,20 +1,36 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.linalg.inverse;
 
 import org.apache.commons.math3.linear.Array2DRowRealMatrix;
 import org.apache.commons.math3.linear.LUDecomposition;
 import org.apache.commons.math3.linear.MatrixUtils;
 import org.apache.commons.math3.linear.RealMatrix;
-import org.apache.commons.math3.linear.SingularMatrixException;
-import org.nd4j.linalg.primitives.Pair;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.nd4j.linalg.BaseNd4jTest;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.checkutil.CheckUtil;
 import org.nd4j.linalg.checkutil.NDArrayCreationUtil;
 import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.factory.Nd4jBackend;
+import org.nd4j.linalg.primitives.Pair;
 
 import java.util.List;
 
@@ -47,7 +63,7 @@ public class TestInvertMatrices extends BaseNd4jTest {
     @Test
     public void testInverseComparison() {
 
-        List<Pair<INDArray, String>> list = NDArrayCreationUtil.getAllTestMatricesWithShape(10, 10, 12345);
+        List<Pair<INDArray, String>> list = NDArrayCreationUtil.getAllTestMatricesWithShape(10, 10, 12345, DataType.DOUBLE);
 
         for (Pair<INDArray, String> p : list) {
             INDArray orig = p.getFirst();
@@ -56,7 +72,7 @@ public class TestInvertMatrices extends BaseNd4jTest {
             RealMatrix rm = CheckUtil.convertToApacheMatrix(orig);
             RealMatrix rmInverse = new LUDecomposition(rm).getSolver().getInverse();
 
-            INDArray expected = CheckUtil.convertFromApacheMatrix(rmInverse);
+            INDArray expected = CheckUtil.convertFromApacheMatrix(rmInverse, orig.dataType());
             assertTrue(p.getSecond(), CheckUtil.checkEntries(expected, inverse, 1e-3, 1e-4));
         }
     }
@@ -80,6 +96,18 @@ public class TestInvertMatrices extends BaseNd4jTest {
             fail("No exception thrown for invalid input");
         } catch (Exception e) {
         }
+    }
+
+    @Test
+    public void testInvertMatrixScalar(){
+        INDArray in = Nd4j.valueArrayOf(new int[]{1,1}, 2);
+        INDArray out1 = InvertMatrix.invert(in, false);
+        assertEquals(Nd4j.valueArrayOf(new int[]{1,1}, 0.5), out1);
+        assertEquals(Nd4j.valueArrayOf(new int[]{1,1}, 2), in);
+
+        INDArray out2 = InvertMatrix.invert(in, true);
+        assertTrue(out2 == in);
+        assertEquals(Nd4j.valueArrayOf(new int[]{1,1}, 0.5), out2);
     }
 
     /**

@@ -1,27 +1,53 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.nn.conf.layers.misc;
 
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
+import lombok.Setter;
 import org.deeplearning4j.nn.api.ParamInitializer;
 import org.deeplearning4j.nn.api.layers.LayerConstraint;
+import org.deeplearning4j.nn.conf.GradientNormalization;
 import org.deeplearning4j.nn.conf.InputPreProcessor;
 import org.deeplearning4j.nn.conf.NeuralNetConfiguration;
 import org.deeplearning4j.nn.conf.inputs.InputType;
 import org.deeplearning4j.nn.conf.layers.Layer;
 import org.deeplearning4j.nn.conf.memory.LayerMemoryReport;
+import org.deeplearning4j.nn.conf.serde.FrozenLayerDeserializer;
 import org.deeplearning4j.nn.params.FrozenLayerParamInitializer;
 import org.deeplearning4j.optimize.api.TrainingListener;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.learning.config.IUpdater;
+import org.nd4j.linalg.learning.regularization.Regularization;
 import org.nd4j.shade.jackson.annotation.JsonProperty;
+import org.nd4j.shade.jackson.databind.annotation.JsonDeserialize;
 
 import java.util.Collection;
 import java.util.List;
 
 /**
- * Created by Alex on 10/07/2017.
+ * FrozenLayer is used for the purposes of transfer learning.<br> A frozen layer wraps another DL4J Layer within it.
+ * During backprop, the FrozenLayer is skipped, and any parameters are not be updated. Usually users will typically not
+ * create FrozenLayer instances directly - they are usually used in the process of performing transfer learning
+ *
+ * @author Alex Black
  */
-@EqualsAndHashCode
+@EqualsAndHashCode(callSuper = false)
+@JsonDeserialize(using = FrozenLayerDeserializer.class)
 public class FrozenLayer extends Layer {
 
     @Getter
@@ -65,12 +91,7 @@ public class FrozenLayer extends Layer {
             conf.clearVariables();
             for (String s : vars) {
                 conf.variables(false).add(s);
-                conf.getL1ByParam().put(s, 0.0);
-                conf.getL2ByParam().put(s, 0.0);
-
                 nncUnderlying.variables(false).add(s);
-                nncUnderlying.getL1ByParam().put(s, 0.0);
-                nncUnderlying.getL2ByParam().put(s, 0.0);
             }
         }
 
@@ -98,13 +119,8 @@ public class FrozenLayer extends Layer {
     }
 
     @Override
-    public double getL1ByParam(String paramName) {
-        return 0;
-    }
-
-    @Override
-    public double getL2ByParam(String paramName) {
-        return 0;
+    public List<Regularization> getRegularizationByParam(String param){
+        return null;
     }
 
     @Override
@@ -115,6 +131,16 @@ public class FrozenLayer extends Layer {
     @Override
     public IUpdater getUpdaterByParam(String paramName) {
         return null;
+    }
+
+    @Override
+    public GradientNormalization getGradientNormalization() {
+        return layer.getGradientNormalization();
+    }
+
+    @Override
+    public double getGradientNormalizationThreshold() {
+        return layer.getGradientNormalizationThreshold();
     }
 
     @Override
@@ -129,16 +155,19 @@ public class FrozenLayer extends Layer {
     }
 
     @Override
-    public void setConstraints(List<LayerConstraint> constraints){
+    public void setConstraints(List<LayerConstraint> constraints) {
         this.constraints = constraints;
         this.layer.setConstraints(constraints);
     }
 
+    @Getter
+    @Setter
     public static class Builder extends Layer.Builder<Builder> {
+
         private Layer layer;
 
         public Builder layer(Layer layer) {
-            this.layer = layer;
+            this.setLayer(layer);
             return this;
         }
 

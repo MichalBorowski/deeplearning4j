@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.gradientcheck;
 
 import org.deeplearning4j.BaseDL4JTest;
@@ -16,14 +32,16 @@ import org.deeplearning4j.nn.multilayer.MultiLayerNetwork;
 import org.deeplearning4j.nn.weights.WeightInit;
 import org.junit.Test;
 import org.nd4j.linalg.activations.Activation;
-import org.nd4j.linalg.api.buffer.DataBuffer;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.api.ops.random.impl.BernoulliDistribution;
 import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.learning.config.NoOp;
 import org.nd4j.linalg.lossfunctions.LossFunctions;
 
-import java.util.*;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
 
 import static org.junit.Assert.assertTrue;
 
@@ -36,7 +54,7 @@ public class UtilLayerGradientChecks extends BaseDL4JTest {
     private static final double DEFAULT_MIN_ABS_ERROR = 1e-6;
 
     static {
-        Nd4j.setDataType(DataBuffer.Type.DOUBLE);
+        Nd4j.setDataType(DataType.DOUBLE);
     }
 
     @Test
@@ -53,11 +71,21 @@ public class UtilLayerGradientChecks extends BaseDL4JTest {
                     if (inputMask) {
                         switch (inputRank) {
                             case 2:
-                            case 4:
                                 if(minibatch == 1){
                                     inMask = Nd4j.ones(1,1);
                                 } else {
                                     inMask = Nd4j.create(minibatch, 1);
+                                    Nd4j.getExecutioner().exec(new BernoulliDistribution(inMask, 0.5));
+                                    int count = inMask.sumNumber().intValue();
+                                    assertTrue(count >= 0 && count <= minibatch);   //Sanity check on RNG seed
+                                }
+                                break;
+                            case 4:
+                                //Per-example mask (broadcast along all channels/x/y)
+                                if(minibatch == 1){
+                                    inMask = Nd4j.ones(1,1, 1, 1);
+                                } else {
+                                    inMask = Nd4j.create(minibatch, 1, 1, 1);
                                     Nd4j.getExecutioner().exec(new BernoulliDistribution(inMask, 0.5));
                                     int count = inMask.sumNumber().intValue();
                                     assertTrue(count >= 0 && count <= minibatch);   //Sanity check on RNG seed
@@ -139,7 +167,7 @@ public class UtilLayerGradientChecks extends BaseDL4JTest {
                     MultiLayerConfiguration conf = new NeuralNetConfiguration.Builder()
                             .updater(new NoOp())
                             .activation(Activation.TANH)
-                            .weightInit(WeightInit.DISTRIBUTION)
+
                             .dist(new NormalDistribution(0,2))
                             .list()
                             .layer(l1)

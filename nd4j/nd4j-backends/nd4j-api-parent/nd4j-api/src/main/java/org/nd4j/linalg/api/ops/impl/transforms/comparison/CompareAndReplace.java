@@ -1,29 +1,29 @@
-/*-
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
  *
- *  * Copyright 2015 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
  *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
  *
- */
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.nd4j.linalg.api.ops.impl.transforms.comparison;
 
 import org.nd4j.autodiff.samediff.SDVariable;
 import org.nd4j.autodiff.samediff.SameDiff;
+import org.nd4j.base.Preconditions;
 import org.nd4j.imports.NoOpNameFoundException;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.api.ops.BaseTransformOp;
+import org.nd4j.linalg.api.ops.BaseTransformSameOp;
 import org.nd4j.linalg.indexing.conditions.Condition;
 
 import java.util.*;
@@ -34,7 +34,7 @@ import java.util.*;
  *
  * @author raver119@gmail.com
  */
-public class CompareAndReplace extends BaseTransformOp {
+public class CompareAndReplace extends BaseTransformSameOp {
 
     private Condition condition;
     private double compare;
@@ -85,12 +85,12 @@ public class CompareAndReplace extends BaseTransformOp {
      * @param condition
      */
     public CompareAndReplace(INDArray x, INDArray y, INDArray z, Condition condition) {
-        super(x, y, z, x.lengthLong());
+        super(x, y, z);
         this.compare = condition.getValue();
         this.set = 0;
         this.mode = condition.condtionNum();
         this.eps = condition.epsThreshold();
-        init(x, y, z, x.lengthLong());
+        this.extraArgs = new Object[] {compare, set, eps, (double) mode};
     }
 
 
@@ -109,7 +109,7 @@ public class CompareAndReplace extends BaseTransformOp {
 
     @Override
     public int opNum() {
-        return 46;
+        return 13;
     }
 
     @Override
@@ -127,22 +127,23 @@ public class CompareAndReplace extends BaseTransformOp {
         throw new NoOpNameFoundException("No tensorflow op opName found for " +  opName());
     }
 
-    @Override
-    public void init(INDArray x, INDArray y, INDArray z, long n) {
-        super.init(x, y, z, n);
-        this.extraArgs = new Object[] {compare, set, eps, (double) mode};
-    }
-
 
     @Override
     public List<SDVariable> doDiff(List<SDVariable> grad) {
         //2 inputs: 'to' and 'from'
         //Pass through gradient for 'to' where condition is NOT satisfied
         //Pass through gradient for 'from' where condition IS satisfied
-        SDVariable maskMatched = sameDiff.matchCondition(arg(0), condition);
+        SDVariable maskMatched = sameDiff.matchCondition(arg(0), condition).castTo(arg().dataType());
         SDVariable maskNotMatched = maskMatched.rsub(1.0);
 
         return Arrays.asList(grad.get(0).mul(maskNotMatched), grad.get(0).mul(maskMatched));
+    }
+
+    @Override
+    public List<DataType> calculateOutputDataTypes(List<DataType> dataTypes){
+        Preconditions.checkState(dataTypes != null && dataTypes.size() == 2, "Expected exactly 2 input datatypes for %s, got input %s", getClass(), dataTypes);
+        Preconditions.checkState(dataTypes.get(0) == dataTypes.get(1), "Input data types must be the same: got %s", dataTypes);
+        return Collections.singletonList(dataTypes.get(0));
     }
 }
 

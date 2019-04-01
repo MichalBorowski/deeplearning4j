@@ -1,20 +1,18 @@
-/*-
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
  *
- *  * Copyright 2015 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
  *
- */
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.deeplearning4j.datasets.datavec;
 
@@ -47,6 +45,7 @@ import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.dataset.DataSet;
 import org.nd4j.linalg.dataset.api.iterator.DataSetIterator;
@@ -68,6 +67,11 @@ import static org.nd4j.linalg.indexing.NDArrayIndex.point;
  */
 @Slf4j
 public class RecordReaderDataSetiteratorTest extends BaseDL4JTest {
+
+    @Override
+    public DataType getDataType(){
+        return DataType.FLOAT;
+    }
 
     @Rule
     public TemporaryFolder temporaryFolder = new TemporaryFolder();
@@ -120,7 +124,7 @@ public class RecordReaderDataSetiteratorTest extends BaseDL4JTest {
             }
             DataSet ds = iter.next();
 
-            INDArray f = ds.getFeatureMatrix();
+            INDArray f = ds.getFeatures();
             INDArray l = ds.getLabels();
             assertArrayEquals(new long[]{3, 3}, f.shape());
             assertArrayEquals(new long[]{3, 2}, l.shape());
@@ -130,8 +134,8 @@ public class RecordReaderDataSetiteratorTest extends BaseDL4JTest {
 
             double[][] lExpD = new double[][]{{0.2, 0}, {0.2, 0}, {0.2, 0}};
 
-            INDArray fExp = Nd4j.create(fExpD);
-            INDArray lExp = Nd4j.create(lExpD);
+            INDArray fExp = Nd4j.create(fExpD).castTo(DataType.FLOAT);
+            INDArray lExp = Nd4j.create(lExpD).castTo(DataType.FLOAT);
 
             assertEquals(fExp, f);
             assertEquals(lExp, l);
@@ -169,7 +173,7 @@ public class RecordReaderDataSetiteratorTest extends BaseDL4JTest {
         assertEquals(3, dsList.size()); //3 files
         for (int i = 0; i < 3; i++) {
             DataSet ds = dsList.get(i);
-            INDArray features = ds.getFeatureMatrix();
+            INDArray features = ds.getFeatures();
             INDArray labels = ds.getLabels();
             assertEquals(1, features.size(0)); //1 example in mini-batch
             assertEquals(1, labels.size(0));
@@ -185,21 +189,21 @@ public class RecordReaderDataSetiteratorTest extends BaseDL4JTest {
         expF0.tensorAlongDimension(1, 1).assign(Nd4j.create(new double[] {10, 11, 12}));
         expF0.tensorAlongDimension(2, 1).assign(Nd4j.create(new double[] {20, 21, 22}));
         expF0.tensorAlongDimension(3, 1).assign(Nd4j.create(new double[] {30, 31, 32}));
-        assertEquals(dsList.get(0).getFeatureMatrix(), expF0);
+        assertEquals(dsList.get(0).getFeatures(), expF0);
 
         INDArray expF1 = Nd4j.create(1, 3, 4);
         expF1.tensorAlongDimension(0, 1).assign(Nd4j.create(new double[] {100, 101, 102}));
         expF1.tensorAlongDimension(1, 1).assign(Nd4j.create(new double[] {110, 111, 112}));
         expF1.tensorAlongDimension(2, 1).assign(Nd4j.create(new double[] {120, 121, 122}));
         expF1.tensorAlongDimension(3, 1).assign(Nd4j.create(new double[] {130, 131, 132}));
-        assertEquals(dsList.get(1).getFeatureMatrix(), expF1);
+        assertEquals(dsList.get(1).getFeatures(), expF1);
 
         INDArray expF2 = Nd4j.create(1, 3, 4);
         expF2.tensorAlongDimension(0, 1).assign(Nd4j.create(new double[] {200, 201, 202}));
         expF2.tensorAlongDimension(1, 1).assign(Nd4j.create(new double[] {210, 211, 212}));
         expF2.tensorAlongDimension(2, 1).assign(Nd4j.create(new double[] {220, 221, 222}));
         expF2.tensorAlongDimension(3, 1).assign(Nd4j.create(new double[] {230, 231, 232}));
-        assertEquals(dsList.get(2).getFeatureMatrix(), expF2);
+        assertEquals(dsList.get(2).getFeatures(), expF2);
 
         //Check labels vs. expected:
         INDArray expL0 = Nd4j.create(1, 4, 4);
@@ -287,7 +291,7 @@ public class RecordReaderDataSetiteratorTest extends BaseDL4JTest {
         assertEquals(3, dsList.size()); //3 files
         for (int i = 0; i < 3; i++) {
             DataSet ds = dsList.get(i);
-            INDArray features = ds.getFeatureMatrix();
+            INDArray features = ds.getFeatures();
             INDArray labels = ds.getLabels();
             assertArrayEquals(new long[] {1, 3, 4}, features.shape()); //1 examples, 3 values, 4 time steps
             assertArrayEquals(new long[] {1, 3, 4}, labels.shape());
@@ -301,7 +305,7 @@ public class RecordReaderDataSetiteratorTest extends BaseDL4JTest {
         int count = 0;
         while (iter.hasNext()) {
             DataSet ds = iter.next();
-            assertEquals(2, ds.getFeatureMatrix().size(1));
+            assertEquals(2, ds.getFeatures().size(1));
             assertEquals(1, ds.getLabels().size(1));
             count++;
         }
@@ -343,7 +347,7 @@ public class RecordReaderDataSetiteratorTest extends BaseDL4JTest {
         assertEquals(3, dsList.size()); //3 files
         for (int i = 0; i < 3; i++) {
             DataSet ds = dsList.get(i);
-            INDArray features = ds.getFeatureMatrix();
+            INDArray features = ds.getFeatures();
             INDArray labels = ds.getLabels();
             assertArrayEquals(new long[] {1, 1, 4}, features.shape()); //1 examples, 1 values, 4 time steps
             assertArrayEquals(new long[] {1, 2, 4}, labels.shape());
@@ -353,16 +357,16 @@ public class RecordReaderDataSetiteratorTest extends BaseDL4JTest {
 
             switch (i){
                 case 0:
-                    assertEquals(Nd4j.create(new double[]{0,10,20,30}, new int[]{4,1}), f2d);
-                    assertEquals(Nd4j.create(new double[][]{{1,2}, {11,12}, {21,22}, {31,32}}), l2d);
+                    assertEquals(Nd4j.create(new double[]{0,10,20,30}, new int[]{4,1}).castTo(DataType.FLOAT), f2d);
+                    assertEquals(Nd4j.create(new double[][]{{1,2}, {11,12}, {21,22}, {31,32}}).castTo(DataType.FLOAT), l2d);
                     break;
                 case 1:
-                    assertEquals(Nd4j.create(new double[]{100,110,120,130}, new int[]{4,1}), f2d);
-                    assertEquals(Nd4j.create(new double[][]{{101,102}, {111,112}, {121,122}, {131,132}}), l2d);
+                    assertEquals(Nd4j.create(new double[]{100,110,120,130}, new int[]{4,1}).castTo(DataType.FLOAT), f2d);
+                    assertEquals(Nd4j.create(new double[][]{{101,102}, {111,112}, {121,122}, {131,132}}).castTo(DataType.FLOAT), l2d);
                     break;
                 case 2:
-                    assertEquals(Nd4j.create(new double[]{200,210,220,230}, new int[]{4,1}), f2d);
-                    assertEquals(Nd4j.create(new double[][]{{201,202}, {211,212}, {221,222}, {231,232}}), l2d);
+                    assertEquals(Nd4j.create(new double[]{200,210,220,230}, new int[]{4,1}).castTo(DataType.FLOAT), f2d);
+                    assertEquals(Nd4j.create(new double[][]{{201,202}, {211,212}, {221,222}, {231,232}}).castTo(DataType.FLOAT), l2d);
                     break;
                 default:
                     throw new RuntimeException();
@@ -409,7 +413,7 @@ public class RecordReaderDataSetiteratorTest extends BaseDL4JTest {
             int count = 0;
             while (iter.hasNext()) {
                 DataSet ds = iter.next();
-                INDArray features = ds.getFeatureMatrix();
+                INDArray features = ds.getFeatures();
                 INDArray labels = ds.getLabels();
                 assertArrayEquals(new long[] {1, 3, 4}, features.shape());
                 assertArrayEquals(new long[] {1, 4, 4}, labels.shape());
@@ -438,7 +442,7 @@ public class RecordReaderDataSetiteratorTest extends BaseDL4JTest {
         int miniBatch = 0;
         while (iter.hasNext()) {
             DataSet test = iter.next();
-            INDArray features = test.getFeatureMatrix();
+            INDArray features = test.getFeatures();
             INDArray labels = test.getLabels();
             assertArrayEquals(new long[] {miniBatchSize, nFeatures}, features.shape());
             assertArrayEquals(new long[] {miniBatchSize, 1}, labels.shape());
@@ -538,7 +542,7 @@ public class RecordReaderDataSetiteratorTest extends BaseDL4JTest {
 
         for (int i = 0; i < 3; i++) {
             DataSet ds = dsListAlignStart.get(i);
-            INDArray features = ds.getFeatureMatrix();
+            INDArray features = ds.getFeatures();
             INDArray labels = ds.getLabels();
             assertEquals(1, features.size(0)); //1 example in mini-batch
             assertEquals(1, labels.size(0));
@@ -548,7 +552,7 @@ public class RecordReaderDataSetiteratorTest extends BaseDL4JTest {
             assertEquals(4, labels.size(2));
 
             DataSet ds2 = dsListAlignEnd.get(i);
-            features = ds2.getFeatureMatrix();
+            features = ds2.getFeatures();
             labels = ds2.getLabels();
             assertEquals(1, features.size(0)); //1 example in mini-batch
             assertEquals(1, labels.size(0));
@@ -565,24 +569,24 @@ public class RecordReaderDataSetiteratorTest extends BaseDL4JTest {
         expF0.tensorAlongDimension(1, 1).assign(Nd4j.create(new double[] {10, 11, 12}));
         expF0.tensorAlongDimension(2, 1).assign(Nd4j.create(new double[] {20, 21, 22}));
         expF0.tensorAlongDimension(3, 1).assign(Nd4j.create(new double[] {30, 31, 32}));
-        assertEquals(expF0, dsListAlignStart.get(0).getFeatureMatrix());
-        assertEquals(expF0, dsListAlignEnd.get(0).getFeatureMatrix());
+        assertEquals(expF0, dsListAlignStart.get(0).getFeatures());
+        assertEquals(expF0, dsListAlignEnd.get(0).getFeatures());
 
         INDArray expF1 = Nd4j.create(1, 3, 4);
         expF1.tensorAlongDimension(0, 1).assign(Nd4j.create(new double[] {100, 101, 102}));
         expF1.tensorAlongDimension(1, 1).assign(Nd4j.create(new double[] {110, 111, 112}));
         expF1.tensorAlongDimension(2, 1).assign(Nd4j.create(new double[] {120, 121, 122}));
         expF1.tensorAlongDimension(3, 1).assign(Nd4j.create(new double[] {130, 131, 132}));
-        assertEquals(expF1, dsListAlignStart.get(1).getFeatureMatrix());
-        assertEquals(expF1, dsListAlignEnd.get(1).getFeatureMatrix());
+        assertEquals(expF1, dsListAlignStart.get(1).getFeatures());
+        assertEquals(expF1, dsListAlignEnd.get(1).getFeatures());
 
         INDArray expF2 = Nd4j.create(1, 3, 4);
         expF2.tensorAlongDimension(0, 1).assign(Nd4j.create(new double[] {200, 201, 202}));
         expF2.tensorAlongDimension(1, 1).assign(Nd4j.create(new double[] {210, 211, 212}));
         expF2.tensorAlongDimension(2, 1).assign(Nd4j.create(new double[] {220, 221, 222}));
         expF2.tensorAlongDimension(3, 1).assign(Nd4j.create(new double[] {230, 231, 232}));
-        assertEquals(expF2, dsListAlignStart.get(2).getFeatureMatrix());
-        assertEquals(expF2, dsListAlignEnd.get(2).getFeatureMatrix());
+        assertEquals(expF2, dsListAlignStart.get(2).getFeatures());
+        assertEquals(expF2, dsListAlignEnd.get(2).getFeatures());
 
         //Check features mask array:
         INDArray featuresMaskExpected = null; //null: equivalent to all 1s (i.e., present for all time steps)
@@ -830,14 +834,14 @@ public class RecordReaderDataSetiteratorTest extends BaseDL4JTest {
     public void testSeqRRDSIArrayWritableOneReader() {
 
         List<List<Writable>> sequence1 = new ArrayList<>();
-        sequence1.add(Arrays.asList((Writable) new NDArrayWritable(Nd4j.create(new double[] {1, 2, 3})),
+        sequence1.add(Arrays.asList((Writable) new NDArrayWritable(Nd4j.create(new double[] {1, 2, 3}, new long[]{1,3})),
                         new IntWritable(0)));
-        sequence1.add(Arrays.asList((Writable) new NDArrayWritable(Nd4j.create(new double[] {4, 5, 6})),
+        sequence1.add(Arrays.asList((Writable) new NDArrayWritable(Nd4j.create(new double[] {4, 5, 6}, new long[]{1,3})),
                         new IntWritable(1)));
         List<List<Writable>> sequence2 = new ArrayList<>();
-        sequence2.add(Arrays.asList((Writable) new NDArrayWritable(Nd4j.create(new double[] {7, 8, 9})),
+        sequence2.add(Arrays.asList((Writable) new NDArrayWritable(Nd4j.create(new double[] {7, 8, 9}, new long[]{1,3})),
                         new IntWritable(2)));
-        sequence2.add(Arrays.asList((Writable) new NDArrayWritable(Nd4j.create(new double[] {10, 11, 12})),
+        sequence2.add(Arrays.asList((Writable) new NDArrayWritable(Nd4j.create(new double[] {10, 11, 12}, new long[]{1,3})),
                         new IntWritable(3)));
 
 
@@ -855,7 +859,7 @@ public class RecordReaderDataSetiteratorTest extends BaseDL4JTest {
         expLabels.tensorAlongDimension(0, 1, 2).assign(Nd4j.create(new double[][] {{1, 0}, {0, 1}, {0, 0}, {0, 0}}));
         expLabels.tensorAlongDimension(1, 1, 2).assign(Nd4j.create(new double[][] {{0, 0}, {0, 0}, {1, 0}, {0, 1}}));
 
-        assertEquals(expFeatures, ds.getFeatureMatrix());
+        assertEquals(expFeatures, ds.getFeatures());
         assertEquals(expLabels, ds.getLabels());
     }
 
@@ -863,15 +867,15 @@ public class RecordReaderDataSetiteratorTest extends BaseDL4JTest {
     public void testSeqRRDSIArrayWritableOneReaderRegression() {
         //Regression, where the output is an array writable
         List<List<Writable>> sequence1 = new ArrayList<>();
-        sequence1.add(Arrays.asList((Writable) new NDArrayWritable(Nd4j.create(new double[] {1, 2, 3})),
-                        new NDArrayWritable(Nd4j.create(new double[] {100, 200, 300}))));
-        sequence1.add(Arrays.asList((Writable) new NDArrayWritable(Nd4j.create(new double[] {4, 5, 6})),
-                        new NDArrayWritable(Nd4j.create(new double[] {400, 500, 600}))));
+        sequence1.add(Arrays.asList((Writable) new NDArrayWritable(Nd4j.create(new double[] {1, 2, 3}, new long[]{1,3})),
+                        new NDArrayWritable(Nd4j.create(new double[] {100, 200, 300}, new long[]{1,3}))));
+        sequence1.add(Arrays.asList((Writable) new NDArrayWritable(Nd4j.create(new double[] {4, 5, 6}, new long[]{1,3})),
+                        new NDArrayWritable(Nd4j.create(new double[] {400, 500, 600}, new long[]{1,3}))));
         List<List<Writable>> sequence2 = new ArrayList<>();
-        sequence2.add(Arrays.asList((Writable) new NDArrayWritable(Nd4j.create(new double[] {7, 8, 9})),
-                        new NDArrayWritable(Nd4j.create(new double[] {700, 800, 900}))));
-        sequence2.add(Arrays.asList((Writable) new NDArrayWritable(Nd4j.create(new double[] {10, 11, 12})),
-                        new NDArrayWritable(Nd4j.create(new double[] {1000, 1100, 1200}))));
+        sequence2.add(Arrays.asList((Writable) new NDArrayWritable(Nd4j.create(new double[] {7, 8, 9}, new long[]{1,3})),
+                        new NDArrayWritable(Nd4j.create(new double[] {700, 800, 900}, new long[]{1,3}))));
+        sequence2.add(Arrays.asList((Writable) new NDArrayWritable(Nd4j.create(new double[] {10, 11, 12}, new long[]{1,3})),
+                        new NDArrayWritable(Nd4j.create(new double[] {1000, 1100, 1200}, new long[]{1,3}))));
 
 
         SequenceRecordReader rr = new CollectionSequenceRecordReader(Arrays.asList(sequence1, sequence2));
@@ -890,7 +894,7 @@ public class RecordReaderDataSetiteratorTest extends BaseDL4JTest {
         expLabels.tensorAlongDimension(1, 1, 2)
                         .assign(Nd4j.create(new double[][] {{700, 1000}, {800, 1100}, {900, 1200}}));
 
-        assertEquals(expFeatures, ds.getFeatureMatrix());
+        assertEquals(expFeatures, ds.getFeatures());
         assertEquals(expLabels, ds.getLabels());
     }
 
@@ -899,15 +903,15 @@ public class RecordReaderDataSetiteratorTest extends BaseDL4JTest {
         //Input with multiple array writables:
 
         List<List<Writable>> sequence1 = new ArrayList<>();
-        sequence1.add(Arrays.asList((Writable) new NDArrayWritable(Nd4j.create(new double[] {1, 2, 3})),
-                        new NDArrayWritable(Nd4j.create(new double[] {100, 200, 300})), new IntWritable(0)));
-        sequence1.add(Arrays.asList((Writable) new NDArrayWritable(Nd4j.create(new double[] {4, 5, 6})),
-                        new NDArrayWritable(Nd4j.create(new double[] {400, 500, 600})), new IntWritable(1)));
+        sequence1.add(Arrays.asList((Writable) new NDArrayWritable(Nd4j.create(new double[] {1, 2, 3}, new long[]{1,3})),
+                        new NDArrayWritable(Nd4j.create(new double[] {100, 200, 300}, new long[]{1,3})), new IntWritable(0)));
+        sequence1.add(Arrays.asList((Writable) new NDArrayWritable(Nd4j.create(new double[] {4, 5, 6}, new long[]{1,3})),
+                        new NDArrayWritable(Nd4j.create(new double[] {400, 500, 600}, new long[]{1,3})), new IntWritable(1)));
         List<List<Writable>> sequence2 = new ArrayList<>();
-        sequence2.add(Arrays.asList((Writable) new NDArrayWritable(Nd4j.create(new double[] {7, 8, 9})),
-                        new NDArrayWritable(Nd4j.create(new double[] {700, 800, 900})), new IntWritable(2)));
-        sequence2.add(Arrays.asList((Writable) new NDArrayWritable(Nd4j.create(new double[] {10, 11, 12})),
-                        new NDArrayWritable(Nd4j.create(new double[] {1000, 1100, 1200})), new IntWritable(3)));
+        sequence2.add(Arrays.asList((Writable) new NDArrayWritable(Nd4j.create(new double[] {7, 8, 9}, new long[]{1,3})),
+                        new NDArrayWritable(Nd4j.create(new double[] {700, 800, 900}, new long[]{1,3})), new IntWritable(2)));
+        sequence2.add(Arrays.asList((Writable) new NDArrayWritable(Nd4j.create(new double[] {10, 11, 12}, new long[]{1,3})),
+                        new NDArrayWritable(Nd4j.create(new double[] {1000, 1100, 1200}, new long[]{1,3})), new IntWritable(3)));
 
 
         SequenceRecordReader rr = new CollectionSequenceRecordReader(Arrays.asList(sequence1, sequence2));
@@ -926,33 +930,33 @@ public class RecordReaderDataSetiteratorTest extends BaseDL4JTest {
         expLabels.tensorAlongDimension(0, 1, 2).assign(Nd4j.create(new double[][] {{1, 0}, {0, 1}, {0, 0}, {0, 0}}));
         expLabels.tensorAlongDimension(1, 1, 2).assign(Nd4j.create(new double[][] {{0, 0}, {0, 0}, {1, 0}, {0, 1}}));
 
-        assertEquals(expFeatures, ds.getFeatureMatrix());
+        assertEquals(expFeatures, ds.getFeatures());
         assertEquals(expLabels, ds.getLabels());
     }
 
     @Test
     public void testSeqRRDSIArrayWritableTwoReaders() {
         List<List<Writable>> sequence1 = new ArrayList<>();
-        sequence1.add(Arrays.asList((Writable) new NDArrayWritable(Nd4j.create(new double[] {1, 2, 3})),
+        sequence1.add(Arrays.asList((Writable) new NDArrayWritable(Nd4j.create(new double[] {1, 2, 3}, new long[]{1,3})),
                         new IntWritable(100)));
-        sequence1.add(Arrays.asList((Writable) new NDArrayWritable(Nd4j.create(new double[] {4, 5, 6})),
+        sequence1.add(Arrays.asList((Writable) new NDArrayWritable(Nd4j.create(new double[] {4, 5, 6}, new long[]{1,3})),
                         new IntWritable(200)));
         List<List<Writable>> sequence2 = new ArrayList<>();
-        sequence2.add(Arrays.asList((Writable) new NDArrayWritable(Nd4j.create(new double[] {7, 8, 9})),
+        sequence2.add(Arrays.asList((Writable) new NDArrayWritable(Nd4j.create(new double[] {7, 8, 9}, new long[]{1,3})),
                         new IntWritable(300)));
-        sequence2.add(Arrays.asList((Writable) new NDArrayWritable(Nd4j.create(new double[] {10, 11, 12})),
+        sequence2.add(Arrays.asList((Writable) new NDArrayWritable(Nd4j.create(new double[] {10, 11, 12}, new long[]{1,3})),
                         new IntWritable(400)));
         SequenceRecordReader rrFeatures = new CollectionSequenceRecordReader(Arrays.asList(sequence1, sequence2));
 
         List<List<Writable>> sequence1L = new ArrayList<>();
-        sequence1L.add(Arrays.asList((Writable) new NDArrayWritable(Nd4j.create(new double[] {100, 200, 300})),
+        sequence1L.add(Arrays.asList((Writable) new NDArrayWritable(Nd4j.create(new double[] {100, 200, 300}, new long[]{1,3})),
                         new IntWritable(101)));
-        sequence1L.add(Arrays.asList((Writable) new NDArrayWritable(Nd4j.create(new double[] {400, 500, 600})),
+        sequence1L.add(Arrays.asList((Writable) new NDArrayWritable(Nd4j.create(new double[] {400, 500, 600}, new long[]{1,3})),
                         new IntWritable(201)));
         List<List<Writable>> sequence2L = new ArrayList<>();
-        sequence2L.add(Arrays.asList((Writable) new NDArrayWritable(Nd4j.create(new double[] {700, 800, 900})),
+        sequence2L.add(Arrays.asList((Writable) new NDArrayWritable(Nd4j.create(new double[] {700, 800, 900}, new long[]{1,3})),
                         new IntWritable(301)));
-        sequence2L.add(Arrays.asList((Writable) new NDArrayWritable(Nd4j.create(new double[] {1000, 1100, 1200})),
+        sequence2L.add(Arrays.asList((Writable) new NDArrayWritable(Nd4j.create(new double[] {1000, 1100, 1200}, new long[]{1,3})),
                         new IntWritable(401)));
         SequenceRecordReader rrLabels = new CollectionSequenceRecordReader(Arrays.asList(sequence1L, sequence2L));
 
@@ -972,7 +976,7 @@ public class RecordReaderDataSetiteratorTest extends BaseDL4JTest {
                         .assign(Nd4j.create(new double[][] {{700, 1000}, {800, 1100}, {900, 1200}, {301, 401}}));
 
         DataSet ds = iter.next();
-        assertEquals(expFeatures, ds.getFeatureMatrix());
+        assertEquals(expFeatures, ds.getFeatures());
         assertEquals(expLabels, ds.getLabels());
     }
 
@@ -995,7 +999,7 @@ public class RecordReaderDataSetiteratorTest extends BaseDL4JTest {
             int i = 0;
             for (RecordMetaData m : meta) {
                 Record r = csv.loadFromMetaData(m);
-                INDArray row = ds.getFeatureMatrix().getRow(i);
+                INDArray row = ds.getFeatures().getRow(i);
                 System.out.println(m.getLocation() + "\t" + r.getRecord() + "\t" + row);
 
                 for (int j = 0; j < 4; j++) {
@@ -1038,11 +1042,11 @@ public class RecordReaderDataSetiteratorTest extends BaseDL4JTest {
         Collection<Collection<Writable>> data = new ArrayList<>();
 
         data.add(Arrays.<Writable>asList(new DoubleWritable(0), new DoubleWritable(1),
-                        new NDArrayWritable(Nd4j.create(new double[] {1.1, 2.1, 3.1}))));
+                        new NDArrayWritable(Nd4j.create(new double[] {1.1, 2.1, 3.1}, new long[]{1,3}))));
         data.add(Arrays.<Writable>asList(new DoubleWritable(2), new DoubleWritable(3),
-                        new NDArrayWritable(Nd4j.create(new double[] {4.1, 5.1, 6.1}))));
+                        new NDArrayWritable(Nd4j.create(new double[] {4.1, 5.1, 6.1}, new long[]{1,3}))));
         data.add(Arrays.<Writable>asList(new DoubleWritable(4), new DoubleWritable(5),
-                        new NDArrayWritable(Nd4j.create(new double[] {7.1, 8.1, 9.1}))));
+                        new NDArrayWritable(Nd4j.create(new double[] {7.1, 8.1, 9.1}, new long[]{1,3}))));
 
         RecordReader rr = new CollectionRecordReader(data);
         int batchSize = 3;
@@ -1053,8 +1057,8 @@ public class RecordReaderDataSetiteratorTest extends BaseDL4JTest {
                         new RecordReaderDataSetIterator(rr, batchSize, labelIndexFrom, labelIndexTo, regression);
 
         DataSet ds = rrdsi.next();
-        INDArray expFeatures = Nd4j.create(new double[][] {{0, 1}, {2, 3}, {4, 5}});
-        INDArray expLabels = Nd4j.create(new double[][] {{1.1, 2.1, 3.1}, {4.1, 5.1, 6.1}, {7.1, 8.1, 9.1}});
+        INDArray expFeatures = Nd4j.create(new float[][] {{0, 1}, {2, 3}, {4, 5}});
+        INDArray expLabels = Nd4j.create(new float[][] {{1.1f, 2.1f, 3.1f}, {4.1f, 5.1f, 6.1f}, {7.1f, 8.1f, 9.1f}});
 
         assertEquals(expFeatures, ds.getFeatures());
         assertEquals(expLabels, ds.getLabels());
@@ -1062,12 +1066,12 @@ public class RecordReaderDataSetiteratorTest extends BaseDL4JTest {
         //ALSO: test if we have NDArrayWritables for BOTH the features and the labels
         data = new ArrayList<>();
 
-        data.add(Arrays.<Writable>asList(new NDArrayWritable(Nd4j.create(new double[] {0, 1})),
-                        new NDArrayWritable(Nd4j.create(new double[] {1.1, 2.1, 3.1}))));
-        data.add(Arrays.<Writable>asList(new NDArrayWritable(Nd4j.create(new double[] {2, 3})),
-                        new NDArrayWritable(Nd4j.create(new double[] {4.1, 5.1, 6.1}))));
-        data.add(Arrays.<Writable>asList(new NDArrayWritable(Nd4j.create(new double[] {4, 5})),
-                        new NDArrayWritable(Nd4j.create(new double[] {7.1, 8.1, 9.1}))));
+        data.add(Arrays.<Writable>asList(new NDArrayWritable(Nd4j.create(new double[] {0, 1}, new long[]{1,2})),
+                        new NDArrayWritable(Nd4j.create(new double[] {1.1, 2.1, 3.1}, new long[]{1,3}))));
+        data.add(Arrays.<Writable>asList(new NDArrayWritable(Nd4j.create(new double[] {2, 3}, new long[]{1,2})),
+                        new NDArrayWritable(Nd4j.create(new double[] {4.1, 5.1, 6.1}, new long[]{1,3}))));
+        data.add(Arrays.<Writable>asList(new NDArrayWritable(Nd4j.create(new double[] {4, 5}, new long[]{1,2})),
+                        new NDArrayWritable(Nd4j.create(new double[] {7.1, 8.1, 9.1}, new long[]{1,3}))));
         labelIndexFrom = 1;
         labelIndexTo = 1;
 
@@ -1092,7 +1096,7 @@ public class RecordReaderDataSetiteratorTest extends BaseDL4JTest {
             DataSet ds = rrdsi.next();
             assertEquals(128, ds.numExamples());
             for (int i = 0; i < ds.numExamples(); i++) {
-                INDArray example = ds.getFeatureMatrix().tensorAlongDimension(i, 1, 2, 3).dup();
+                INDArray example = ds.getFeatures().tensorAlongDimension(i, 1, 2, 3).dup();
                 //                assertEquals("Failed on DataSet [" + cnt + "], example [" + i + "]", (double) examples, example.meanNumber().doubleValue(), 0.01);
 
                 //                assertEquals("Failed on DataSet [" + cnt + "], example [" + i + "]", (double) examples, ds.getLabels().getRow(i).meanNumber().doubleValue(), 0.01);
@@ -1117,7 +1121,7 @@ public class RecordReaderDataSetiteratorTest extends BaseDL4JTest {
         while (rrdsi.hasNext()) {
             DataSet ds = rrdsi.next();
             for (int i = 0; i < ds.numExamples(); i++) {
-                INDArray example = ds.getFeatureMatrix().tensorAlongDimension(i, 1, 2, 3).dup();
+                INDArray example = ds.getFeatures().tensorAlongDimension(i, 1, 2, 3).dup();
                 assertEquals("Failed on DataSet ["+ cnt + "], example ["+ i +"]",(double) examples, example.meanNumber().doubleValue(), 0.01);
                 examples++;
             }
@@ -1145,7 +1149,7 @@ public class RecordReaderDataSetiteratorTest extends BaseDL4JTest {
         while (rrdsi.hasNext()) {
             DataSet ds = rrdsi.next();
             for (int i = 0; i < ds.numExamples(); i++) {
-                INDArray example = ds.getFeatureMatrix().tensorAlongDimension(i, 1, 2, 3).dup();
+                INDArray example = ds.getFeatures().tensorAlongDimension(i, 1, 2, 3).dup();
                 assertEquals("Failed on DataSet ["+ cnt + "], example ["+ i +"]",(double) examples, example.meanNumber().doubleValue(), 0.01);
                 examples++;
             }
@@ -1174,7 +1178,7 @@ public class RecordReaderDataSetiteratorTest extends BaseDL4JTest {
         while (rrdsi.hasNext()) {
             DataSet ds = rrdsi.next();
             for (int i = 0; i < ds.numExamples(); i++) {
-                INDArray example = ds.getFeatureMatrix().tensorAlongDimension(i, 1, 2, 3).dup();
+                INDArray example = ds.getFeatures().tensorAlongDimension(i, 1, 2, 3).dup();
                 assertEquals("Failed on DataSet ["+ cnt + "], example ["+ i +"]",(double) examples, example.meanNumber().doubleValue(), 0.01);
                 examples++;
             }
@@ -1200,8 +1204,8 @@ public class RecordReaderDataSetiteratorTest extends BaseDL4JTest {
         DataSetIterator iter = new RecordReaderDataSetIterator(rr, 1, 5, 3);
 
         DataSet ds = iter.next();
-        INDArray expF = Nd4j.create(new double[] {1, 2, 3, 4, 5, 6, 7, 8, 9});
-        INDArray expL = Nd4j.create(new double[] {0, 1, 0});
+        INDArray expF = Nd4j.create(new float[] {1, 2, 3, 4, 5, 6, 7, 8, 9});
+        INDArray expL = Nd4j.create(new float[] {0, 1, 0});
 
         assertEquals(expF, ds.getFeatures());
         assertEquals(expL, ds.getLabels());
@@ -1218,7 +1222,7 @@ public class RecordReaderDataSetiteratorTest extends BaseDL4JTest {
         DataSetIterator iter = new RecordReaderDataSetIterator(rr, 1);
 
         DataSet ds = iter.next();
-        INDArray expF = Nd4j.create(new double[] {0, 1, 2, 3, 4, 5, 6, 7, 8, 9});
+        INDArray expF = Nd4j.create(new float[] {0, 1, 2, 3, 4, 5, 6, 7, 8, 9});
 
         assertEquals(expF, ds.getFeatures());
     }
@@ -1229,11 +1233,11 @@ public class RecordReaderDataSetiteratorTest extends BaseDL4JTest {
         //Idea: input vector is like [f,f,f,f,l,l,f,f] or similar - i.e., label writables aren't start/end
 
         List<Writable> l = Arrays.<Writable>asList(new DoubleWritable(1),
-                        new NDArrayWritable(Nd4j.create(new double[] {2, 3, 4})), new DoubleWritable(5),
-                        new NDArrayWritable(Nd4j.create(new double[] {6, 7, 8})));
+                        new NDArrayWritable(Nd4j.create(new float[] {2, 3, 4}, new long[]{1,3})), new DoubleWritable(5),
+                        new NDArrayWritable(Nd4j.create(new float[] {6, 7, 8}, new long[]{1,3})));
 
-        INDArray expF = Nd4j.create(new double[] {1, 6, 7, 8});
-        INDArray expL = Nd4j.create(new double[] {2, 3, 4, 5});
+        INDArray expF = Nd4j.create(new float[] {1, 6, 7, 8}, new long[]{1,4});
+        INDArray expL = Nd4j.create(new float[] {2, 3, 4, 5}, new long[]{1,4});
 
         RecordReader rr = new CollectionRecordReader(Collections.singletonList(l));
 
@@ -1348,5 +1352,25 @@ public class RecordReaderDataSetiteratorTest extends BaseDL4JTest {
         ds = rrdsi.next();
         assertArrayEquals(new long[]{2, 3, 28, 28}, ds.getFeatures().shape());
         assertArrayEquals(new long[]{2, 2}, ds.getLabels().shape());
+    }
+
+
+
+    @Test
+    public void testSeqRRDSINoLabels(){
+        List<List<Writable>> sequence1 = new ArrayList<>();
+        sequence1.add(Arrays.asList((Writable) new DoubleWritable(1), new DoubleWritable(2)));
+        sequence1.add(Arrays.asList((Writable) new DoubleWritable(3), new DoubleWritable(4)));
+        sequence1.add(Arrays.asList((Writable) new DoubleWritable(5), new DoubleWritable(6)));
+        List<List<Writable>> sequence2 = new ArrayList<>();
+        sequence2.add(Arrays.asList((Writable) new DoubleWritable(10), new DoubleWritable(20)));
+        sequence2.add(Arrays.asList((Writable) new DoubleWritable(30), new DoubleWritable(40)));
+        SequenceRecordReader rrFeatures = new CollectionSequenceRecordReader(Arrays.asList(sequence1, sequence2));
+
+        SequenceRecordReaderDataSetIterator iter = new SequenceRecordReaderDataSetIterator(rrFeatures, 2, -1, -1);
+
+        DataSet ds = iter.next();
+        assertNotNull(ds.getFeatures());
+        assertNull(ds.getLabels());
     }
 }

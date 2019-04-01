@@ -1,9 +1,27 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.linalg.compression;
 
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.nd4j.linalg.BaseNd4jTest;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.factory.Nd4jBackend;
@@ -19,43 +37,27 @@ public class CompressionMagicTests extends BaseNd4jTest {
         super(backend);
     }
 
+    @Before
+    public void setUp() {
+
+    }
+
     @Test
-    public void testMagicDecompression1() throws Exception {
-        INDArray array = Nd4j.linspace(1, 100, 2500);
+    public void testMagicDecompression1() {
+        INDArray array = Nd4j.linspace(1, 100, 2500, DataType.FLOAT);
 
         INDArray compressed = Nd4j.getCompressor().compress(array, "GZIP");
 
+        assertTrue(compressed.isCompressed());
         compressed.muli(1.0);
 
+        assertFalse(compressed.isCompressed());
         assertEquals(array, compressed);
     }
 
     @Test
-    public void testMagicDecompression2() throws Exception {
-        INDArray array = Nd4j.linspace(1, 100, 2500);
-
-        INDArray compressed = Nd4j.getCompressor().compress(array, "FLOAT16");
-
-        compressed.muli(1.0);
-
-        assertArrayEquals(array.data().asFloat(), compressed.data().asFloat(), 0.1f);
-    }
-
-    @Test
-    public void testMagicDecompression3() throws Exception {
-        INDArray array = Nd4j.linspace(1, 2500, 2500);
-
-        INDArray compressed = Nd4j.getCompressor().compress(array, "INT16");
-
-        compressed.muli(1.0);
-
-        assertEquals(array, compressed);
-    }
-
-
-    @Test
-    public void testMagicDecompression4() throws Exception {
-        INDArray array = Nd4j.linspace(1, 100, 2500);
+    public void testMagicDecompression4() {
+        INDArray array = Nd4j.linspace(1, 100, 2500, DataType.FLOAT);
 
         INDArray compressed = Nd4j.getCompressor().compress(array, "GZIP");
 
@@ -69,7 +71,7 @@ public class CompressionMagicTests extends BaseNd4jTest {
 
     @Test
     public void testDupSkipDecompression1() {
-        INDArray array = Nd4j.linspace(1, 100, 2500);
+        INDArray array = Nd4j.linspace(1, 100, 2500, DataType.FLOAT);
 
         INDArray compressed = Nd4j.getCompressor().compress(array, "GZIP");
 
@@ -85,7 +87,7 @@ public class CompressionMagicTests extends BaseNd4jTest {
 
     @Test
     public void testDupSkipDecompression2() {
-        INDArray array = Nd4j.linspace(1, 100, 2500);
+        INDArray array = Nd4j.linspace(1, 100, 2500, DataType.FLOAT);
 
         INDArray compressed = Nd4j.getCompressor().compress(array, "GZIP");
 
@@ -101,7 +103,7 @@ public class CompressionMagicTests extends BaseNd4jTest {
 
     @Test
     public void testDupSkipDecompression3() {
-        INDArray array = Nd4j.linspace(1, 100, 2500);
+        INDArray array = Nd4j.linspace(1, 100, 2500, DataType.FLOAT);
 
         INDArray compressed = Nd4j.getCompressor().compress(array, "GZIP");
 

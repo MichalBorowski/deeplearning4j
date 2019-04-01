@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.nn.conf.preprocessor;
 
 import lombok.val;
@@ -383,7 +399,7 @@ public class TestPreProcessors extends BaseDL4JTest {
                                         .layer(1, new GravesLSTM.Builder().nIn(6).nOut(7).build())
                                         .layer(2, new org.deeplearning4j.nn.conf.layers.DenseLayer.Builder().nIn(7)
                                                         .nOut(8).build())
-                                        .layer(3, new RnnOutputLayer.Builder().nIn(8).nOut(9).build()).build();
+                                        .layer(3, new RnnOutputLayer.Builder().nIn(8).nOut(9).activation(Activation.SOFTMAX).build()).build();
         //Expect preprocessors: layer1: FF->RNN; 2: RNN->FF; 3: FF->RNN
         assertEquals(3, conf1.getInputPreProcessors().size());
         assertTrue(conf1.getInputPreProcess(1) instanceof FeedForwardToRnnPreProcessor);
@@ -396,7 +412,7 @@ public class TestPreProcessors extends BaseDL4JTest {
                         .layer(0, new org.deeplearning4j.nn.conf.layers.ConvolutionLayer.Builder().nOut(10)
                                         .kernelSize(5, 5).stride(1, 1).build())
                         .layer(1, new org.deeplearning4j.nn.conf.layers.DenseLayer.Builder().nOut(6).build())
-                        .layer(2, new RnnOutputLayer.Builder().nIn(6).nOut(5).build())
+                        .layer(2, new RnnOutputLayer.Builder().nIn(6).nOut(5).activation(Activation.SOFTMAX).build())
                         .setInputType(InputType.convolutionalFlat(28, 28, 1)).build();
         //Expect preprocessors: 0: FF->CNN; 1: CNN->FF; 2: FF->RNN
         assertEquals(3, conf2.getInputPreProcessors().size());
@@ -409,7 +425,7 @@ public class TestPreProcessors extends BaseDL4JTest {
                         .layer(0, new org.deeplearning4j.nn.conf.layers.ConvolutionLayer.Builder().nOut(10)
                                         .kernelSize(5, 5).stride(1, 1).build())
                         .layer(1, new org.deeplearning4j.nn.conf.layers.DenseLayer.Builder().nOut(6).build())
-                        .layer(2, new RnnOutputLayer.Builder().nIn(6).nOut(5).build())
+                        .layer(2, new RnnOutputLayer.Builder().nIn(6).nOut(5).activation(Activation.SOFTMAX).build())
                         .setInputType(InputType.convolutional(28, 28, 1)).build();
         //Expect preprocessors: 1: CNN->FF; 2: FF->RNN
         assertEquals(2, conf2a.getInputPreProcessors().size());
@@ -422,7 +438,7 @@ public class TestPreProcessors extends BaseDL4JTest {
                         .layer(0, new org.deeplearning4j.nn.conf.layers.ConvolutionLayer.Builder().nOut(10)
                                         .kernelSize(5, 5).stride(1, 1).build())
                         .layer(1, new GravesLSTM.Builder().nOut(6).build())
-                        .layer(2, new RnnOutputLayer.Builder().nIn(6).nOut(5).build())
+                        .layer(2, new RnnOutputLayer.Builder().nIn(6).nOut(5).activation(Activation.SOFTMAX).build())
                         .setInputType(InputType.convolutionalFlat(28, 28, 1)).build();
         //Expect preprocessors: 0: FF->CNN, 1: CNN->RNN;
         assertEquals(2, conf3.getInputPreProcessors().size());
@@ -447,8 +463,8 @@ public class TestPreProcessors extends BaseDL4JTest {
                         .layer(2, new OutputLayer.Builder(LossFunctions.LossFunction.MCXENT).nIn(200)
                                 .nOut(5).weightInit(WeightInit.RELU)
                                 .activation(Activation.SOFTMAX).build())
-                        .setInputType(InputType.convolutionalFlat(28, 28, 1)).backprop(true)
-                        .pretrain(false).build();
+                        .setInputType(InputType.convolutionalFlat(28, 28, 1))
+                        .build();
 
         assertNotNull(conf.getInputPreProcess(0));
         assertNotNull(conf.getInputPreProcess(1));

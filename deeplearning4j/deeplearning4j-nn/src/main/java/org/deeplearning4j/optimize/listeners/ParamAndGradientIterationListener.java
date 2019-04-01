@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.optimize.listeners;
 
 import lombok.Builder;
@@ -22,10 +38,9 @@ import java.util.Map;
  * i.e., is intended to aid network tuning and debugging<br>
  * This iteration listener is set up to calculate mean, min, max, and mean absolute value
  * of each type of parameter and gradient in the network at each iteration.<br>
- * These
- *
  *
  * @author Alex Black
+ * @deprecated StatsListener can be used instead, storing data using FileStatsStorage  - UI is not required
  */
 public class ParamAndGradientIterationListener extends BaseTrainingListener {
     private static final int MAX_WRITE_FAILURE_MESSAGES = 10;

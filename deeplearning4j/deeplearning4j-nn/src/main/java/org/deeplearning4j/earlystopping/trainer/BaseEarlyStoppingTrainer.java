@@ -1,23 +1,24 @@
-/*-
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
  *
- *  * Copyright 2016 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
  *
- */
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.deeplearning4j.earlystopping.trainer;
 
+import org.deeplearning4j.datasets.iterator.AsyncDataSetIterator;
+import org.deeplearning4j.datasets.iterator.AsyncMultiDataSetIterator;
+import org.deeplearning4j.datasets.iterator.AsyncShieldDataSetIterator;
 import org.deeplearning4j.earlystopping.EarlyStoppingConfiguration;
 import org.deeplearning4j.earlystopping.EarlyStoppingResult;
 import org.deeplearning4j.earlystopping.listener.EarlyStoppingListener;
@@ -25,6 +26,7 @@ import org.deeplearning4j.earlystopping.scorecalc.ScoreCalculator;
 import org.deeplearning4j.earlystopping.termination.EpochTerminationCondition;
 import org.deeplearning4j.earlystopping.termination.IterationTerminationCondition;
 import org.deeplearning4j.nn.api.Model;
+import org.deeplearning4j.nn.api.Trainable;
 import org.deeplearning4j.nn.graph.ComputationGraph;
 import org.deeplearning4j.nn.multilayer.MultiLayerNetwork;
 import org.deeplearning4j.optimize.api.TrainingListener;
@@ -64,6 +66,13 @@ public abstract class BaseEarlyStoppingTrainer<T extends Model> implements IEarl
 
     protected BaseEarlyStoppingTrainer(EarlyStoppingConfiguration<T> earlyStoppingConfiguration, T model,
                                        DataSetIterator train, MultiDataSetIterator trainMulti, EarlyStoppingListener<T> listener) {
+        if(train != null && train.asyncSupported()){
+            train = new AsyncDataSetIterator(train);
+        }
+        if(trainMulti != null && trainMulti.asyncSupported()){
+            trainMulti = new AsyncMultiDataSetIterator(trainMulti);
+        }
+
         this.esConfig = earlyStoppingConfiguration;
         this.model = model;
         this.train = train;
@@ -76,8 +85,21 @@ public abstract class BaseEarlyStoppingTrainer<T extends Model> implements IEarl
 
     protected abstract void fit(MultiDataSet mds);
 
+    protected abstract void pretrain(DataSet ds);
+
+    protected abstract void pretrain(MultiDataSet mds);
+
     @Override
     public EarlyStoppingResult<T> fit() {
+        return fit(false);
+    }
+
+    @Override
+    public EarlyStoppingResult<T> pretrain(){
+        return fit(true);
+    }
+
+    protected EarlyStoppingResult<T> fit(boolean pretrain){
         esConfig.validate();
         log.info("Starting early stopping training");
         if (esConfig.getScoreCalculator() == null)
@@ -118,10 +140,18 @@ public abstract class BaseEarlyStoppingTrainer<T extends Model> implements IEarl
             triggerEpochListeners(true, model, epochCount);
             while (iterator.hasNext()) {
                 try {
-                    if (train != null) {
-                        fit((DataSet) iterator.next());
-                    } else
-                        fit(trainMulti.next());
+                    if(pretrain){
+                        if(train != null){
+                            pretrain((DataSet)iterator.next());
+                        } else {
+                            pretrain(trainMulti.next());
+                        }
+                    } else {
+                        if (train != null) {
+                            fit((DataSet) iterator.next());
+                        } else
+                            fit(trainMulti.next());
+                    }
                 } catch (Exception e) {
                     log.warn("Early stopping training terminated due to exception at epoch {}, iteration {}",
                             epochCount, iterCount, e);
@@ -137,7 +167,16 @@ public abstract class BaseEarlyStoppingTrainer<T extends Model> implements IEarl
                 }
 
                 //Check per-iteration termination conditions
-                lastScore = model.score();
+                if(pretrain){
+                    //TODO support for non-first-layer pretraining
+                    if(model instanceof MultiLayerNetwork){
+                        lastScore = (((MultiLayerNetwork) model).getLayer(0)).score();
+                    } else {
+                        lastScore = (((ComputationGraph) model).getLayer(0)).score();
+                    }
+                } else {
+                    lastScore = model.score();
+                }
                 for (IterationTerminationCondition c : esConfig.getIterationTerminationConditions()) {
                     if (c.terminate(lastScore)) {
                         terminate = true;
@@ -247,7 +286,7 @@ public abstract class BaseEarlyStoppingTrainer<T extends Model> implements IEarl
                 boolean epochTerminate = false;
                 EpochTerminationCondition termReason = null;
                 for (EpochTerminationCondition c : esConfig.getEpochTerminationConditions()) {
-                    if (c.terminate(epochCount, score)) {
+                    if (c.terminate(epochCount, score, esConfig.getScoreCalculator().minimizeScore())) {
                         epochTerminate = true;
                         termReason = c;
                         break;

@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.linalg.profiling;
 
 import org.junit.After;
@@ -6,7 +22,6 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.nd4j.linalg.BaseNd4jTest;
-import org.nd4j.linalg.api.buffer.DataBuffer;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.api.ops.executioner.OpExecutioner;
 import org.nd4j.linalg.api.ops.executioner.OpExecutionerUtil;
@@ -35,7 +50,7 @@ public class InfNanTests extends BaseNd4jTest {
     }
 
     @Test(expected = ND4JIllegalStateException.class)
-    public void testInf1() throws Exception {
+    public void testInf1() {
         Nd4j.getExecutioner().setProfilingMode(OpExecutioner.ProfilingMode.INF_PANIC);
 
         INDArray x = Nd4j.create(100);
@@ -47,7 +62,7 @@ public class InfNanTests extends BaseNd4jTest {
 
 
     @Test(expected = ND4JIllegalStateException.class)
-    public void testInf2() throws Exception {
+    public void testInf2() {
         Nd4j.getExecutioner().setProfilingMode(OpExecutioner.ProfilingMode.ANY_PANIC);
 
         INDArray x = Nd4j.create(100);
@@ -58,7 +73,7 @@ public class InfNanTests extends BaseNd4jTest {
     }
 
     @Test
-    public void testInf3() throws Exception {
+    public void testInf3() {
         Nd4j.getExecutioner().setProfilingMode(OpExecutioner.ProfilingMode.ANY_PANIC);
 
         INDArray x = Nd4j.create(100);
@@ -67,7 +82,7 @@ public class InfNanTests extends BaseNd4jTest {
     }
 
     @Test
-    public void testInf4() throws Exception {
+    public void testInf4() {
         Nd4j.getExecutioner().setProfilingMode(OpExecutioner.ProfilingMode.DISABLED);
 
         INDArray x = Nd4j.create(100);
@@ -76,7 +91,7 @@ public class InfNanTests extends BaseNd4jTest {
     }
 
     @Test(expected = ND4JIllegalStateException.class)
-    public void testNaN1() throws Exception {
+    public void testNaN1() {
         Nd4j.getExecutioner().setProfilingMode(OpExecutioner.ProfilingMode.NAN_PANIC);
 
         INDArray x = Nd4j.create(100);
@@ -88,7 +103,7 @@ public class InfNanTests extends BaseNd4jTest {
 
 
     @Test(expected = ND4JIllegalStateException.class)
-    public void testNaN2() throws Exception {
+    public void testNaN2() {
         Nd4j.getExecutioner().setProfilingMode(OpExecutioner.ProfilingMode.ANY_PANIC);
 
         INDArray x = Nd4j.create(100);
@@ -99,7 +114,7 @@ public class InfNanTests extends BaseNd4jTest {
     }
 
     @Test
-    public void testNaN3() throws Exception {
+    public void testNaN3() {
         Nd4j.getExecutioner().setProfilingMode(OpExecutioner.ProfilingMode.ANY_PANIC);
 
         INDArray x = Nd4j.create(100);
@@ -108,7 +123,7 @@ public class InfNanTests extends BaseNd4jTest {
     }
 
     @Test
-    public void testNaN4() throws Exception {
+    public void testNaN4() {
         Nd4j.getExecutioner().setProfilingMode(OpExecutioner.ProfilingMode.DISABLED);
 
         INDArray x = Nd4j.create(100);

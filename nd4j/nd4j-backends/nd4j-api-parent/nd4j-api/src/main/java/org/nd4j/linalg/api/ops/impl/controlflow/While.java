@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.linalg.api.ops.impl.controlflow;
 
 import lombok.*;
@@ -6,13 +22,17 @@ import onnx.OnnxProto3;
 import org.nd4j.autodiff.functions.DifferentialFunction;
 import org.nd4j.autodiff.samediff.SDVariable;
 import org.nd4j.autodiff.samediff.SameDiff;
+import org.nd4j.autodiff.samediff.SameDiffConditional;
+import org.nd4j.autodiff.samediff.SameDiffFunctionDefinition;
 import org.nd4j.imports.NoOpNameFoundException;
 import org.nd4j.imports.converters.DifferentialFunctionClassHolder;
 import org.nd4j.imports.graphmapper.tf.TFGraphMapper;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.api.ops.CustomOp;
 import org.nd4j.linalg.api.ops.CustomOpDescriptor;
 import org.nd4j.linalg.api.ops.Op;
+import org.nd4j.linalg.api.shape.LongShapeDescriptor;
 import org.nd4j.linalg.exception.ND4JIllegalArgumentException;
 import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.weightinit.impl.ZeroInitScheme;
@@ -45,9 +65,9 @@ public class While extends DifferentialFunction implements CustomOp {
 
 
     @Getter
-    protected SameDiff.SameDiffConditional predicate;
+    protected SameDiffConditional predicate;
     @Getter
-    protected SameDiff.SameDiffFunctionDefinition trueBody;
+    protected SameDiffFunctionDefinition trueBody;
 
     @Getter
     protected String blockName,trueBodyName;
@@ -88,9 +108,7 @@ public class While extends DifferentialFunction implements CustomOp {
         this.predicate = whileStatement.predicate;
         this.predicateExecution = whileStatement.predicateExecution;
         this.inputVars = whileStatement.inputVars;
-        this.dummyResult =  this.sameDiff.var("dummyresult-" + UUID.randomUUID().toString(),new long[]{1,1},new ZeroInitScheme('f'));
-
-
+        this.dummyResult =  this.sameDiff.var("dummyresult-" + UUID.randomUUID().toString(),new ZeroInitScheme('f'), DataType.FLOAT, 1);
     }
 
 
@@ -99,9 +117,9 @@ public class While extends DifferentialFunction implements CustomOp {
     public While(String blockName,
                  SameDiff parent,
                  SDVariable[] inputVars,
-                 SameDiff.SameDiffConditional predicate,
-                 SameDiff.SameDiffFunctionDefinition condition,
-                 SameDiff.SameDiffFunctionDefinition trueBody) {
+                 SameDiffConditional predicate,
+                 SameDiffFunctionDefinition condition,
+                 SameDiffFunctionDefinition trueBody) {
         init(blockName,parent,inputVars,predicate,condition,trueBody);
     }
 
@@ -109,15 +127,15 @@ public class While extends DifferentialFunction implements CustomOp {
     private void init(String blockName,
                       SameDiff parent,
                       SDVariable[] inputVars,
-                      SameDiff.SameDiffConditional predicate,
-                      SameDiff.SameDiffFunctionDefinition condition,
-                      SameDiff.SameDiffFunctionDefinition trueBody) {
+                      SameDiffConditional predicate,
+                      SameDiffFunctionDefinition condition,
+                      SameDiffFunctionDefinition trueBody) {
         this.sameDiff = parent;
         this.inputVars = inputVars;
         this.predicate = predicate;
         this.trueBody = trueBody;
         this.blockName = blockName;
-        this.dummyResult =  parent.var("dummyresult-" + UUID.randomUUID().toString(),new long[]{1,1},new ZeroInitScheme('f'));
+        this.dummyResult =  parent.var("dummyresult-" + UUID.randomUUID().toString(),new ZeroInitScheme('f'), DataType.FLOAT, 1);
         parent.putFunctionForId(getOwnName(),this);
 
         parent.addArgsFor(inputVars,this);
@@ -213,7 +231,7 @@ public class While extends DifferentialFunction implements CustomOp {
             val vars = new SDVariable[tfNode.getInputCount()];
             for (int e = 0; e < tfNode.getInputCount(); e++) {
                 val input = TFGraphMapper.getInstance().getNodeName(tfNode.getInput(e));
-                vars[e] = initWith.getVariable(input) == null ? initWith.var(input,null,new ZeroInitScheme()) : initWith.getVariable(input);
+                vars[e] = initWith.getVariable(input) == null ? initWith.var(input, (LongShapeDescriptor) null,new ZeroInitScheme()) : initWith.getVariable(input);
                 scopeCondition.var(vars[e]);
                 scopeLoop.var(vars[e]);
             }
@@ -228,12 +246,12 @@ public class While extends DifferentialFunction implements CustomOp {
             val tfNode = nodes.get(currIndex.get());
 
             if (!tfNode.getOp().equalsIgnoreCase("merge")) {
-                scopeLoop.var(TFGraphMapper.getInstance().getNodeName(tfNode.getName()),null,new ZeroInitScheme());
+                scopeLoop.var(TFGraphMapper.getInstance().getNodeName(tfNode.getName()), (LongShapeDescriptor) null,new ZeroInitScheme());
                 break;
             }
 
             skipSet.add(tfNode.getName());
-            val var = scopeLoop.var(TFGraphMapper.getInstance().getNodeName(tfNode.getName()),null,new ZeroInitScheme());
+            val var = scopeLoop.var(TFGraphMapper.getInstance().getNodeName(tfNode.getName()), (LongShapeDescriptor)null,new ZeroInitScheme());
             scopeCondition.var(var);
             initWith.var(var);
             mergedCnt++;
@@ -257,7 +275,7 @@ public class While extends DifferentialFunction implements CustomOp {
 
 
             if (isConst || isVar || isPlaceholder) {
-                val var = scopeCondition.var(tfNode.getName(),null,new ZeroInitScheme());
+                val var = scopeCondition.var(tfNode.getName(), (LongShapeDescriptor) null,new ZeroInitScheme());
                 scopeLoop.var(var);
                 initWith.var(var);
                 log.info("Adding condition var [{}]", var.getVarName());
@@ -308,7 +326,7 @@ public class While extends DifferentialFunction implements CustomOp {
             for(int i = 0; i < tfNode.getInputCount(); i++) {
                 val testVar = initWith.getVariable(TFGraphMapper.getInstance().getNodeName(tfNode.getInput(i)));
                 if(testVar == null) {
-                    variables[i] = initWith.var(tfNode.getInput(i),null,new ZeroInitScheme());
+                    variables[i] = initWith.var(tfNode.getInput(i), (LongShapeDescriptor) null,new ZeroInitScheme());
                     scopeCondition.var(variables[i]);
                     scopeLoop.var(variables[i]);
                     continue;
@@ -354,7 +372,7 @@ public class While extends DifferentialFunction implements CustomOp {
 
 
             if (isConst || isVar || isPlaceholder) {
-                val var = scopeLoop.var(tfNode.getName(), null,new ZeroInitScheme());
+                val var = scopeLoop.var(tfNode.getName(), (LongShapeDescriptor) null,new ZeroInitScheme());
                 log.info("Adding body var [{}]",var.getVarName());
 
             } else {
@@ -411,7 +429,7 @@ public class While extends DifferentialFunction implements CustomOp {
             skipSet.add(tfNode.getName());
 
             val inputName = TFGraphMapper.getInstance().getNodeName(tfNode.getName());
-            val input = initWith.getVariable(inputName) == null ? initWith.var(inputName,null,new ZeroInitScheme()) : initWith.getVariable(inputName) ;
+            val input = initWith.getVariable(inputName) == null ? initWith.var(inputName, (LongShapeDescriptor) null,new ZeroInitScheme()) : initWith.getVariable(inputName) ;
             returnInputs.add(input);
         }
 
@@ -433,7 +451,7 @@ public class While extends DifferentialFunction implements CustomOp {
 
             skipSet.add(tfNode.getName());
             val inputName = TFGraphMapper.getInstance().getNodeName(tfNode.getName());
-            val input = initWith.getVariable(inputName) == null ? initWith.var(inputName,null,new ZeroInitScheme()) : initWith.getVariable(inputName) ;
+            val input = initWith.getVariable(inputName) == null ? initWith.var(inputName, (LongShapeDescriptor) null,new ZeroInitScheme()) : initWith.getVariable(inputName) ;
         }
 
 
@@ -541,6 +559,11 @@ public class While extends DifferentialFunction implements CustomOp {
     }
 
     @Override
+    public int numBArguments() {
+        return 0;
+    }
+
+    @Override
     public void addInputArgument(INDArray... arg) {
 
     }
@@ -548,6 +571,21 @@ public class While extends DifferentialFunction implements CustomOp {
     @Override
     public void removeInputArgument(INDArray arg) {
 
+    }
+
+    @Override
+    public boolean[] bArgs() {
+        return new boolean[0];
+    }
+
+    @Override
+    public void addBArgument(boolean... arg) {
+
+    }
+
+    @Override
+    public Boolean getBArgument(int index) {
+        return null;
     }
 
     @Override
@@ -580,10 +618,10 @@ public class While extends DifferentialFunction implements CustomOp {
         return 0;
     }
     @Override
-    public List<long[]> calculateOutputShape() {
-        List<long[]> ret =  new ArrayList<>();
+    public List<LongShapeDescriptor> calculateOutputShape() {
+        List<LongShapeDescriptor> ret =  new ArrayList<>();
         for(SDVariable var : args()) {
-            ret.add(sameDiff.getShapeForVarName(var.getVarName()));
+            ret.add(sameDiff.getShapeDescriptorForVarName(var.getVarName()));
         }
         return ret;
     }
@@ -595,11 +633,6 @@ public class While extends DifferentialFunction implements CustomOp {
 
     @Override
     public void assertValidForExecution() {
-
-    }
-
-    @Override
-    public void populateInputsAndOutputsFromSameDiff() {
 
     }
 

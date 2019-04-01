@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.linalg.nativ;
 
 import lombok.NonNull;
@@ -5,10 +21,10 @@ import lombok.extern.slf4j.Slf4j;
 import lombok.val;
 import org.junit.Test;
 import org.nd4j.autodiff.functions.DifferentialFunction;
-import org.nd4j.autodiff.samediff.SameDiff;
+import org.nd4j.autodiff.samediff.serde.FlatBuffersMapper;
 import org.nd4j.imports.NoOpNameFoundException;
 import org.nd4j.linalg.api.ops.*;
-import org.nd4j.linalg.api.ops.impl.accum.Variance;
+import org.nd4j.linalg.api.ops.impl.summarystats.Variance;
 import org.nd4j.linalg.api.ops.random.BaseRandomOp;
 import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.primitives.Pair;
@@ -53,7 +69,7 @@ public class OpsMappingTests {
             val bt = Integer.valueOf(line[0]).byteValue();
             val ops = line[1].split("<<");
 
-            val type = SameDiff.getTypeFromByte(bt);
+            val type = FlatBuffersMapper.getTypeFromByte(bt);
             val list = getOperations(type);
 
             for (val op: ops) {
@@ -148,8 +164,8 @@ public class OpsMappingTests {
             }
             break;
             case REDUCE3:
-            case REDUCE: {
-                Set<Class<? extends BaseAccumulation>> clazzes = f.getSubTypesOf(BaseAccumulation.class);
+            case REDUCE_FLOAT: {
+                Set<Class<? extends BaseReduceFloatOp>> clazzes = f.getSubTypesOf(BaseReduceFloatOp.class);
 
                 for (Class<? extends DifferentialFunction> clazz : clazzes)
                     addOperation(clazz, list);
@@ -170,8 +186,8 @@ public class OpsMappingTests {
             }
             break;
             case PAIRWISE:
-            case TRANSFORM: {
-                Set<Class<? extends BaseTransformOp>> clazzes = f.getSubTypesOf(BaseTransformOp.class);
+            case TRANSFORM_SAME: {
+                Set<Class<? extends BaseTransformSameOp>> clazzes = f.getSubTypesOf(BaseTransformSameOp.class);
 
                 for (Class<? extends DifferentialFunction> clazz : clazzes)
                     addOperation(clazz, list);

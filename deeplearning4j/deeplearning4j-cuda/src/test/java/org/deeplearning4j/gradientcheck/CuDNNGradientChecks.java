@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.gradientcheck;
 
 import lombok.extern.slf4j.Slf4j;
@@ -28,7 +44,7 @@ import org.deeplearning4j.nn.multilayer.MultiLayerNetwork;
 import org.deeplearning4j.nn.weights.WeightInit;
 import org.junit.Test;
 import org.nd4j.linalg.activations.Activation;
-import org.nd4j.linalg.api.buffer.DataBuffer;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.buffer.util.DataTypeUtil;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.factory.Nd4j;
@@ -37,7 +53,10 @@ import org.nd4j.linalg.learning.config.NoOp;
 import org.nd4j.linalg.lossfunctions.LossFunctions;
 
 import java.lang.reflect.Field;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Random;
+import java.util.Set;
 
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
@@ -55,7 +74,7 @@ public class CuDNNGradientChecks extends BaseDL4JTest {
     private static final double DEFAULT_MIN_ABS_ERROR = 1e-6;
 
     static {
-        DataTypeUtil.setDTypeForContext(DataBuffer.Type.DOUBLE);
+        DataTypeUtil.setDTypeForContext(DataType.DOUBLE);
     }
 
 
@@ -91,7 +110,7 @@ public class CuDNNGradientChecks extends BaseDL4JTest {
 
                     MultiLayerConfiguration.Builder builder = new NeuralNetConfiguration.Builder()
                                     .optimizationAlgo(OptimizationAlgorithm.CONJUGATE_GRADIENT)
-                                    .weightInit(WeightInit.DISTRIBUTION).dist(new UniformDistribution(-1, 1))
+                                    .dist(new UniformDistribution(-1, 1))
                                     .updater(new NoOp()).seed(12345L).list()
                                     .layer(0, new ConvolutionLayer.Builder(2, 2).stride(2, 2).padding(1, 1).nOut(3)
                                                     .activation(afn).build())
@@ -99,8 +118,8 @@ public class CuDNNGradientChecks extends BaseDL4JTest {
                                                     .activation(afn).build())
                                     .layer(2, new OutputLayer.Builder(LossFunctions.LossFunction.MCXENT)
                                                     .activation(Activation.SOFTMAX).nOut(nOut).build())
-                                    .setInputType(InputType.convolutional(height, width, inputDepth)).pretrain(false)
-                                    .backprop(true);
+                                    .setInputType(InputType.convolutional(height, width, inputDepth))
+                                    ;
 
                     MultiLayerConfiguration conf = builder.build();
 
@@ -183,7 +202,7 @@ public class CuDNNGradientChecks extends BaseDL4JTest {
                 }
 
                 MultiLayerConfiguration.Builder builder = new NeuralNetConfiguration.Builder()
-                        .weightInit(WeightInit.DISTRIBUTION).dist(new UniformDistribution(-1, 1))
+                        .dist(new UniformDistribution(-1, 1))
                         .updater(new NoOp()).seed(12345L)
                         .list()
                         .layer(0, new ConvolutionLayer.Builder(2, 2).stride(2, 2).padding(1, 1).nOut(3)
@@ -194,8 +213,8 @@ public class CuDNNGradientChecks extends BaseDL4JTest {
                                 .activation(Activation.TANH).build())
                         .layer(2, new OutputLayer.Builder(LossFunctions.LossFunction.MCXENT)
                                 .activation(Activation.SOFTMAX).nOut(nOut).build())
-                        .setInputType(InputType.convolutional(height, width, inputDepth)).pretrain(false)
-                        .backprop(true);
+                        .setInputType(InputType.convolutional(height, width, inputDepth))
+                        ;
 
                 MultiLayerConfiguration conf = builder.build();
 
@@ -246,7 +265,7 @@ public class CuDNNGradientChecks extends BaseDL4JTest {
         }
 
         MultiLayerConfiguration.Builder builder = new NeuralNetConfiguration.Builder().updater(new NoOp())
-                        .seed(12345L).weightInit(WeightInit.DISTRIBUTION)
+                        .seed(12345L)
                         .dist(new NormalDistribution(0, 2)).list()
                         .layer(0, new ConvolutionLayer.Builder().kernelSize(2, 2).stride(1, 1).nIn(depth).nOut(2)
                                         .activation(Activation.IDENTITY).build())
@@ -254,7 +273,7 @@ public class CuDNNGradientChecks extends BaseDL4JTest {
                         .layer(2, new ActivationLayer.Builder().activation(Activation.TANH).build())
                         .layer(3, new OutputLayer.Builder(LossFunctions.LossFunction.MCXENT)
                                         .activation(Activation.SOFTMAX).nOut(nOut).build())
-                        .setInputType(InputType.convolutional(hw, hw, depth)).pretrain(false).backprop(true);
+                        .setInputType(InputType.convolutional(hw, hw, depth));
 
         MultiLayerNetwork mln = new MultiLayerNetwork(builder.build());
         mln.init();
@@ -278,8 +297,12 @@ public class CuDNNGradientChecks extends BaseDL4JTest {
                 System.out.println("Layer " + j + " # params: " + mln.getLayer(j).numParams());
         }
 
+        //Mean and variance vars are not gradient checkable; mean/variance "gradient" is used to implement running mean/variance calc
+        //i.e., runningMean = decay * runningMean + (1-decay) * batchMean
+        //However, numerical gradient will be 0 as forward pass doesn't depend on this "parameter"
+        Set<String> excludeParams = new HashSet<>(Arrays.asList("1_mean", "1_var", "1_log10stdev"));
         boolean gradOK = GradientCheckUtil.checkGradients(mln, DEFAULT_EPS, DEFAULT_MAX_REL_ERROR,
-                        DEFAULT_MIN_ABS_ERROR, PRINT_RESULTS, RETURN_ON_FIRST_FAILURE, input, labels);
+                        DEFAULT_MIN_ABS_ERROR, PRINT_RESULTS, RETURN_ON_FIRST_FAILURE, input, labels, excludeParams);
 
         assertTrue(gradOK);
     }
@@ -300,14 +323,14 @@ public class CuDNNGradientChecks extends BaseDL4JTest {
         }
 
         MultiLayerConfiguration.Builder builder = new NeuralNetConfiguration.Builder().updater(new NoOp())
-                        .seed(12345L).weightInit(WeightInit.DISTRIBUTION)
+                        .seed(12345L)
                         .dist(new NormalDistribution(0, 2)).list()
                         .layer(0, new ConvolutionLayer.Builder().nOut(6).kernelSize(2, 2).stride(1, 1)
                                         .activation(Activation.TANH).build())
                         .layer(1, new LocalResponseNormalization.Builder().build())
                         .layer(2, new OutputLayer.Builder(LossFunctions.LossFunction.MCXENT)
                                         .activation(Activation.SOFTMAX).nOut(nOut).build())
-                        .setInputType(InputType.convolutional(hw, hw, depth)).pretrain(false).backprop(true);
+                        .setInputType(InputType.convolutional(hw, hw, depth));
 
         MultiLayerNetwork mln = new MultiLayerNetwork(builder.build());
         mln.init();
@@ -357,7 +380,7 @@ public class CuDNNGradientChecks extends BaseDL4JTest {
         }
 
         MultiLayerConfiguration.Builder builder = new NeuralNetConfiguration.Builder()
-                        .updater(new NoOp()).seed(12345L).weightInit(WeightInit.DISTRIBUTION)
+                        .updater(new NoOp()).seed(12345L)
                         .dist(new NormalDistribution(0, 2)).list()
                         .layer(0, new LSTM.Builder().nIn(input.size(1)).nOut(lstmLayerSize)
                                         .gateActivationFunction(Activation.SIGMOID).activation(Activation.TANH).build())
@@ -365,7 +388,7 @@ public class CuDNNGradientChecks extends BaseDL4JTest {
                                         .gateActivationFunction(Activation.SIGMOID).activation(Activation.TANH).build())
                         .layer(2, new RnnOutputLayer.Builder(LossFunctions.LossFunction.MCXENT)
                                         .activation(Activation.SOFTMAX).nIn(lstmLayerSize).nOut(nOut).build())
-                        .pretrain(false).backprop(true);
+                        ;
 
         MultiLayerNetwork mln = new MultiLayerNetwork(builder.build());
         mln.init();
@@ -414,7 +437,7 @@ public class CuDNNGradientChecks extends BaseDL4JTest {
         }
 
         MultiLayerConfiguration.Builder builder = new NeuralNetConfiguration.Builder()
-                        .updater(new NoOp()).seed(12345L).weightInit(WeightInit.DISTRIBUTION)
+                        .updater(new NoOp()).seed(12345L)
                         .dist(new NormalDistribution(0, 2)).list()
                         .layer(0, new LSTM.Builder().nIn(input.size(1)).nOut(lstmLayerSize)
                                         .gateActivationFunction(Activation.SIGMOID).activation(Activation.TANH).build())
@@ -422,7 +445,7 @@ public class CuDNNGradientChecks extends BaseDL4JTest {
                                         .gateActivationFunction(Activation.SIGMOID).activation(Activation.TANH).build())
                         .layer(2, new RnnOutputLayer.Builder(LossFunctions.LossFunction.MCXENT)
                                         .activation(Activation.SOFTMAX).nIn(lstmLayerSize).nOut(nOut).build())
-                        .pretrain(false).backprop(true);
+                        ;
 
         MultiLayerNetwork mln = new MultiLayerNetwork(builder.build());
         mln.init();
@@ -566,7 +589,7 @@ public class CuDNNGradientChecks extends BaseDL4JTest {
 
             NeuralNetConfiguration.ListBuilder builder = new NeuralNetConfiguration.Builder()
                     .seed(12345)
-                    .weightInit(WeightInit.DISTRIBUTION)
+
                     .dist(new NormalDistribution(0, 1))
                     .convolutionMode(ConvolutionMode.Same)
                     .dropOut(dropout)
@@ -630,5 +653,38 @@ public class CuDNNGradientChecks extends BaseDL4JTest {
             assertTrue(msg, gradOK);
             TestUtils.testModelSerialization(mln);
         }
+    }
+
+
+    @Test
+    public void testDenseBatchNorm(){
+
+
+        MultiLayerConfiguration conf = new NeuralNetConfiguration.Builder()
+                .seed(12345)
+                .weightInit(WeightInit.XAVIER)
+                .updater(new NoOp())
+                .list()
+                .layer(new DenseLayer.Builder().nIn(5).nOut(5).activation(Activation.TANH).build())
+                .layer(new BatchNormalization.Builder().nOut(5).build())
+                .layer(new OutputLayer.Builder().nIn(5).nOut(5).activation(Activation.SOFTMAX).lossFunction(LossFunctions.LossFunction.MCXENT).build())
+                .build();
+
+        MultiLayerNetwork net = new MultiLayerNetwork(conf);
+        net.init();
+
+        INDArray in = Nd4j.rand(3, 5);
+        INDArray labels = TestUtils.randomOneHot(3, 5);
+
+        //Mean and variance vars are not gradient checkable; mean/variance "gradient" is used to implement running mean/variance calc
+        //i.e., runningMean = decay * runningMean + (1-decay) * batchMean
+        //However, numerical gradient will be 0 as forward pass doesn't depend on this "parameter"
+        Set<String> excludeParams = new HashSet<>(Arrays.asList("1_mean", "1_var", "1_log10stdev"));
+        boolean gradOK = GradientCheckUtil.checkGradients(net, DEFAULT_EPS, DEFAULT_MAX_REL_ERROR,
+                DEFAULT_MIN_ABS_ERROR, PRINT_RESULTS, RETURN_ON_FIRST_FAILURE, in, labels, excludeParams);
+
+        assertTrue(gradOK);
+
+        TestUtils.testModelSerialization(net);
     }
 }

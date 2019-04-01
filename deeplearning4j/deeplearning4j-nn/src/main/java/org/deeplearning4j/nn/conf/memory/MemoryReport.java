@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.nn.conf.memory;
 
 import lombok.EqualsAndHashCode;
@@ -5,6 +21,7 @@ import lombok.NonNull;
 import org.deeplearning4j.nn.conf.CacheMode;
 import org.deeplearning4j.nn.conf.NeuralNetConfiguration;
 import org.nd4j.linalg.api.buffer.DataBuffer;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.buffer.util.DataTypeUtil;
 import org.nd4j.shade.jackson.annotation.JsonTypeInfo;
 import org.nd4j.shade.jackson.core.JsonProcessingException;
@@ -118,7 +135,7 @@ public abstract class MemoryReport {
      * @return The estimated total memory consumption in bytes
      */
     public abstract long getTotalMemoryBytes(int minibatchSize, @NonNull MemoryUseMode memoryUseMode,
-                    @NonNull CacheMode cacheMode, @NonNull DataBuffer.Type dataType);
+                    @NonNull CacheMode cacheMode, @NonNull DataType dataType);
 
     /**
      * Get the memory estimate (in bytes) for the specified type of memory, using the current ND4J data type
@@ -145,11 +162,11 @@ public abstract class MemoryReport {
      * @return              Estimated memory use for the given memory type
      */
     public abstract long getMemoryBytes(MemoryType memoryType, int minibatchSize, MemoryUseMode memoryUseMode,
-                    CacheMode cacheMode, DataBuffer.Type dataType);
+                    CacheMode cacheMode, DataType dataType);
 
     public abstract String toString();
 
-    protected int getBytesPerElement(DataBuffer.Type dataType) {
+    protected int getBytesPerElement(DataType dataType) {
         switch (dataType) {
             case DOUBLE:
                 return 8;

@@ -131,7 +131,7 @@ namespace nd4j {
             }
         }
 
-        bool _preprocess_strided_slice(IndicesList* indicesList, std::vector<Nd4jLong>* final_shape, std::vector<Nd4jLong>& input_shape, std::vector<int>& begin, std::vector<int>& end, std::vector<int>& strides, int begin_mask, int ellipsis_mask, int end_mask, int new_axis_mask, int shrink_axis_mask, bool* is_identity, bool* is_simple_slice, bool* slice_dim0) {
+        bool _preprocess_strided_slice(std::vector<Nd4jLong>* indicesList, std::vector<Nd4jLong>* final_shape, std::vector<Nd4jLong>& input_shape, std::vector<int>& begin, std::vector<int>& end, std::vector<int>& strides, int begin_mask, int ellipsis_mask, int end_mask, int new_axis_mask, int shrink_axis_mask, bool* is_identity, bool* is_simple_slice, bool* slice_dim0) {
             std::vector<int> preshape;
 
             bool ellipsis_seen = false;
@@ -252,10 +252,22 @@ namespace nd4j {
                     }
                 
                     if (indicesList != nullptr) {
-                        if (interval_length > 1)
-                            indicesList->push_back(NDIndex::interval(begin_idx, end_idx, stride_idx));
-                        else if (interval_length == 1)
-                            indicesList->push_back(NDIndex::point(begin_idx));
+                        if (interval_length > 1) {
+                            indicesList->push_back(begin_idx);
+                            indicesList->push_back(end_idx);
+                            indicesList->push_back(stride_idx);
+                            // (*indicesList)[3*e]   = begin_idx;
+                            // (*indicesList)[3*e+1] = end_idx;
+                            // (*indicesList)[3*e+2] = stride_idx;
+                        }
+                        else if (interval_length == 1) {                            
+                            indicesList->push_back(begin_idx);
+                            indicesList->push_back(begin_idx + 1);
+                            indicesList->push_back(1);
+                            // (*indicesList)[3*e]   = begin_idx;
+                            // (*indicesList)[3*e+1] = begin_idx + 1;
+                            // (*indicesList)[3*e+2] = 1;
+                        }
                     }
 
                     preshape.emplace_back(size_i);
@@ -286,6 +298,10 @@ namespace nd4j {
 
         CUSTOM_OP_IMPL(strided_slice, 1, 1, false, 0, 5) {
             auto x = INPUT_VARIABLE(0);
+            auto z = OUTPUT_VARIABLE(0);
+            if (z->isEmpty()) {
+                return ND4J_STATUS_OK;
+            }
 
             int begin_mask = INT_ARG(0);
             int ellipsis_mask = INT_ARG(1);
@@ -316,11 +332,11 @@ namespace nd4j {
 
                 REQUIRE_TRUE(delta == 0, 0, "StridedSlice: Number of Integer arguments should be equal to input rank x 3 = %i, but got %i instead", (x->rankOf() * 3), dim_values);
 
-                ShapeUtils<T>::copyVectorPart(begin, args, elements, 0);
-                ShapeUtils<T>::copyVectorPart(end, args, elements, elements);
-                ShapeUtils<T>::copyVectorPart(strides, args, elements, elements * 2);
+                ShapeUtils::copyVectorPart(begin, args, elements, 0);
+                ShapeUtils::copyVectorPart(end, args, elements, elements);
+                ShapeUtils::copyVectorPart(strides, args, elements, elements * 2);
 
-            } else if (block.width() >= 3) {
+            } else if (block.width() > 1) {
                 isLive = true;
 
                 auto v_begin = INPUT_VARIABLE(1);
@@ -331,28 +347,52 @@ namespace nd4j {
                 REQUIRE_TRUE(v_begin->lengthOf() == v_end->lengthOf(), 0, "StridedSlice: Length of begin/end should match, but got %i vs %i instead", (int) v_begin->lengthOf(), (int) v_end->lengthOf());
 
                 for (int e = 0; e < v_begin->lengthOf(); e++)
-                    begin.emplace_back((int) v_begin->getIndexedScalar(e));
+                    begin.emplace_back(v_begin->e<int>(e));
 
                 for (int e = 0; e < v_end->lengthOf(); e++)
-                    end.emplace_back((int) v_end->getIndexedScalar(e));
+                    end.emplace_back(v_end->e<int>(e));
 
-                if (block.width() >= 4) {
+                if (block.width() > 3) {
                     auto v_stride = INPUT_VARIABLE(3);
 
                     REQUIRE_TRUE(v_stride->lengthOf() == v_begin->lengthOf(), 0, "StridedSlice: Length of begin/end/stride should match, but got %i vs %i vs %i instead", (int) v_begin->lengthOf(), (int) v_end->lengthOf(), (int) v_stride->lengthOf());
 
                     for (int e = 0; e < v_stride->lengthOf(); e++)
-                        strides.emplace_back((int) v_stride->getIndexedScalar(e));
+                        strides.emplace_back(v_stride->e<int>(e));
                 } else {
                     for (int e = 0; e < v_begin->lengthOf(); e++)
                         strides.emplace_back(1);
                 }
             } else {
                 REQUIRE_TRUE(false, 0, "StridedSlice: Can't find begin/end/stride information neither in IArguments or in input arrays");
+            }            
+
+            // validation of begin and start
+            std::vector<int> ignoreBegin = BitwiseUtils::valueBits(begin_mask);
+            std::vector<int> ignoreEnd   = BitwiseUtils::valueBits(end_mask);
+            std::vector<int> addAxes     = BitwiseUtils::valueBits(new_axis_mask);
+            std::vector<int> moveAxes    = BitwiseUtils::valueBits(shrink_axis_mask);
+            
+            for (int dim = 0, b = 0, e = 0; dim < x->rankOf(); ++dim) {
+
+                if(moveAxes[dim])
+                    continue;                            
+                
+                if(b < begin.size() && !ignoreBegin[b] && !addAxes[dim]) {
+                    int first = strides[b] > 0 ? begin[b] : math::nd4j_abs<int>(begin[b]) - 1;
+                    REQUIRE_TRUE(first <= x->sizeAt(dim), 0, "StridedSlice: begin index should be <= corresponding dimension of input array, but got end_index = %i for dimension %i!", begin[b], dim);
+                }
+                if(e < end.size() && !ignoreEnd[e] && !addAxes[dim]) {
+                   int last  = strides[e] > 0 ? end[e] : math::nd4j_abs<int>(end[e])   - 1;
+                   REQUIRE_TRUE(last <= x->sizeAt(dim), 0, "StridedSlice: end index should be <= corresponding dimension of input array, but got end_index = %i for dimension %i!", end[e], dim);
+                }                
+                ++b;
+                ++e;
             }
 
-            IndicesList indices;
-            auto input_shape = x->getShapeAsVector();
+            
+            std::vector<Nd4jLong> indices;
+            auto input_shape = x->getShapeAsVector();            
             std::vector<Nd4jLong> final_shape;
             bool is_identity;
             bool is_simple_slice;
@@ -362,12 +402,13 @@ namespace nd4j {
             vectorize(input_shape);
             REQUIRE_TRUE(_preprocess_strided_slice(&indices, &final_shape, input_shape, begin, end, strides, begin_mask, ellipsis_mask, end_mask, new_axis_mask, shrink_axis_mask, &is_identity, &is_simple_slice, &is_dim0), 0, "StridedSlice: shape calculation failed");
 
-            auto sub = x->subarray(indices);
-
-            auto z = OUTPUT_VARIABLE(0);
-            z->assign(sub);
-
-            delete sub;
+            if(indices.size() == 3 && (indices[1] - indices[0]) == 1) {
+                z->assign(x->e<float>(indices[0]));
+            }
+            else {
+                auto sub = (*x)(indices, true, true);
+                z->assign(sub);
+            }
 
             return Status::OK();
         }
@@ -405,12 +446,36 @@ namespace nd4j {
                 for (int e = 5; e < block.getIArguments()->size(); e++)
                     args.emplace_back(INT_ARG(e));
 
-                ShapeUtils<T>::copyVectorPart(begin, args, elements, 0);
-                ShapeUtils<T>::copyVectorPart(end, args, elements, elements);
-                ShapeUtils<T>::copyVectorPart(strides, args, elements, elements * 2);
+                // FIXME: propably template required here
+                ShapeUtils::copyVectorPart(begin, args, elements, 0);
+                ShapeUtils::copyVectorPart(end, args, elements, elements);
+                ShapeUtils::copyVectorPart(strides, args, elements, elements * 2);
             }
 
             REQUIRE_TRUE(begin.size() > 0 && end.size() > 0 && strides.size() > 0, 0, "Strided_Slice: empty arguments");
+            
+            // validation of begin and start
+            std::vector<int> ignoreBegin = BitwiseUtils::valueBits(begin_mask);
+            std::vector<int> ignoreEnd   = BitwiseUtils::valueBits(end_mask);
+            std::vector<int> addAxes     = BitwiseUtils::valueBits(new_axis_mask);
+            std::vector<int> moveAxes    = BitwiseUtils::valueBits(shrink_axis_mask);
+            
+            for (int dim = 0, b = 0, e = 0; dim < inShape[0]; ++dim) {
+
+                if(moveAxes[dim])
+                    continue;                            
+
+                if(b < begin.size() && !ignoreBegin[b] && !addAxes[dim]) {
+                    int first = strides[b] > 0 ? begin[b] : math::nd4j_abs<int>(begin[b]) - 1;
+                    REQUIRE_TRUE(first <= inShape[dim+1], 0, "StridedSlice: begin index should be <= corresponding dimension of input array, but got end_index = %i for dimension %i!", begin[b], dim);                    
+                }
+                if(e < end.size() && !ignoreEnd[e] && !addAxes[dim]) {
+                   int last  = strides[e] > 0 ? end[e] : math::nd4j_abs<int>(end[e])   - 1;
+                   REQUIRE_TRUE(last <= inShape[dim+1], 0, "StridedSlice: end index should be <= corresponding dimension of input array, but got end_index = %i for dimension %i!", end[e], dim);                   
+                }
+                ++b;
+                ++e;
+            }
 
             Nd4jLong *newShape;
             std::vector<Nd4jLong> input_shape(shape::rank(inShape));
@@ -426,9 +491,17 @@ namespace nd4j {
             // FIXME: remove this, once we bring in 1D NDArrays 
             vectorize(input_shape);
             bool result = _preprocess_strided_slice(nullptr, &shape, input_shape, begin, end, strides, begin_mask, ellipsis_mask, end_mask, new_axis_mask, shrink_axis_mask, &is_identity, &is_simple_slice, &is_dim0);
-
-            ALLOCATE(newShape, block.getWorkspace(), shape::shapeInfoLength(shape.size()), Nd4jLong);
-            shape::shapeBuffer(shape.size(), shape.data(), newShape);
+            if (shape.size()) {
+                ALLOCATE(newShape, block.getWorkspace(), shape::shapeInfoLength(shape.size()), Nd4jLong);
+                shape::shapeBuffer(shape.size(), ArrayOptions::dataType(inShape), shape.data(), newShape);
+                //if (input_shape[0] == 0)
+                //    ArrayOptions::setPropertyBit(newShape, nd4j::ArrayType::EMPTY);
+            }
+            else {
+                newShape = ShapeBuilders::createScalarShapeInfo(ArrayOptions::dataType(inShape), block.workspace());
+                if (shape::rank(inShape) == 0 || begin == end)
+                ArrayOptions::setPropertyBit(newShape, ARRAY_EMPTY);
+            }
 
             return SHAPELIST(newShape);
         }
@@ -468,9 +541,9 @@ namespace nd4j {
 
                 REQUIRE_TRUE(delta == 0, 0, "StridedSliceBP: Number of Integer arguments should be equal to input rank x 3 = %i, but got %i instead", (x->rankOf() * 3), dim_values);
 
-                ShapeUtils<T>::copyVectorPart(begin, args, elements, 0);
-                ShapeUtils<T>::copyVectorPart(end, args, elements, elements);
-                ShapeUtils<T>::copyVectorPart(strides, args, elements, elements * 2);
+                ShapeUtils::copyVectorPart(begin, args, elements, 0);
+                ShapeUtils::copyVectorPart(end, args, elements, elements);
+                ShapeUtils::copyVectorPart(strides, args, elements, elements * 2);
 
             } else if (block.width() >= 3) {
                 isLive = true;
@@ -483,10 +556,10 @@ namespace nd4j {
                 REQUIRE_TRUE(v_begin->lengthOf() == v_end->lengthOf(), 0, "StridedSliceBP: Length of begin/end should match, but got %i vs %i instead", (int) v_begin->lengthOf(), (int) v_end->lengthOf());
 
                 for (int e = 0; e < v_begin->lengthOf(); e++)
-                    begin.emplace_back((int) v_begin->getIndexedScalar(e));
+                    begin.emplace_back(v_begin->e<int>(e));
 
                 for (int e = 0; e < v_end->lengthOf(); e++)
-                    end.emplace_back((int) v_end->getIndexedScalar(e));
+                    end.emplace_back(v_end->e<int>(e));
 
                 if (block.width() >= 4) {
                     auto v_stride = INPUT_VARIABLE(3);
@@ -494,7 +567,7 @@ namespace nd4j {
                     REQUIRE_TRUE(v_stride->lengthOf() == v_begin->lengthOf(), 0, "StridedSliceBP: Length of begin/end/stride should match, but got %i vs %i vs %i instead", (int) v_begin->lengthOf(), (int) v_end->lengthOf(), (int) v_stride->lengthOf());
 
                     for (int e = 0; e < v_stride->lengthOf(); e++)
-                        strides.emplace_back((int) v_stride->getIndexedScalar(e));
+                        strides.emplace_back(v_stride->e<int>(e));
                 } else {
                     for (int e = 0; e < v_begin->lengthOf(); e++)
                         strides.emplace_back(1);
@@ -503,8 +576,31 @@ namespace nd4j {
                 REQUIRE_TRUE(false, 0, "StridedSliceBP: Can't find begin/end/stride information neither in IArguments or in input arrays");
             }
 
-            IndicesList indices;
+            // validation of begin and start
+            std::vector<int> ignoreBegin = BitwiseUtils::valueBits(begin_mask);
+            std::vector<int> ignoreEnd   = BitwiseUtils::valueBits(end_mask);
+            std::vector<int> addAxes     = BitwiseUtils::valueBits(new_axis_mask);
+            std::vector<int> moveAxes    = BitwiseUtils::valueBits(shrink_axis_mask);
+            
+            for (int dim = 0, b = 0, e = 0; dim < x->rankOf(); ++dim) {
+
+                if(moveAxes[dim])
+                    continue;                            
+                
+                if(b < begin.size() && !ignoreBegin[b] && !addAxes[dim]) {
+                    int first = strides[b] > 0 ? begin[b] : math::nd4j_abs<int>(begin[b]) - 1;
+                    REQUIRE_TRUE(first <= x->sizeAt(dim), 0, "StridedSlice: begin index should be <= corresponding dimension of input array, but got end_index = %i for dimension %i!", begin[b], dim);
+                }
+                if(e < end.size() && !ignoreEnd[e] && !addAxes[dim]) {
+                   int last  = strides[e] > 0 ? end[e] : math::nd4j_abs<int>(end[e])   - 1;
+                   REQUIRE_TRUE(last <= x->sizeAt(dim), 0, "StridedSlice: end index should be <= corresponding dimension of input array, but got end_index = %i for dimension %i!", end[e], dim);
+                }                
+                ++b;
+                ++e;
+            }
+    
             auto input_shape = x->getShapeAsVector();
+            std::vector<Nd4jLong> indices;
             std::vector<Nd4jLong> final_shape;
             bool is_identity;
             bool is_simple_slice;
@@ -514,9 +610,13 @@ namespace nd4j {
             vectorize(input_shape);
             REQUIRE_TRUE(_preprocess_strided_slice(&indices, &final_shape, input_shape, begin, end, strides, begin_mask, ellipsis_mask, end_mask, new_axis_mask, shrink_axis_mask, &is_identity, &is_simple_slice, &is_dim0), 0, "StridedSliceBP: shape calculation failed");
 
-            auto sub = output->subarray(indices);
-            sub->assign(epsNext);
-            delete sub;
+            if(indices.size() == 3 && (indices[1] - indices[0]) == 1) {
+                output->p(indices[0], *epsNext);
+            }
+            else {
+                auto sub = (*output)(indices, true, true);
+                sub.assign(epsNext);
+            }           
 
             return Status::OK();
         }
@@ -527,6 +627,18 @@ namespace nd4j {
             COPY_SHAPE(inShape, newShape);
 
             return SHAPELIST(newShape);
+        }
+
+        DECLARE_TYPES(strided_slice) {
+            getOpDescriptor()
+                    ->setAllowedInputTypes(nd4j::DataType::ANY)
+                    ->setSameMode(true);
+        }
+
+        DECLARE_TYPES(strided_slice_bp) {
+            getOpDescriptor()
+                    ->setAllowedInputTypes(nd4j::DataType::ANY)
+                    ->setAllowedOutputTypes({ALL_FLOATS});
         }
     }
 }

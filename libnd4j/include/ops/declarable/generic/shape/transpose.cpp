@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 //
 // Created by raver119 on 29/10/17.
 //
@@ -36,7 +52,7 @@ namespace ops {
             if (w == 2 && a == 0) {
                 auto axis = INPUT_VARIABLE(1);
                 for (int e = 0; e < axis->lengthOf(); e++) {
-                    auto ax = static_cast<int>(axis->getScalar(e));
+                    auto ax = axis->e<int>(e);
                     if (ax < 0)
                         ax += x->rankOf();
 
@@ -56,7 +72,7 @@ namespace ops {
                 if (!block.isInplace())
                     output->assign(x);
 
-                return ND4J_STATUS_OK;
+                return Status::OK();
             }
 
             if(block.isInplace()) {		// in-place
@@ -74,10 +90,15 @@ namespace ops {
         return Status::OK();
     }
 
+    DECLARE_TYPES(transpose) {
+        getOpDescriptor()
+                ->setAllowedInputTypes(nd4j::DataType::ANY)
+                ->setSameMode(true);
+    }
 
     DECLARE_SHAPE_FN(transpose) {
         if (block.width() == 1) {
-            auto outputShapeInfo = ShapeUtils<T>::evalTranspShapeInfo(*INPUT_VARIABLE(0), block.workspace());
+            auto outputShapeInfo = ShapeUtils::evalTranspShapeInfo(*INPUT_VARIABLE(0), block.workspace());
             return SHAPELIST(outputShapeInfo);
         } else {
             // this is basically permute mode
@@ -90,24 +111,24 @@ namespace ops {
                 newshape[1] = 0;
                 newshape[2] = 1;
                 newshape[3] = 99;
+                ArrayOptions::copyDataType(newshape, inputShape->at(0));
                 shapeList->push_back(newshape);
             } else if (arguments->size() > 0 || inputShape->size() > 1) {
                 auto axis = arguments->size() > 0 ? *arguments : (INPUT_VARIABLE(1))->template asVectorT<int>();
-                auto outputShapeInfo = ShapeUtils<T>::evalPermShapeInfo(axis.data(), axis.size(), *INPUT_VARIABLE(0), block.workspace());
+                auto outputShapeInfo = ShapeUtils::evalPermShapeInfo(axis.data(), axis.size(), *INPUT_VARIABLE(0), block.workspace());
                 shapeList->push_back(outputShapeInfo);
             } else if (inputShape->size() == 2) {
                 // dead end
                 auto axis = INPUT_VARIABLE(1);
                 auto axisV = axis->template asVectorT<Nd4jLong>();
-                auto newshape = ShapeUtils<T>::evalPermShapeInfo(axisV.data(), axisV.size(), *INPUT_VARIABLE(0), block.workspace());
-
+                auto newshape = ShapeUtils::evalPermShapeInfo(axisV.data(), axisV.size(), *INPUT_VARIABLE(0), block.workspace());
                 shapeList->push_back(newshape);
             } else {
                 int rank = shape::rank(inputShape->at(0));
                 for (int e = rank - 1; e >= 0; e--)
                     arguments->emplace_back(e);
 
-                auto outputShapeInfo = ShapeUtils<T>::evalPermShapeInfo(arguments->data(), arguments->size(), *INPUT_VARIABLE(0), block.workspace());
+                auto outputShapeInfo = ShapeUtils::evalPermShapeInfo(arguments->data(), arguments->size(), *INPUT_VARIABLE(0), block.workspace());
                 shapeList->push_back(outputShapeInfo);
             }
 

@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.parameterserver.distributed.transport;
 
 import io.aeron.Aeron;
@@ -32,6 +48,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * @author raver119@gmail.com
  */
 @Slf4j
+@Deprecated
 public abstract class BaseTransport implements Transport {
     protected VoidConfiguration voidConfiguration;
     protected NodeRole nodeRole;
@@ -320,8 +337,9 @@ public abstract class BaseTransport implements Transport {
                     }
                 });
 
+                threadA.setDaemon(true);
                 threadA.start();
-            }
+                }
                 break;
             case DEDICATED_THREADS: {
                 // we start separate thread for each handler
@@ -337,12 +355,15 @@ public abstract class BaseTransport implements Transport {
                     // // Shard or Backup uses two subscriptions
 
                     // setting up thread for shard->client communication listener
-                    if (messageHandlerForShards != null)
+                    if (messageHandlerForShards != null) {
                         threadB = new Thread(() -> {
                             while (runner.get())
                                 idler.idle(subscriptionForShards.poll(messageHandlerForShards, 512));
 
                         });
+                        threadB.setDaemon(true);
+                        threadB.setName("VoidParamServer subscription threadB [" + nodeRole + "]");
+                    }
 
                     // setting up thread for inter-shard communication listener
                     threadA = new Thread(() -> {

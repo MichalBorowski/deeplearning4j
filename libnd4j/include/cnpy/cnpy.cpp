@@ -1,8 +1,25 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 //Copyright (C) 2011  Carl Rogers
 //Released under MIT License
 //license available in LICENSE file, or at http://www.opensource.org/licenses/mit-license.php
 
 #include <pointercast.h>
+#include <stdexcept>
 #include"cnpy.h"
 
 
@@ -48,6 +65,17 @@ char cnpy::mapType(const std::type_info &t) {
     else return '?';
 }
 
+template <typename T>
+std::vector<char>& operator+=(std::vector<char>& lhs, const T rhs) {
+    //write in little endian
+    for(char byte = 0; byte < sizeof(T); byte++) {
+        char val = *((char*)&rhs+byte);
+        lhs.push_back(val);
+    }
+
+    return lhs;
+}
+
 /**
  *
  * @param lhs
@@ -55,7 +83,7 @@ char cnpy::mapType(const std::type_info &t) {
  * @return
  */
 template<>
-std::vector<char>& cnpy::operator+=(std::vector<char>& lhs, const std::string rhs) {
+std::vector<char>& operator+=(std::vector<char>& lhs, const std::string rhs) {
     lhs.insert(lhs.end(),rhs.begin(),rhs.end());
     return lhs;
 }
@@ -67,7 +95,7 @@ std::vector<char>& cnpy::operator+=(std::vector<char>& lhs, const std::string rh
  * @return
  */
 template<>
-std::vector<char>& cnpy::operator+=(std::vector<char>& lhs, const char* rhs) {
+std::vector<char>& operator+=(std::vector<char>& lhs, const char* rhs) {
     //write in little endian
     size_t len = strlen(rhs);
     lhs.reserve(len);
@@ -82,7 +110,7 @@ std::vector<char>& cnpy::operator+=(std::vector<char>& lhs, const char* rhs) {
  * @param path
  * @return
  */
-char* cnpy::loadFile(char const *path) {
+char* cnpy::loadFile(const char *path) {
     char* buffer = 0;
     long length;
     FILE * f = fopen (path, "rb"); //was "rb"
@@ -128,22 +156,26 @@ void cnpy::parseNpyHeaderStr(std::string header,
 
     int loc1, loc2;
 
-    //fortran order
-    loc1 = header.find("fortranOrder") + 16;
-    fortranOrder = (header.substr(loc1,5) == "True" ? true : false);
 
+
+    //fortran order
+    loc1 = header.find("fortran_order") + 16;
+    fortranOrder = (header.substr(loc1,5) == "True" ? true : false);
     //shape
     loc1 = header.find("(");
     loc2 = header.find(")");
     std::string str_shape = header.substr(loc1 + 1,loc2 - loc1 - 1);
     if(str_shape[str_shape.size() - 1] == ',') ndims = 1;
     else ndims = std::count(str_shape.begin(),str_shape.end(),',')+1;
+
     shape = new unsigned int[ndims];
     for(unsigned int i = 0; i < ndims; i++) {
         loc1 = str_shape.find(",");
         shape[i] = atoi(str_shape.substr(0,loc1).c_str());
         str_shape = str_shape.substr(loc1 + 1);
     }
+
+
 
     //endian, word size, data type
     //byte order code | stands for not applicable.
@@ -158,6 +190,7 @@ void cnpy::parseNpyHeaderStr(std::string header,
     std::string str_ws = header.substr(loc1 + 2);
     loc2 = str_ws.find("'");
     wordSize = atoi(str_ws.substr(0,loc2).c_str());
+
 }
 
 /**
@@ -248,14 +281,26 @@ cnpy::NpyArray cnpy::loadNpyFromFile(FILE *fp) {
     return arr;
 }
 
+
+
 /**
     *
     * @param data
     * @return
     */
 cnpy::NpyArray cnpy::loadNpyFromPointer(char *data)  {
-    //move the pointer forward by 11 immitating
+    //move the pointer forward by 11 imitating
     //the seek in loading directly from a file
+    return cnpy::loadNpyFromHeader(data);
+}
+
+/**
+*
+* @param data
+* @return
+*/
+cnpy::NpyArray cnpy::loadNpyFromHeader(char *data) {
+    //move passed magic
     data += 11;
     unsigned int *shape;
     unsigned int ndims, wordSize;
@@ -267,13 +312,16 @@ cnpy::NpyArray cnpy::loadNpyFromPointer(char *data)  {
                             fortranOrder);
     //the "real" data starts after the \n
     char currChar = data[0];
+    int count = 0;
     while(currChar != '\n') {
         data++;
         currChar = data[0];
+        count++;
     }
 
     //move pass the \n
     data++;
+    count++;
 
     unsigned long long size = 1; //long long so no overflow when multiplying by word_size
     for(unsigned int i = 0; i < ndims; i++) size *= shape[i];
@@ -287,18 +335,13 @@ cnpy::NpyArray cnpy::loadNpyFromPointer(char *data)  {
     return arr;
 }
 
-
 /**
  * Load the numpy z archive
- * @param fname the fully qualified path
- * @return the
+ * @param fp FILE pointer
+ * @return the arrays
  */
-cnpy::npz_t cnpy::npzLoad(std::string fname) {
-    FILE* fp = fopen(fname.c_str(),"rb");
 
-    if(!fp) printf("npz_load: Error! Unable to open file %s!\n",fname.c_str());
-    assert(fp);
-
+cnpy::npz_t cnpy::npzLoad(FILE* fp){
     cnpy::npz_t arrays;
 
     while(1) {
@@ -317,7 +360,7 @@ cnpy::npz_t cnpy::npzLoad(std::string fname) {
         if(vname_res != name_len)
             throw std::runtime_error("npz_load: failed fread");
 
-        //erase the lagging .npy        
+        //erase the lagging .npy
         varname.erase(varname.end() - 4,varname.end());
 
         //read in the extra field
@@ -329,11 +372,55 @@ cnpy::npz_t cnpy::npzLoad(std::string fname) {
                 throw std::runtime_error("npz_load: failed fread");
         }
 
-        // arrays[varname] = loadArrayFromFile(fp);
+        arrays[varname] = loadNpyFromFile(fp);
     }
+    return arrays;
+}
 
+/**
+ * Load the numpy z archive
+ * @param fname the fully qualified path
+ * @return the arrays
+ */
+cnpy::npz_t cnpy::npzLoad(std::string fname) {
+    FILE* fp = fopen(fname.c_str(),"rb");
+
+    if(!fp) printf("npz_load: Error! Unable to open file %s!\n",fname.c_str());
+    assert(fp);
+    cnpy::npz_t arrays;
+    while(1) {
+        std::vector<char> local_header(30);
+        size_t headerres = fread(&local_header[0],sizeof(char),30,fp);
+        if(headerres != 30)
+            throw std::runtime_error("npz_load: failed fread");
+
+        //if we've reached the global header, stop reading
+        if(local_header[2] != 0x03 || local_header[3] != 0x04) break;
+
+        //read in the variable name
+        unsigned short name_len = *(unsigned short*) &local_header[26];
+        std::string varname(name_len,' ');
+        size_t vname_res = fread(&varname[0],sizeof(char),name_len,fp);
+        if(vname_res != name_len)
+            throw std::runtime_error("npz_load: failed fread");
+
+        //erase the lagging .npy
+        varname.erase(varname.end() - 4,varname.end());
+
+        //read in the extra field
+        unsigned short extra_field_len = *(unsigned short*) &local_header[28];
+        if(extra_field_len > 0) {
+            std::vector<char> buff(extra_field_len);
+            size_t efield_res = fread(&buff[0],sizeof(char),extra_field_len,fp);
+            if(efield_res != extra_field_len)
+                throw std::runtime_error("npz_load: failed fread");
+        }
+
+        arrays[varname] = loadNpyFromFile(fp);
+    }
     fclose(fp);
     return arrays;
+
 }
 
 /**
@@ -347,7 +434,6 @@ cnpy::NpyArray cnpy::npzLoad(std::string fname, std::string varname) {
 
     if(!fp) {
         printf("npz_load: Error! Unable to open file %s!\n",fname.c_str());
-        abort();
     }
 
     while(1) {
@@ -385,7 +471,7 @@ cnpy::NpyArray cnpy::npzLoad(std::string fname, std::string varname) {
 
     fclose(fp);
     printf("npz_load: Error! Variable name %s not found in %s!\n",varname.c_str(),fname.c_str());
-    abort();
+    throw std::runtime_error("Variable wasn't found in file");
 }
 
 
@@ -401,7 +487,6 @@ cnpy::NpyArray cnpy::npyLoad(std::string fname) {
 
     if(!fp) {
         printf("npy_load: Error! Unable to open file %s!\n",fname.c_str());
-        abort();
     }
 
     NpyArray arr = cnpy::loadNpyFromFile(fp);
@@ -411,4 +496,136 @@ cnpy::NpyArray cnpy::npyLoad(std::string fname) {
 }
 
 
+/**
+     * Save the numpy array
+     * @tparam T
+     * @param fname the file
+     * @param data the data for the ndarray
+     * @param shape the shape of the ndarray
+     * @param ndims the number of dimensions
+     * for the ndarray
+     * @param mode the mode for writing
+     */
+template<typename T>
+void cnpy::npy_save(std::string fname,
+                          const T* data,
+                          const unsigned int* shape,
+                          const unsigned int ndims,
+                          std::string mode) {
 
+    FILE* fp = NULL;
+
+    if(mode == "a")
+        fp = fopen(fname.c_str(),"r+b");
+
+    if(fp) {
+        //file exists. we need to append to it. read the header, modify the array size
+        unsigned int word_size, tmp_dims;
+        unsigned int* tmp_shape = 0;
+        bool fortran_order;
+        parseNpyHeader(fp,
+                       word_size,
+                       tmp_shape,
+                       tmp_dims,
+                       fortran_order);
+
+        assert(!fortran_order);
+
+        if(word_size != sizeof(T)) {
+            std::cout<<"libnpy error: " << fname<< " has word size " << word_size<<" but npy_save appending data sized " << sizeof(T) <<"\n";
+            assert( word_size == sizeof(T) );
+        }
+
+        if(tmp_dims != ndims) {
+            std::cout<<"libnpy error: npy_save attempting to append misdimensioned data to "<<fname<<"\n";
+            assert(tmp_dims == ndims);
+        }
+
+        for(int i = 1; i < ndims; i++) {
+            if(shape[i] != tmp_shape[i]) {
+                std::cout<<"libnpy error: npy_save attempting to append misshaped data to " << fname << "\n";
+                assert(shape[i] == tmp_shape[i]);
+            }
+        }
+
+        tmp_shape[0] += shape[0];
+
+        fseek(fp,0,SEEK_SET);
+        std::vector<char> header = createNpyHeader(data,tmp_shape,ndims);
+        fwrite(&header[0],sizeof(char),header.size(),fp);
+        fseek(fp,0,SEEK_END);
+
+        delete[] tmp_shape;
+    }
+    else {
+        fp = fopen(fname.c_str(),"wb");
+        std::vector<char> header = createNpyHeader(data,shape,ndims);
+        fwrite(&header[0],sizeof(char),header.size(),fp);
+    }
+
+    unsigned int nels = 1;
+    for(int i = 0;i < ndims;i++) nels *= shape[i];
+
+    fwrite(data,sizeof(T),nels,fp);
+    fclose(fp);
+}
+
+
+/**
+ *
+ * @tparam T
+ * @param data
+ * @param shape
+ * @param ndims
+ * @return
+ */
+template<typename T>
+std::vector<char> cnpy::createNpyHeader(const T *data,
+                                              const unsigned int *shape,
+                                              const unsigned int ndims,
+                                              unsigned int wordSize) {
+
+    std::vector<char> dict;
+    dict += "{'descr': '";
+    dict += BigEndianTest();
+    dict += mapType(typeid(T));
+    dict += tostring(wordSize);
+    dict += "', 'fortran_order': False, 'shape': (";
+    dict += tostring(shape[0]);
+    for(int i = 1; i < ndims;i++) {
+        dict += ", ";
+        dict += tostring(shape[i]);
+    }
+
+    if(ndims == 1)
+        dict += ",";
+    dict += "), }";
+    //pad with spaces so that preamble+dict is modulo 16 bytes. preamble is 10 bytes. dict needs to end with \n
+    int remainder = 16 - (10 + dict.size()) % 16;
+    dict.insert(dict.end(),remainder,' ');
+    dict.back() = '\n';
+
+    std::vector<char> header;
+    header += (char) 0x93;
+    header += "NUMPY";
+    header += (char) 0x01; //major version of numpy format
+    header += (char) 0x00; //minor version of numpy format
+    header += (unsigned short) dict.size();
+    header.insert(header.end(),dict.begin(),dict.end());
+    std::vector<int> remove;
+    for(int i = 0; i < header.size(); i++) {
+        if(header[i] == '\0') {
+            remove.push_back(i);
+        }
+    }
+
+    for(int i = 0; i < remove.size(); i++) {
+        header.erase(header.begin() + remove[i]);
+    }
+
+    return header;
+}
+
+template ND4J_EXPORT std::vector<char> cnpy::createNpyHeader<void>(const void *data, const unsigned int *shape, const unsigned int ndims, unsigned int wordSize);
+
+template ND4J_EXPORT void cnpy::npy_save<float>(std::string fname, const float* data, const unsigned int* shape, const unsigned int ndims, std::string mode);

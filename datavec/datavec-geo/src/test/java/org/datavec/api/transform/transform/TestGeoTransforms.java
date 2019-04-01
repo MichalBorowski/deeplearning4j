@@ -1,18 +1,18 @@
-/*-
- *  * Copyright 2017 Skymind, Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
- */
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.datavec.api.transform.transform;
 
@@ -79,7 +79,7 @@ public class TestGeoTransforms {
 
         String in = "128.101.101.101";
         double latitude = 44.9733;
-        double longitude = -93.2323;
+        double longitude = -93.158;
 
         List<Writable> writables = transform.map(Collections.singletonList((Writable) new Text(in)));
         assertEquals(1, writables.size());
@@ -113,8 +113,8 @@ public class TestGeoTransforms {
         Schema schema = new Schema.Builder().addColumnString("column").build();
         LocationType[] locationTypes = LocationType.values();
         String in = "128.101.101.101";
-        String[] locations = {"Minneapolis", "5037649", "North America", "6255149", "United States", "6252001",
-                        "44.9733:-93.2323", "55414", "Minnesota", "5037779"};
+        String[] locations = {"Saint Paul", "5045360", "North America", "6255149", "United States", "6252001",
+                        "44.9733:-93.2323", "55104", "Minnesota", "5037779"};
 
         for (int i = 0; i < locationTypes.length; i++) {
             LocationType locationType = locationTypes[i];

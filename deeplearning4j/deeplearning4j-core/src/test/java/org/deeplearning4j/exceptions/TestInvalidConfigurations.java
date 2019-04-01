@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.exceptions;
 
 import org.deeplearning4j.BaseDL4JTest;
@@ -10,6 +26,7 @@ import org.deeplearning4j.nn.conf.layers.*;
 import org.deeplearning4j.nn.conf.preprocessor.CnnToFeedForwardPreProcessor;
 import org.deeplearning4j.nn.multilayer.MultiLayerNetwork;
 import org.junit.Test;
+import org.nd4j.linalg.activations.Activation;
 import org.nd4j.linalg.factory.Nd4j;
 
 import static org.junit.Assert.fail;
@@ -216,7 +233,7 @@ public class TestInvalidConfigurations extends BaseDL4JTest {
         MultiLayerConfiguration conf = new NeuralNetConfiguration.Builder().list()
                         .layer(0, new ConvolutionLayer.Builder().kernelSize(7, 7).stride(1, 1).padding(0, 0).nOut(5)
                                         .build())
-                        .layer(1, new OutputLayer.Builder().nOut(10).build())
+                        .layer(1, new OutputLayer.Builder().nOut(10).activation(Activation.SOFTMAX).build())
                         .setInputType(InputType.convolutional(hIn, wIn, depthIn)).build();
 
         MultiLayerNetwork net = new MultiLayerNetwork(conf);
@@ -248,7 +265,7 @@ public class TestInvalidConfigurations extends BaseDL4JTest {
                         new NeuralNetConfiguration.Builder().convolutionMode(ConvolutionMode.Strict).list()
                                         .layer(0, new ConvolutionLayer.Builder().kernelSize(3, 3).stride(2, 2)
                                                         .padding(0, 0).nIn(depthIn).nOut(5).build())
-                                        .layer(1, new OutputLayer.Builder().nIn(5 * 4 * 4).nOut(10).build())
+                                        .layer(1, new OutputLayer.Builder().nIn(5 * 4 * 4).nOut(10).activation(Activation.SOFTMAX).build())
                                         .inputPreProcessor(1, new CnnToFeedForwardPreProcessor()).build();
 
         MultiLayerNetwork net = new MultiLayerNetwork(conf);
@@ -281,7 +298,7 @@ public class TestInvalidConfigurations extends BaseDL4JTest {
             MultiLayerConfiguration conf = new NeuralNetConfiguration.Builder().list()
                             .layer(0, new ConvolutionLayer.Builder().kernelSize(2, 3).stride(2, 2).padding(0, 0).nOut(5)
                                             .build())
-                            .layer(1, new OutputLayer.Builder().nOut(10).build())
+                            .layer(1, new OutputLayer.Builder().nOut(10).activation(Activation.SOFTMAX).build())
                             .setInputType(InputType.convolutional(hIn, wIn, depthIn)).build();
         } catch (Exception e) {
             fail("Did not expect exception with default (truncate)");
@@ -340,7 +357,7 @@ public class TestInvalidConfigurations extends BaseDL4JTest {
         new ConvolutionLayer.Builder().kernelSize(3, 0).build();
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test(expected = IllegalArgumentException.class)
     public void testCnnInvalidKernel2() {
         new ConvolutionLayer.Builder().kernelSize(2, 2, 2).build();
     }
@@ -350,17 +367,17 @@ public class TestInvalidConfigurations extends BaseDL4JTest {
         new ConvolutionLayer.Builder().kernelSize(3, 3).stride(0, 1).build();
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test(expected = IllegalArgumentException.class)
     public void testCnnInvalidStride2() {
         new ConvolutionLayer.Builder().kernelSize(3, 3).stride(1).build();
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test(expected = IllegalArgumentException.class)
     public void testCnnInvalidPadding() {
         new ConvolutionLayer.Builder().kernelSize(3, 3).stride(1, 1).padding(-1, 0).build();
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test(expected = IllegalArgumentException.class)
     public void testCnnInvalidPadding2() {
         new ConvolutionLayer.Builder().kernelSize(3, 3).stride(1, 1).padding(0, 0, 0).build();
     }
@@ -370,7 +387,7 @@ public class TestInvalidConfigurations extends BaseDL4JTest {
         new SubsamplingLayer.Builder().kernelSize(3, 0).build();
     }
 
-    @Test(expected = RuntimeException.class)
+    @Test(expected = IllegalArgumentException.class)
     public void testSubsamplingInvalidKernel2() {
         new SubsamplingLayer.Builder().kernelSize(2).build();
     }
@@ -385,7 +402,7 @@ public class TestInvalidConfigurations extends BaseDL4JTest {
         new SubsamplingLayer.Builder().kernelSize(3, 3).stride(1, 1, 1).build();
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test(expected = IllegalArgumentException.class)
     public void testSubsamplingInvalidPadding() {
         new SubsamplingLayer.Builder().kernelSize(3, 3).stride(1, 1).padding(-1, 0).build();
     }

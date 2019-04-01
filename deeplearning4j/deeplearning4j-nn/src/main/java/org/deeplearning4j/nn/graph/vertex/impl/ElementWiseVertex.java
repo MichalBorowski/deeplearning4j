@@ -1,20 +1,18 @@
-/*-
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
  *
- *  * Copyright 2016 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
  *
- */
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.deeplearning4j.nn.graph.vertex.impl;
 
@@ -24,13 +22,14 @@ import org.deeplearning4j.nn.gradient.Gradient;
 import org.deeplearning4j.nn.graph.ComputationGraph;
 import org.deeplearning4j.nn.graph.vertex.BaseGraphVertex;
 import org.deeplearning4j.nn.graph.vertex.VertexIndices;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.memory.MemoryWorkspace;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.api.ops.CustomOp;
 import org.nd4j.linalg.api.ops.DynamicCustomOp;
-import org.nd4j.linalg.api.ops.impl.transforms.MatchConditionTransform;
-import org.nd4j.linalg.api.ops.impl.transforms.Or;
-import org.nd4j.linalg.api.ops.impl.transforms.arithmetic.OldSubOp;
+import org.nd4j.linalg.api.ops.impl.transforms.bool.MatchConditionTransform;
+import org.nd4j.linalg.api.ops.impl.transforms.pairwise.bool.Or;
+import org.nd4j.linalg.api.ops.impl.transforms.pairwise.arithmetic.OldSubOp;
 import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.indexing.conditions.Conditions;
 import org.nd4j.linalg.primitives.Pair;
@@ -79,7 +78,7 @@ public class ElementWiseVertex extends BaseGraphVertex {
 
         nInForwardPass = inputs.length;
         if (inputs.length == 1)
-            return inputs[0];
+            return workspaceMgr.dup(ArrayType.ACTIVATIONS, inputs[0]);
 
         switch (op) {
             case Add:
@@ -97,8 +96,7 @@ public class ElementWiseVertex extends BaseGraphVertex {
             case Subtract:
                 if (inputs.length != 2)
                     throw new IllegalArgumentException("ElementWise subtraction only supports 2 inputs");
-                return Nd4j.getExecutioner().execAndReturn(
-                        new OldSubOp(inputs[0], inputs[1], workspaceMgr.createUninitialized(ArrayType.ACTIVATIONS, inputs[0].shape())));
+                return Nd4j.getExecutioner().exec(new OldSubOp(inputs[0], inputs[1], workspaceMgr.createUninitialized(ArrayType.ACTIVATIONS, inputs[0].shape())));
             case Product:
                 INDArray product =  workspaceMgr.dup(ArrayType.ACTIVATIONS, inputs[0]);
                 for (int i = 1; i < inputs.length; i++) {
@@ -125,7 +123,7 @@ public class ElementWiseVertex extends BaseGraphVertex {
             throw new IllegalStateException("Cannot do backward pass: errors not set");
 
         if (nInForwardPass == 1)
-            return new Pair<>(null, new INDArray[] {epsilon});
+            return new Pair<>(null, new INDArray[] {workspaceMgr.dup(ArrayType.ACTIVATION_GRAD, epsilon)});
 
         switch (op) {
             case Add:
@@ -158,7 +156,7 @@ public class ElementWiseVertex extends BaseGraphVertex {
                 return new Pair<>(null, out_product);
             case Max:
                 INDArray[] outMax = new INDArray[nInForwardPass];
-                INDArray maxIndices = workspaceMgr.createUninitialized(ArrayType.BP_WORKING_MEM, epsilon.shape(), epsilon.ordering());
+                INDArray maxIndices = workspaceMgr.createUninitialized(ArrayType.BP_WORKING_MEM, DataType.INT, epsilon.shape(), epsilon.ordering());
                 CustomOp op = DynamicCustomOp.builder("mergemaxindex")
                         .addInputs(inputs)
                         .addOutputs(maxIndices)
@@ -167,11 +165,11 @@ public class ElementWiseVertex extends BaseGraphVertex {
                 Nd4j.getExecutioner().exec(op);
                 for (int i = 0; i < nInForwardPass; i++) {
                     //gradient is epsilon where the max index is the same as i and zero elsewhere
-                    outMax[i] = workspaceMgr.dup(ArrayType.ACTIVATION_GRAD, maxIndices);
+                    outMax[i] = workspaceMgr.create(ArrayType.BP_WORKING_MEM, DataType.BOOL, maxIndices.shape());    //workspaceMgr.dup(ArrayType.ACTIVATION_GRAD, maxIndices);
                     //generate a mask with 1s and 0s in the right places and muli with epsilon
-                    MatchConditionTransform nd4jop = new MatchConditionTransform(outMax[i], outMax[i], Conditions.equals(i));
+                    MatchConditionTransform nd4jop = new MatchConditionTransform(maxIndices, outMax[i], Conditions.equals(i));
                     Nd4j.getExecutioner().exec(nd4jop);
-                    outMax[i].muli(epsilon);
+                    outMax[i] = workspaceMgr.leverageTo(ArrayType.ACTIVATION_GRAD, outMax[i].castTo(Nd4j.defaultFloatingPointType())).muli(epsilon);
                 }
                 return new Pair<>(null, outMax);
             default:
@@ -209,12 +207,12 @@ public class ElementWiseVertex extends BaseGraphVertex {
         if (maskArrays.length == 1) {
             return new Pair<>(maskArrays[0], currentMaskState);
         } else {
-            INDArray ret = maskArrays[0].dup(maskArrays[0].ordering());
-            Nd4j.getExecutioner().exec(new Or(maskArrays[0], maskArrays[1], ret));
+            INDArray ret = Nd4j.createUninitialized(DataType.BOOL, maskArrays[0].shape());  //maskArrays[0].dup(maskArrays[0].ordering());
+            Nd4j.getExecutioner().exec(new Or(maskArrays[0].castTo(DataType.BOOL), maskArrays[1].castTo(DataType.BOOL), ret));
             for (int i = 2; i < maskArrays.length; i++) {
-                Nd4j.getExecutioner().exec(new Or(maskArrays[i], ret, ret));
+                Nd4j.getExecutioner().exec(new Or(maskArrays[i].castTo(DataType.BOOL), ret, ret));
             }
-            return new Pair<>(ret, currentMaskState);
+            return new Pair<>(ret.castTo(Nd4j.defaultFloatingPointType()), currentMaskState);
         }
     }
 

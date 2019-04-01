@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.nn.layers.convolution;
 
 import lombok.val;
@@ -7,20 +23,21 @@ import org.deeplearning4j.eval.Evaluation;
 import org.deeplearning4j.exception.DL4JException;
 import org.deeplearning4j.nn.api.Layer;
 import org.deeplearning4j.nn.api.OptimizationAlgorithm;
+import org.deeplearning4j.nn.conf.ConvolutionMode;
 import org.deeplearning4j.nn.conf.MultiLayerConfiguration;
 import org.deeplearning4j.nn.conf.NeuralNetConfiguration;
 import org.deeplearning4j.nn.conf.inputs.InputType;
+import org.deeplearning4j.nn.conf.layers.Convolution1DLayer;
 import org.deeplearning4j.nn.conf.layers.ConvolutionLayer;
-import org.deeplearning4j.nn.conf.layers.DenseLayer;
-import org.deeplearning4j.nn.conf.layers.OutputLayer;
-import org.deeplearning4j.nn.conf.layers.SubsamplingLayer;
+import org.deeplearning4j.nn.conf.layers.*;
 import org.deeplearning4j.nn.multilayer.MultiLayerNetwork;
 import org.deeplearning4j.nn.weights.WeightInit;
+import org.deeplearning4j.nn.workspace.LayerWorkspaceMgr;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.nd4j.linalg.activations.Activation;
 import org.nd4j.linalg.api.buffer.DataBuffer;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.buffer.util.DataTypeUtil;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.api.shape.Shape;
@@ -32,7 +49,8 @@ import org.nd4j.linalg.indexing.INDArrayIndex;
 import org.nd4j.linalg.indexing.NDArrayIndex;
 import org.nd4j.linalg.learning.config.Nesterovs;
 import org.nd4j.linalg.lossfunctions.LossFunctions;
-import org.deeplearning4j.nn.workspace.LayerWorkspaceMgr;
+
+import java.util.List;
 
 import static org.junit.Assert.*;
 
@@ -41,11 +59,9 @@ import static org.junit.Assert.*;
  */
 public class ConvolutionLayerTest extends BaseDL4JTest {
 
-    @Before
-    public void before() {
-        DataTypeUtil.setDTypeForContext(DataBuffer.Type.DOUBLE);
-        Nd4j.factory().setDType(DataBuffer.Type.DOUBLE);
-        Nd4j.EPS_THRESHOLD = 1e-4;
+    @Override
+    public DataType getDataType(){
+        return DataType.FLOAT;
     }
 
     @Test
@@ -67,7 +83,7 @@ public class ConvolutionLayerTest extends BaseDL4JTest {
                                         .dropOut(0.5).build())
                         .layer(3, new OutputLayer.Builder(LossFunctions.LossFunction.SQUARED_LOSS) //output layer
                                         .nOut(10).weightInit(WeightInit.XAVIER).activation(Activation.SOFTMAX).build())
-                        .setInputType(InputType.convolutionalFlat(28, 28, 1)).backprop(true).pretrain(false);
+                        .setInputType(InputType.convolutionalFlat(28, 28, 1));
 
         DataSetIterator iter = new MnistDataSetIterator(10, 10);
         MultiLayerConfiguration conf = builder.build();
@@ -104,7 +120,7 @@ public class ConvolutionLayerTest extends BaseDL4JTest {
                                         .layer(2, new OutputLayer.Builder().nOut(classes).weightInit(WeightInit.XAVIER)
                                                         .activation(Activation.SOFTMAX).build())
                                         .setInputType(InputType.convolutionalFlat(imageHeight, imageWidth, nChannels))
-                                        .backprop(true).pretrain(false);
+                                        ;
 
         MultiLayerConfiguration conf = builder.build();
         MultiLayerNetwork model = new MultiLayerNetwork(conf);
@@ -140,7 +156,7 @@ public class ConvolutionLayerTest extends BaseDL4JTest {
                                         .layer(1, new OutputLayer.Builder().nOut(classes).weightInit(WeightInit.XAVIER)
                                                         .activation(Activation.SOFTMAX).build())
                                         .setInputType(InputType.convolutionalFlat(imageHeight, imageWidth, nChannels))
-                                        .backprop(true).pretrain(false);
+                                        ;
 
         MultiLayerConfiguration conf = builder.build();
         MultiLayerNetwork model = new MultiLayerNetwork(conf);
@@ -174,41 +190,8 @@ public class ConvolutionLayerTest extends BaseDL4JTest {
                                                         .weightInit(WeightInit.XAVIER).build())
                                         .layer(1, new OutputLayer.Builder().nOut(classes).weightInit(WeightInit.XAVIER)
                                                         .activation(Activation.SOFTMAX).build())
-                                        .backprop(true).pretrain(false)
+
                                         .setInputType(InputType.convolutional(imageHeight, imageWidth, nChannels));
-
-        MultiLayerConfiguration conf = builder.build();
-        MultiLayerNetwork model = new MultiLayerNetwork(conf);
-        model.init();
-
-        INDArray emptyFeatures = Nd4j.zeros(numSamples, imageWidth * imageHeight * nChannels);
-        INDArray emptyLables = Nd4j.zeros(numSamples, classes);
-
-        trainInput = new DataSet(emptyFeatures, emptyLables);
-        model.fit(trainInput);
-    }
-
-    @Test(expected = Exception.class)
-    @Ignore //Test is based on the assumption that there is no default kernel size. Needs to be revisited.
-    public void testCNNKernelNoSize() {
-        int imageHeight = 20;
-        int imageWidth = 23;
-        int nChannels = 1;
-        int classes = 2;
-        int numSamples = 200;
-
-        int kernelHeight = 3;
-        int kernelWidth = 3;
-
-        DataSet trainInput;
-        MultiLayerConfiguration.Builder builder = new NeuralNetConfiguration.Builder().seed(123).list()
-                        .layer(0, new ConvolutionLayer.Builder().nOut(2).activation(Activation.RELU)
-                                        .weightInit(WeightInit.XAVIER).build())
-                        .layer(1, new SubsamplingLayer.Builder().poolingType(SubsamplingLayer.PoolingType.MAX).build())
-                        .layer(2, new OutputLayer.Builder().nOut(classes).weightInit(WeightInit.XAVIER)
-                                        .activation(Activation.SOFTMAX).build())
-                        .setInputType(InputType.convolutionalFlat(imageHeight, imageWidth, nChannels)).backprop(true)
-                        .pretrain(false);
 
         MultiLayerConfiguration conf = builder.build();
         MultiLayerNetwork model = new MultiLayerNetwork(conf);
@@ -267,11 +250,11 @@ public class ConvolutionLayerTest extends BaseDL4JTest {
     public void testActivateResultsContained() {
         Layer layer = getContainedConfig();
         INDArray input = getContainedData();
-        INDArray expectedOutput = Nd4j.create(new double[] {0.98201379, 0.98201379, 0.98201379, 0.98201379, 0.99966465,
-                        0.99966465, 0.99966465, 0.99966465, 0.98201379, 0.98201379, 0.98201379, 0.98201379, 0.99966465,
-                        0.99966465, 0.99966465, 0.99966465, 0.98201379, 0.98201379, 0.98201379, 0.98201379, 0.99966465,
-                        0.99966465, 0.99966465, 0.99966465, 0.98201379, 0.98201379, 0.98201379, 0.98201379, 0.99966465,
-                        0.99966465, 0.99966465, 0.99966465}, new int[] {1, 2, 4, 4});
+        INDArray expectedOutput = Nd4j.create(new float[] {0.98201379f, 0.98201379f, 0.98201379f, 0.98201379f, 0.99966465f,
+                        0.99966465f, 0.99966465f, 0.99966465f, 0.98201379f, 0.98201379f, 0.98201379f, 0.98201379f, 0.99966465f,
+                        0.99966465f, 0.99966465f, 0.99966465f, 0.98201379f, 0.98201379f, 0.98201379f, 0.98201379f, 0.99966465f,
+                        0.99966465f, 0.99966465f, 0.99966465f, 0.98201379f, 0.98201379f, 0.98201379f, 0.98201379f, 0.99966465f,
+                        0.99966465f, 0.99966465f, 0.99966465f}, new int[] {1, 2, 4, 4});
 
         INDArray convActivations = layer.activate(input, false, LayerWorkspaceMgr.noWorkspaces());
 
@@ -313,7 +296,7 @@ public class ConvolutionLayerTest extends BaseDL4JTest {
         DataSetIterator data = new MnistDataSetIterator(nExamples, nExamples);
         DataSet mnist = data.next();
         nExamples = mnist.numExamples();
-        return mnist.getFeatureMatrix().reshape(nExamples, nChannelsIn, inputHeight, inputWidth);
+        return mnist.getFeatures().reshape(nExamples, nChannelsIn, inputHeight, inputWidth);
     }
 
     public Layer getContainedConfig() {
@@ -334,14 +317,14 @@ public class ConvolutionLayerTest extends BaseDL4JTest {
     }
 
     public INDArray getContainedData() {
-        INDArray ret = Nd4j.create(new double[] {1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3,
+        INDArray ret = Nd4j.create(new float[] {1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3,
                         4, 4, 4, 4, 4, 4, 4, 4, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3,
                         4, 4, 4, 4, 4, 4, 4, 4}, new int[] {1, 1, 8, 8});
         return ret;
     }
 
     public INDArray getContainedCol() {
-        return Nd4j.create(new double[] {1, 1, 1, 1, 3, 3, 3, 3, 1, 1, 1, 1, 3, 3, 3, 3, 1, 1, 1, 1, 3, 3, 3, 3, 1, 1,
+        return Nd4j.create(new float[] {1, 1, 1, 1, 3, 3, 3, 3, 1, 1, 1, 1, 3, 3, 3, 3, 1, 1, 1, 1, 3, 3, 3, 3, 1, 1,
                         1, 1, 3, 3, 3, 3, 2, 2, 2, 2, 4, 4, 4, 4, 2, 2, 2, 2, 4, 4, 4, 4, 2, 2, 2, 2, 4, 4, 4, 4, 2, 2,
                         2, 2, 4, 4, 4, 4}, new int[] {1, 1, 2, 2, 4, 4});
     }
@@ -370,12 +353,12 @@ public class ConvolutionLayerTest extends BaseDL4JTest {
         DataSet test = mnistIter.next();
 
         Evaluation eval = new Evaluation();
-        INDArray output = model.output(test.getFeatureMatrix());
+        INDArray output = model.output(test.getFeatures());
         eval.eval(test.getLabels(), output);
         double f1Score = eval.f1();
 
         Evaluation eval2 = new Evaluation();
-        INDArray output2 = model2.output(test.getFeatureMatrix());
+        INDArray output2 = model2.output(test.getFeatures());
         eval2.eval(test.getLabels(), output2);
         double f1Score2 = eval2.f1();
 
@@ -397,15 +380,16 @@ public class ConvolutionLayerTest extends BaseDL4JTest {
         MultiLayerNetwork model2 = getCNNMLNConfig(true, false);
         model2.fit(mnistIter);
 
+        mnistIter.reset();
         DataSet test = mnistIter.next();
 
         Evaluation eval = new Evaluation();
-        INDArray output = model.output(test.getFeatureMatrix());
+        INDArray output = model.output(test.getFeatures());
         eval.eval(test.getLabels(), output);
         double f1Score = eval.f1();
 
         Evaluation eval2 = new Evaluation();
-        INDArray output2 = model2.output(test.getFeatureMatrix());
+        INDArray output2 = model2.output(test.getFeatures());
         eval2.eval(test.getLabels(), output2);
         double f1Score2 = eval2.f1();
 
@@ -600,7 +584,7 @@ public class ConvolutionLayerTest extends BaseDL4JTest {
                                         44}, //depth0
                         {9, 10, 11, 12, 13, 14, 15, 16, 17, 27, 28, 29, 30, 31, 32, 33, 34, 35, 45, 46, 47, 48, 49, 50,
                                         51, 52, 53} //depth1
-        });
+        }).castTo(delta2d.dataType());
 
         assertEquals(exp, delta2d);
     }
@@ -648,7 +632,7 @@ public class ConvolutionLayerTest extends BaseDL4JTest {
 
         //Expected order of weight rows, after reshaping: (kw0,kh0,din0), (kw1,kh0,din0), (kw0,kh1,din0), (kw1,kh1,din0), (kw0,kh0,din1), ...
         INDArray wExp = Nd4j.create(new double[][] {{0, 12}, {1, 13}, {2, 14}, {3, 15}, {4, 16}, {5, 17}, {6, 18},
-                        {7, 19}, {8, 20}, {9, 21}, {10, 22}, {11, 23}});
+                        {7, 19}, {8, 20}, {9, 21}, {10, 22}, {11, 23}}).castTo(DataType.FLOAT);
 
         assertEquals(wExp, w2d);
     }
@@ -669,12 +653,47 @@ public class ConvolutionLayerTest extends BaseDL4JTest {
                                                         LossFunctions.LossFunction.NEGATIVELOGLIKELIHOOD)
                                                                         .nOut(outputNum).weightInit(WeightInit.XAVIER)
                                                                         .activation(Activation.SOFTMAX).build())
-                                        .setInputType(InputType.convolutionalFlat(28, 28, 1)).backprop(backprop)
-                                        .pretrain(pretrain);
+                                        .setInputType(InputType.convolutionalFlat(28, 28, 1));
 
         MultiLayerNetwork model = new MultiLayerNetwork(conf.build());
         model.init();
 
         return model;
+    }
+
+
+
+    @Test
+    public void test1dInputType(){
+
+        MultiLayerConfiguration conf = new NeuralNetConfiguration.Builder()
+                .convolutionMode(ConvolutionMode.Same)
+                .list()
+                .layer(new Convolution1DLayer.Builder().nOut(3).kernelSize(2).activation(Activation.TANH).build())
+                .layer(new Subsampling1DLayer.Builder().kernelSize(2).stride(2).build())
+                .layer(new Upsampling1D.Builder().size(2).build())
+                .layer(new RnnOutputLayer.Builder().nOut(7).activation(Activation.SOFTMAX).build())
+                .setInputType(InputType.recurrent(10))
+                .build();
+
+        MultiLayerNetwork net = new MultiLayerNetwork(conf);
+        net.init();
+
+        List<InputType> l = conf.getLayerActivationTypes(InputType.recurrent(10));
+        assertEquals(InputType.recurrent(3, -1), l.get(0));
+        assertEquals(InputType.recurrent(3, -1), l.get(1));
+        assertEquals(InputType.recurrent(3, -1), l.get(2));
+        assertEquals(InputType.recurrent(7, -1), l.get(3));
+
+        List<InputType> l2 = conf.getLayerActivationTypes(InputType.recurrent(10, 6));
+        assertEquals(InputType.recurrent(3, 6), l2.get(0));
+        assertEquals(InputType.recurrent(3, 3), l2.get(1));
+        assertEquals(InputType.recurrent(3, 6), l2.get(2));
+        assertEquals(InputType.recurrent(7, 6), l2.get(3));
+
+
+        INDArray in = Nd4j.create(2, 10, 6);
+        INDArray out = net.output(in);
+        assertArrayEquals(new long[]{2,7,6}, out.shape());
     }
 }

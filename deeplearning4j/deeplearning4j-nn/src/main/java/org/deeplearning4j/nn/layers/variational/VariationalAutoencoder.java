@@ -1,8 +1,25 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.nn.layers.variational;
 
 import lombok.*;
 import org.deeplearning4j.nn.api.Layer;
 import org.deeplearning4j.nn.api.MaskState;
+import org.deeplearning4j.nn.api.TrainingConfig;
 import org.deeplearning4j.nn.api.layers.LayerConstraint;
 import org.deeplearning4j.nn.conf.CacheMode;
 import org.deeplearning4j.nn.conf.NeuralNetConfiguration;
@@ -24,6 +41,7 @@ import org.nd4j.linalg.api.blas.Level1;
 import org.nd4j.linalg.api.memory.MemoryWorkspace;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.factory.Nd4j;
+import org.nd4j.linalg.learning.regularization.Regularization;
 import org.nd4j.linalg.lossfunctions.ILossFunction;
 import org.nd4j.linalg.ops.transforms.Transforms;
 import org.nd4j.linalg.primitives.Pair;
@@ -36,7 +54,7 @@ import static org.deeplearning4j.nn.params.VariationalAutoencoderParamInitialize
 /**
  * Variational Autoencoder layer
  * <p>
- * See: Kingma & Welling, 2013: Auto-Encoding Variational Bayes - https://arxiv.org/abs/1312.6114
+ * See: Kingma & Welling, 2013: Auto-Encoding Variational Bayes - <a href="https://arxiv.org/abs/1312.6114">https://arxiv.org/abs/1312.6114</a>
  * <p>
  * This implementation allows multiple encoder and decoder layers, the number and sizes of which can be set independently.
  * <p>
@@ -138,10 +156,10 @@ public class VariationalAutoencoder implements Layer {
         return score;
     }
 
-    protected INDArray getParamWithNoise(String param, boolean training, LayerWorkspaceMgr workspaceMgr){
+    protected INDArray  getParamWithNoise(String param, boolean training, LayerWorkspaceMgr workspaceMgr){
         INDArray p;
         if(layerConf().getWeightNoise() != null){
-            if(training && weightNoiseParams.size() > 0 ){
+            if(training && weightNoiseParams.size() > 0 && weightNoiseParams.containsKey(param) ){
                 //Re-use these weights for both forward pass and backprop - don't want to use 2 different params here
                 //These should be cleared during  backprop
                 return weightNoiseParams.get(param);
@@ -228,7 +246,7 @@ public class VariationalAutoencoder implements Layer {
                 INDArray temp = meanZ.mul(meanZ).addi(pzxSigmaSquared).negi();
                 temp.addi(logStdev2Z).addi(1.0);
                 double scorePt1 = -0.5 / minibatch * temp.sumNumber().doubleValue();
-                this.score = scorePt1 + (calcL1(false) + calcL2(false)) / minibatch;
+                this.score = scorePt1 + calcRegularizationScore(false);
             }
 
             INDArray pxzDistributionPreOut = current.mmul(pxzw).addiRowVector(pxzb);
@@ -398,7 +416,7 @@ public class VariationalAutoencoder implements Layer {
 
                 INDArray actInput;
                 if (i == 0) {
-                    actInput = input;
+                    actInput = input.castTo(dLdW.dataType());
                 } else {
                     actInput = fwd.encoderActivations[i - 1];
                 }
@@ -454,22 +472,22 @@ public class VariationalAutoencoder implements Layer {
     }
 
     @Override
-    public void accumulateScore(double accum) {
-
-    }
-
-    @Override
     public INDArray params() {
         return paramsFlattened;
     }
 
     @Override
-    public int numParams() {
+    public TrainingConfig getConfig() {
+        return conf.getLayer();
+    }
+
+    @Override
+    public long numParams() {
         return numParams(false);
     }
 
     @Override
-    public int numParams(boolean backwards) {
+    public long numParams(boolean backwards) {
         int ret = 0;
         for (Map.Entry<String, INDArray> entry : params.entrySet()) {
             if (backwards && isPretrainParam(entry.getKey()))
@@ -551,11 +569,6 @@ public class VariationalAutoencoder implements Layer {
     }
 
     @Override
-    public void validateInput() {
-        throw new UnsupportedOperationException("Not supported " + layerId());
-    }
-
-    @Override
     public ConvexOptimizer getOptimizer() {
         return optimizer;
     }
@@ -563,11 +576,6 @@ public class VariationalAutoencoder implements Layer {
     @Override
     public INDArray getParam(String param) {
         return params.get(param);
-    }
-
-    @Override
-    public void initParams() {
-        throw new UnsupportedOperationException("Deprecated " + layerId());
     }
 
     @Override
@@ -584,6 +592,11 @@ public class VariationalAutoencoder implements Layer {
             }
         }
         return map;
+    }
+
+    @Override
+    public boolean updaterDivideByMinibatch(String paramName) {
+        return true;
     }
 
     @Override
@@ -620,33 +633,20 @@ public class VariationalAutoencoder implements Layer {
     }
 
     @Override
-    public double calcL2(boolean backpropParamsOnly) {
-        double l2Sum = 0.0;
+    public double calcRegularizationScore(boolean backpropParamsOnly){
+        double scoreSum = 0.0;
         for (Map.Entry<String, INDArray> e : paramTable().entrySet()) {
-            double l2 = conf().getL2ByParam(e.getKey());
-            if (l2 <= 0.0 || (backpropParamsOnly && isPretrainParam(e.getKey()))) {
+            if(backpropParamsOnly && isPretrainParam(e.getKey()))
+                continue;
+            List<Regularization> l = layerConf().getRegularizationByParam(e.getKey());
+            if(l == null || l.isEmpty()){
                 continue;
             }
-
-            double l2Norm = e.getValue().norm2Number().doubleValue();
-            l2Sum += 0.5 * l2 * l2Norm * l2Norm;
-        }
-
-        return l2Sum;
-    }
-
-    @Override
-    public double calcL1(boolean backpropParamsOnly) {
-        double l1Sum = 0.0;
-        for (Map.Entry<String, INDArray> e : paramTable().entrySet()) {
-            double l1 = conf().getL1ByParam(e.getKey());
-            if (l1 <= 0.0 || (backpropParamsOnly && isPretrainParam(e.getKey()))) {
-                continue;
+            for(Regularization r : l){
+                scoreSum += r.score(e.getValue(), getIterationCount(), getEpochCount());
             }
-
-            l1Sum += l1 * e.getValue().norm1Number().doubleValue();
         }
-        return l1Sum;
+        return scoreSum;
     }
 
     @Override
@@ -747,7 +747,7 @@ public class VariationalAutoencoder implements Layer {
 
         INDArray[] encoderPreOuts = new INDArray[encoderLayerSizes.length];
         INDArray[] encoderActivations = new INDArray[encoderLayerSizes.length];
-        INDArray current = input;
+        INDArray current = input.castTo(getParam("e0" + WEIGHT_KEY_SUFFIX).dataType());
         for (int i = 0; i < nEncoderLayers; i++) {
             String wKey = "e" + i + WEIGHT_KEY_SUFFIX;
             String bKey = "e" + i + BIAS_KEY_SUFFIX;
@@ -786,16 +786,6 @@ public class VariationalAutoencoder implements Layer {
     public INDArray activate(INDArray input, boolean training, LayerWorkspaceMgr workspaceMgr) {
         setInput(input, workspaceMgr);
         return activate(training, workspaceMgr);
-    }
-
-    @Override
-    public Layer transpose() {
-        throw new UnsupportedOperationException("Not supported " + layerId());
-    }
-
-    @Override
-    public Layer clone() {
-        throw new UnsupportedOperationException("Not yet implemented " + layerId());
     }
 
     @Override

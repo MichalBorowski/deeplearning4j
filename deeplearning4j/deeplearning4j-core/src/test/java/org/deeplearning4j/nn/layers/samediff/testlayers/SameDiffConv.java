@@ -1,20 +1,35 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.nn.layers.samediff.testlayers;
 
-import lombok.Data;
-import lombok.EqualsAndHashCode;
-import lombok.val;
+import lombok.*;
 import org.deeplearning4j.nn.conf.ConvolutionMode;
 import org.deeplearning4j.nn.conf.InputPreProcessor;
 import org.deeplearning4j.nn.conf.NeuralNetConfiguration;
 import org.deeplearning4j.nn.conf.inputs.InputType;
 import org.deeplearning4j.nn.conf.layers.InputTypeUtil;
-import org.deeplearning4j.nn.conf.layers.samediff.BaseSameDiffLayer;
+import org.deeplearning4j.nn.conf.layers.samediff.SameDiffLayer;
 import org.deeplearning4j.nn.conf.layers.samediff.SDLayerParams;
 import org.deeplearning4j.nn.conf.layers.samediff.SameDiffLayerUtils;
 import org.deeplearning4j.nn.params.ConvolutionParamInitializer;
 import org.deeplearning4j.nn.weights.WeightInitUtil;
 import org.nd4j.autodiff.samediff.SDVariable;
 import org.nd4j.autodiff.samediff.SameDiff;
+import org.nd4j.base.Preconditions;
 import org.nd4j.linalg.activations.Activation;
 import org.nd4j.linalg.api.memory.MemoryWorkspace;
 import org.nd4j.linalg.api.ndarray.INDArray;
@@ -27,7 +42,7 @@ import java.util.*;
 @Data
 @EqualsAndHashCode(callSuper = true)
 @JsonIgnoreProperties({"paramShapes"})
-public class SameDiffConv extends BaseSameDiffLayer {
+public class SameDiffConv extends SameDiffLayer {
 
     private static final List<String> WEIGHT_KEYS = Collections.singletonList(ConvolutionParamInitializer.WEIGHT_KEY);
     private static final List<String> BIAS_KEYS = Collections.singletonList(ConvolutionParamInitializer.BIAS_KEY);
@@ -84,7 +99,7 @@ public class SameDiffConv extends BaseSameDiffLayer {
     @Override
     public void defineParameters(SDLayerParams params) {
         params.clear();
-        val weightsShape = new long[]{nOut, nIn, kernel[0], kernel[1]};
+        val weightsShape = new long[]{kernel[0], kernel[1], nIn, nOut}; //[kH, kW, iC, oC] in libnd4j
         params.addWeightParam(ConvolutionParamInitializer.WEIGHT_KEY, weightsShape);
         if(hasBias) {
             val biasShape = new long[]{1, nOut};
@@ -108,7 +123,7 @@ public class SameDiffConv extends BaseSameDiffLayer {
     }
 
     @Override
-    public List<SDVariable> defineLayer(SameDiff sameDiff, SDVariable layerInput, Map<String, SDVariable> paramTable) {
+    public SDVariable defineLayer(SameDiff sameDiff, SDVariable layerInput, Map<String, SDVariable> paramTable) {
 
         SDVariable w = paramTable.get(ConvolutionParamInitializer.WEIGHT_KEY);
 
@@ -128,9 +143,9 @@ public class SameDiffConv extends BaseSameDiffLayer {
                 .isSameMode(this.cm == ConvolutionMode.Same)
                 .build();
 
-        SDVariable conv = sameDiff.conv2d(vars, c);    //TODO can't set name
+        SDVariable conv = sameDiff.cnn().conv2d(vars, c);    //TODO can't set name
 
-        return Collections.singletonList(activation.asSameDiff("out", sameDiff, conv));
+        return activation.asSameDiff("out", sameDiff, conv);
     }
 
     @Override
@@ -143,12 +158,13 @@ public class SameDiffConv extends BaseSameDiffLayer {
         }
     }
 
-    public static class Builder extends BaseSameDiffLayer.Builder<Builder> {
+    public static class Builder extends SameDiffLayer.Builder<Builder> {
 
         private int nIn;
         private int nOut;
         private Activation activation = Activation.TANH;
         private int[] kernel = new int[]{2, 2};
+
         private int[] stride = new int[]{1, 1};
         private int[] padding = new int[]{0, 0};
         private int[] dilation = new int[]{1, 1};

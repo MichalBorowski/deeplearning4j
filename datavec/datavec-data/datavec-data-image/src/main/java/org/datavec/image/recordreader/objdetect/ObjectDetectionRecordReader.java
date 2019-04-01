@@ -1,18 +1,19 @@
-/*
- *  * Copyright 2017 Skymind, Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
- */
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.datavec.image.recordreader.objdetect;
 
 import org.datavec.api.split.FileSplit;
@@ -25,6 +26,7 @@ import org.datavec.image.data.Image;
 import org.datavec.image.loader.NativeImageLoader;
 import org.datavec.image.recordreader.BaseImageRecordReader;
 import org.datavec.image.util.ImageUtils;
+import org.nd4j.base.Preconditions;
 import org.nd4j.linalg.api.concurrency.AffinityManager;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.factory.Nd4j;
@@ -229,6 +231,13 @@ public class ObjectDetectionRecordReader extends BaseImageRecordReader {
             brPost[1] = brPost[1] / height * gridH;
 
             //Put TL, BR into label array:
+            Preconditions.checkState(imgGridY >= 0 && imgGridY < outLabel.size(2), "Invalid image center in Y axis: "
+                    + "calculated grid location of %s, must be between 0 (inclusive) and %s (exclusive). Object label center is outside "
+                    + "of image bounds. Image object: %s", imgGridY, outLabel.size(2), io);
+            Preconditions.checkState(imgGridX >= 0 && imgGridX < outLabel.size(3), "Invalid image center in X axis: "
+                    + "calculated grid location of %s, must be between 0 (inclusive) and %s (exclusive). Object label center is outside "
+                    + "of image bounds. Image object: %s", imgGridY, outLabel.size(2), io);
+
             outLabel.putScalar(exampleNum, 0, imgGridY, imgGridX, tlPost[0]);
             outLabel.putScalar(exampleNum, 1, imgGridY, imgGridX, tlPost[1]);
             outLabel.putScalar(exampleNum, 2, imgGridY, imgGridX, brPost[0]);

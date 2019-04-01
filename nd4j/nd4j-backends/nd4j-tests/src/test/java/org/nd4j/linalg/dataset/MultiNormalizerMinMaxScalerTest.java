@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.linalg.dataset;
 
 import org.junit.Before;
@@ -5,6 +21,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.nd4j.linalg.BaseNd4jTest;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.dataset.api.iterator.MultiDataSetIterator;
 import org.nd4j.linalg.dataset.api.iterator.TestMultiDataSetIterator;
@@ -41,7 +58,7 @@ public class MultiNormalizerMinMaxScalerTest extends BaseNd4jTest {
         // Prepare test data
         int nSamples = 5120;
 
-        INDArray values = Nd4j.linspace(1, nSamples, nSamples).transpose();
+        INDArray values = Nd4j.linspace(1, nSamples, nSamples, Nd4j.dataType()).reshape(1, -1).transpose();
         INDArray input1 = values.mul(INPUT1_SCALE);
         INDArray input2 = values.mul(INPUT2_SCALE);
         INDArray output1 = values.mul(OUTPUT1_SCALE);
@@ -139,7 +156,7 @@ public class MultiNormalizerMinMaxScalerTest extends BaseNd4jTest {
             INDArray inputA = a.getFeatures()[i];
             INDArray inputB = b.getFeatures()[i];
             INDArray delta = Transforms.abs(inputA.sub(inputB)).div(inputB);
-            double maxdeltaPerc = delta.max(0, 1).mul(100).getDouble(0, 0);
+            double maxdeltaPerc = delta.max(0, 1).mul(100).getDouble(0);
             if (maxdeltaPerc > max) {
                 max = maxdeltaPerc;
             }

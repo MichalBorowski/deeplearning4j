@@ -1,18 +1,18 @@
-/*-
- *  * Copyright 2016 Skymind, Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
- */
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.datavec.codec.reader;
 
@@ -60,13 +60,10 @@ public abstract class BaseCodecRecordReader extends FileRecordReader implements 
 
     @Override
     public List<List<Writable>> sequenceRecord() {
-        if (iter == null || !iter.hasNext()) {
-            this.advanceToNextLocation();
-        }
-        File next = iter.next();
+        URI next = locationsIterator.next();
 
-        try {
-            return loadData(next, null);
+        try (InputStream s = streamCreatorFn.apply(next)){
+            return loadData(null, s);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -116,16 +113,16 @@ public abstract class BaseCodecRecordReader extends FileRecordReader implements 
 
     @Override
     public SequenceRecord nextSequence() {
-        File next = this.nextFile();
+        URI next = locationsIterator.next();
 
         List<List<Writable>> list;
-        try {
-            list = loadData(next, null);
+        try (InputStream s = streamCreatorFn.apply(next)){
+            list = loadData(null, s);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
         return new org.datavec.api.records.impl.SequenceRecord(list,
-                        new RecordMetaDataURI(next.toURI(), CodecRecordReader.class));
+                        new RecordMetaDataURI(next, CodecRecordReader.class));
     }
 
     @Override
@@ -137,14 +134,12 @@ public abstract class BaseCodecRecordReader extends FileRecordReader implements 
     public List<SequenceRecord> loadSequenceFromMetaData(List<RecordMetaData> recordMetaDatas) throws IOException {
         List<SequenceRecord> out = new ArrayList<>();
         for (RecordMetaData meta : recordMetaDatas) {
-            File f = new File(meta.getURI());
-
-            List<List<Writable>> list = loadData(f, null);
-            out.add(new org.datavec.api.records.impl.SequenceRecord(list, meta));
+            try (InputStream s = streamCreatorFn.apply(meta.getURI())){
+                List<List<Writable>> list = loadData(null, s);
+                out.add(new org.datavec.api.records.impl.SequenceRecord(list, meta));
+            }
         }
 
         return out;
     }
-
-
 }

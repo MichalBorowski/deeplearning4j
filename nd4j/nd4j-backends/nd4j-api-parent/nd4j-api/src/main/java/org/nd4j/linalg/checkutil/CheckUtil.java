@@ -1,8 +1,26 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.linalg.checkutil;
 
+import lombok.val;
 import org.apache.commons.math3.linear.BlockRealMatrix;
 import org.apache.commons.math3.linear.RealMatrix;
 import org.nd4j.linalg.api.buffer.DataBuffer;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.api.shape.Shape;
 import org.nd4j.linalg.exception.ND4JArraySizeException;
@@ -263,9 +281,9 @@ public class CheckUtil {
         return out;
     }
 
-    public static INDArray convertFromApacheMatrix(RealMatrix matrix) {
-        int[] shape = new int[] {matrix.getRowDimension(), matrix.getColumnDimension()};
-        INDArray out = Nd4j.create(shape);
+    public static INDArray convertFromApacheMatrix(RealMatrix matrix, DataType dataType) {
+        val shape = new long[] {matrix.getRowDimension(), matrix.getColumnDimension()};
+        INDArray out = Nd4j.create(dataType, shape);
         for (int i = 0; i < shape[0]; i++) {
             for (int j = 0; j < shape[1]; j++) {
                 double value = matrix.getEntry(i, j);
@@ -317,7 +335,7 @@ public class CheckUtil {
     }
 
     public static void printMatrixFullPrecision(INDArray matrix) {
-        boolean floatType = (matrix.data().dataType() == DataBuffer.Type.FLOAT);
+        boolean floatType = (matrix.data().dataType() == DataType.FLOAT);
         printNDArrayHeader(matrix);
         long[] shape = matrix.shape();
         for (int i = 0; i < shape[0]; i++) {

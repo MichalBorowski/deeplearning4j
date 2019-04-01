@@ -1,6 +1,23 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.optimizer.listener;
 
 import lombok.Data;
+import lombok.extern.slf4j.Slf4j;
 import org.deeplearning4j.BaseDL4JTest;
 import org.deeplearning4j.api.storage.StatsStorageRouter;
 import org.deeplearning4j.api.storage.listener.RoutingIterationListener;
@@ -21,7 +38,7 @@ import org.deeplearning4j.optimize.listeners.ComposableIterationListener;
 import org.deeplearning4j.optimize.listeners.PerformanceListener;
 import org.deeplearning4j.optimize.listeners.ScoreIterationListener;
 import org.deeplearning4j.optimize.listeners.TimeIterationListener;
-import org.deeplearning4j.optimize.listeners.checkpoint.CheckpointListener;
+import org.deeplearning4j.optimize.listeners.CheckpointListener;
 import org.deeplearning4j.optimize.solvers.BaseOptimizer;
 import org.junit.Rule;
 import org.junit.Test;
@@ -47,6 +64,7 @@ import static org.junit.Assert.assertTrue;
 /**
  * Created by Alex on 01/01/2017.
  */
+@Slf4j
 public class TestListeners extends BaseDL4JTest {
 
     @Rule
@@ -149,9 +167,9 @@ public class TestListeners extends BaseDL4JTest {
 
         List<TrainingListener> listeners = new ArrayList<>();
         listeners.add(new ScoreIterationListener());
-        listeners.add(new PerformanceListener(1));
+        listeners.add(new PerformanceListener(1, true, true));
         listeners.add(new TimeIterationListener(10000));
-        listeners.add(new ComposableIterationListener(new ScoreIterationListener(), new PerformanceListener(1)));
+        listeners.add(new ComposableIterationListener(new ScoreIterationListener(), new PerformanceListener(1, true, true)));
         listeners.add(new CheckpointListener.Builder(tempDir.newFolder()).keepAll().saveEveryNIterations(3).build());   //Doesn't usually need to be serialized, but no reason it can't be...
 
 
@@ -160,7 +178,7 @@ public class TestListeners extends BaseDL4JTest {
         MultiLayerConfiguration conf = new NeuralNetConfiguration.Builder()
                 .list()
                 .layer(new OutputLayer.Builder().nIn(4).nOut(3)
-                        .activation(Activation.TANH)
+                        .activation(Activation.SOFTMAX)
                         .lossFunction(LossFunctions.LossFunction.MCXENT).build())
                 .build();
 
@@ -172,6 +190,8 @@ public class TestListeners extends BaseDL4JTest {
 
         List<TrainingListener> listeners2 = new ArrayList<>();
         for(TrainingListener il : listeners){
+            log.info("------------------");
+            log.info("Testing listener: {}", il);
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
             ObjectOutputStream oos = new ObjectOutputStream(baos);
             oos.writeObject(il);

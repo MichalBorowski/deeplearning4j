@@ -1,24 +1,23 @@
-/*-
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
  *
- *  * Copyright 2015 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
  *
- */
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.deeplearning4j.util;
 
 import lombok.val;
+import org.nd4j.base.Preconditions;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.api.shape.Shape;
 import org.nd4j.linalg.factory.Nd4j;
@@ -68,7 +67,7 @@ public class TimeSeriesUtils {
         if (timeSeriesMask.ordering() != 'f')
             timeSeriesMask = timeSeriesMask.dup('f');
 
-        return timeSeriesMask.reshape('f', new long[] {timeSeriesMask.length(), 1});
+        return timeSeriesMask.reshape('f', timeSeriesMask.length(), 1);
     }
 
 
@@ -84,7 +83,23 @@ public class TimeSeriesUtils {
         if (timeSeriesMask.ordering() != 'f' || !Shape.hasDefaultStridesForShape(timeSeriesMask))
             timeSeriesMask = workspaceMgr.dup(arrayType, timeSeriesMask, 'f');
 
-        return workspaceMgr.leverageTo(arrayType, timeSeriesMask.reshape('f', new long[] {timeSeriesMask.length(), 1}));
+        return workspaceMgr.leverageTo(arrayType, timeSeriesMask.reshape('f', timeSeriesMask.length(), 1));
+    }
+
+    /**
+     * Reshape time series mask arrays. This should match the assumptions (f order, etc) in RnnOutputLayer
+     * This reshapes from [X,1] to [X,1,1,1] suitable for per-example masking in CNNs
+     * @param timeSeriesMask    Mask array to reshape for CNN per-example masking
+     * @return                  Mask array as 4D CNN mask array: [X, 1, 1, 1]
+     */
+    public static INDArray reshapeTimeSeriesMaskToCnn4dMask(INDArray timeSeriesMask, LayerWorkspaceMgr workspaceMgr, ArrayType arrayType) {
+        if (timeSeriesMask.rank() != 2)
+            throw new IllegalArgumentException("Cannot reshape mask: rank is not 2");
+
+        if (timeSeriesMask.ordering() != 'f' || !Shape.hasDefaultStridesForShape(timeSeriesMask))
+            timeSeriesMask = workspaceMgr.dup(arrayType, timeSeriesMask, 'f');
+
+        return workspaceMgr.leverageTo(arrayType, timeSeriesMask.reshape('f', timeSeriesMask.length(), 1, 1, 1));
     }
 
     /**
@@ -98,7 +113,24 @@ public class TimeSeriesUtils {
 
         val timeSeriesLength = timeSeriesMaskAsVector.length() / minibatchSize;
 
-        return timeSeriesMaskAsVector.reshape('f', new long[] {minibatchSize, timeSeriesLength});
+        return timeSeriesMaskAsVector.reshape('f', minibatchSize, timeSeriesLength);
+    }
+
+    /**
+     * Reshape CNN-style 4d mask array of shape [seqLength*minibatch,1,1,1] to time series mask [mb,seqLength]
+     * This should match the assumptions (f order, etc) in RnnOutputLayer
+     * @param timeSeriesMaskAsCnnMask    Mask array to reshape
+     * @return                  Sequence mask array - [minibatch, sequenceLength]
+     */
+    public static INDArray reshapeCnnMaskToTimeSeriesMask(INDArray timeSeriesMaskAsCnnMask, int minibatchSize) {
+        Preconditions.checkArgument(timeSeriesMaskAsCnnMask.rank() == 4 || timeSeriesMaskAsCnnMask.size(1) != 1 ||
+                timeSeriesMaskAsCnnMask.size(2) != 1 || timeSeriesMaskAsCnnMask.size(3) != 1,
+                "Expected rank 4 mask with shape [mb*seqLength, 1, 1, 1]. Got rank %s mask array with shape %s",
+                timeSeriesMaskAsCnnMask.rank(), timeSeriesMaskAsCnnMask.shape());
+
+        val timeSeriesLength = timeSeriesMaskAsCnnMask.length() / minibatchSize;
+
+        return timeSeriesMaskAsCnnMask.reshape('f', minibatchSize, timeSeriesLength);
     }
 
     public static INDArray reshapePerOutputTimeSeriesMaskTo2d(INDArray perOutputTimeSeriesMask) {
@@ -379,9 +411,12 @@ public class TimeSeriesUtils {
 
             //Now, get and assign the corresponding subsets of 3d activations:
             for (int i = 0; i < fwdPassTimeSteps.length; i++) {
+                int lastStepIdx = fwdPassTimeSteps[i];
+                Preconditions.checkState(lastStepIdx >= 0, "Invalid last time step index: example %s in minibatch is entirely masked out" +
+                        " (input mask is all 0s, meaning no input data is present for this example)", i);
                 //TODO can optimize using reshape + pullRows
                 out.putRow(i, pullFrom.get(NDArrayIndex.point(i), NDArrayIndex.all(),
-                        NDArrayIndex.point(fwdPassTimeSteps[i])));
+                        NDArrayIndex.point(lastStepIdx)));
             }
         }
 

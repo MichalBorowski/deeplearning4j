@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.nn.graph.graphnodes;
 
 import lombok.val;
@@ -45,8 +61,8 @@ public class TestGraphNodes {
         Nd4j.getRandom().setSeed(12345);
         GraphVertex mergeNode = new MergeVertex(null, "", -1);
 
-        INDArray first = Nd4j.linspace(0, 11, 12).reshape(3, 4);
-        INDArray second = Nd4j.linspace(0, 17, 18).reshape(3, 6).addi(100);
+        INDArray first = Nd4j.linspace(0, 11, 12, Nd4j.dataType()).reshape(3, 4);
+        INDArray second = Nd4j.linspace(0, 17, 18, Nd4j.dataType()).reshape(3, 6).addi(100);
 
         mergeNode.setInputs(first, second);
         INDArray out = mergeNode.doForward(false, LayerWorkspaceMgr.noWorkspaces());
@@ -67,8 +83,8 @@ public class TestGraphNodes {
         Nd4j.getRandom().setSeed(12345);
         GraphVertex mergeNode = new MergeVertex(null, "", -1);
 
-        INDArray first = Nd4j.linspace(0, 59, 60).reshape(3, 4, 5);
-        INDArray second = Nd4j.linspace(0, 89, 90).reshape(3, 6, 5).addi(100);
+        INDArray first = Nd4j.linspace(0, 59, 60, Nd4j.dataType()).reshape(3, 4, 5);
+        INDArray second = Nd4j.linspace(0, 89, 90, Nd4j.dataType()).reshape(3, 6, 5).addi(100);
 
         mergeNode.setInputs(first, second);
         INDArray out = mergeNode.doForward(false, LayerWorkspaceMgr.noWorkspaces());
@@ -88,8 +104,8 @@ public class TestGraphNodes {
         Nd4j.getRandom().setSeed(12345);
         GraphVertex mergeNode = new MergeVertex(null, "", -1);
 
-        INDArray first = Nd4j.linspace(0, 3, 4).reshape(1, 1, 2, 2);
-        INDArray second = Nd4j.linspace(0, 3, 4).reshape(1, 1, 2, 2).addi(10);
+        INDArray first = Nd4j.linspace(0, 3, 4, Nd4j.dataType()).reshape(1, 1, 2, 2);
+        INDArray second = Nd4j.linspace(0, 3, 4, Nd4j.dataType()).reshape(1, 1, 2, 2).addi(10);
 
         mergeNode.setInputs(first, second);
         INDArray out = mergeNode.doForward(false, LayerWorkspaceMgr.noWorkspaces());
@@ -109,8 +125,8 @@ public class TestGraphNodes {
 
 
         //Slightly more complicated test:
-        first = Nd4j.linspace(0, 17, 18).reshape(1, 2, 3, 3);
-        second = Nd4j.linspace(0, 17, 18).reshape(1, 2, 3, 3).addi(100);
+        first = Nd4j.linspace(0, 17, 18, Nd4j.dataType()).reshape(1, 2, 3, 3);
+        second = Nd4j.linspace(0, 17, 18, Nd4j.dataType()).reshape(1, 2, 3, 3).addi(100);
 
         mergeNode.setInputs(first, second);
         out = mergeNode.doForward(false, LayerWorkspaceMgr.noWorkspaces());
@@ -171,7 +187,7 @@ public class TestGraphNodes {
 
         ComputationGraphConfiguration conf = new NeuralNetConfiguration.Builder().graphBuilder().addInputs("in")
                         .addVertex("lastTS", new LastTimeStepVertex("in"), "in")
-                        .addLayer("out", new OutputLayer.Builder().nIn(1).nOut(1).build(), "lastTS").setOutputs("out")
+                        .addLayer("out", new OutputLayer.Builder().nIn(1).nOut(1).activation(Activation.TANH).lossFunction(LossFunctions.LossFunction.MSE).build(), "lastTS").setOutputs("out")
                         .build();
 
         ComputationGraph graph = new ComputationGraph(conf);
@@ -223,8 +239,8 @@ public class TestGraphNodes {
         ComputationGraphConfiguration conf = new NeuralNetConfiguration.Builder().graphBuilder()
                         .addInputs("in2d", "in3d")
                         .addVertex("duplicateTS", new DuplicateToTimeSeriesVertex("in3d"), "in2d")
-                        .addLayer("out", new OutputLayer.Builder().nIn(1).nOut(1).build(), "duplicateTS")
-                        .addLayer("out3d", new RnnOutputLayer.Builder().nIn(1).nOut(1).build(), "in3d")
+                        .addLayer("out", new OutputLayer.Builder().nIn(1).nOut(1).activation(Activation.TANH).lossFunction(LossFunctions.LossFunction.MSE).build(), "duplicateTS")
+                        .addLayer("out3d", new RnnOutputLayer.Builder().nIn(1).nOut(1).activation(Activation.TANH).lossFunction(LossFunctions.LossFunction.MSE).build(), "in3d")
                         .setOutputs("out", "out3d").build();
 
         ComputationGraph graph = new ComputationGraph(conf);
@@ -514,7 +530,7 @@ public class TestGraphNodes {
 
         reshapeVertex.setEpsilon(out);
         INDArray[] backward = reshapeVertex.doBackward(false, LayerWorkspaceMgr.noWorkspaces()).getSecond();
-        assert (Arrays.equals(backward[0].shape(), inputShape));
+        assertTrue(Arrays.equals(backward[0].shape(), inputShape));
     }
 
     @Test
@@ -531,7 +547,7 @@ public class TestGraphNodes {
                                         .addVertex("v6", new LastTimeStepVertex("in"), "in")
                                         .addVertex("v7", new org.deeplearning4j.nn.conf.graph.StackVertex(), "in")
                                         .addVertex("v8", new org.deeplearning4j.nn.conf.graph.UnstackVertex(0, 1), "in")
-                                        .addLayer("out", new OutputLayer.Builder().nIn(1).nOut(1).build(), "in")
+                                        .addLayer("out", new OutputLayer.Builder().nIn(1).nOut(1).activation(Activation.TANH).lossFunction(LossFunctions.LossFunction.MSE).build(), "in")
                                         .setOutputs("out", "v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8").build();
 
         String json = conf.toJson();
@@ -558,7 +574,7 @@ public class TestGraphNodes {
                 .addLayer("1", new GravesLSTM.Builder().activation(Activation.TANH).nIn(numInputs).nOut(lstmLayerSize).dropOut(0.9).build(), "rr")
                 .addLayer("2", new RnnOutputLayer.Builder(LossFunctions.LossFunction.MCXENT)
                         .activation(Activation.SOFTMAX).nOut(numLabelClasses).build(), "1")
-                .pretrain(false).backprop(true)
+
                 .setOutputs("2")
                 .build();
 

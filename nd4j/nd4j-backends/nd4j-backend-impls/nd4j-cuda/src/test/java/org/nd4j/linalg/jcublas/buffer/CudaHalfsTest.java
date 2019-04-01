@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.linalg.jcublas.buffer;
 
 import org.junit.Before;
@@ -26,7 +42,7 @@ public class CudaHalfsTest {
 
     @Before
     public void setUp() {
-        DataTypeUtil.setDTypeForContext(DataBuffer.Type.HALF);
+        DataTypeUtil.setDTypeForContext(DataType.HALF);
     }
 
     @Test
@@ -67,14 +83,14 @@ public class CudaHalfsTest {
         // loading data back from file
         DataInputStream dis = new DataInputStream(new FileInputStream(tempFile.getAbsoluteFile()));
 
-        DataTypeUtil.setDTypeForContext(DataBuffer.Type.FLOAT);
+        DataTypeUtil.setDTypeForContext(DataType.FLOAT);
 
         INDArray exp = Nd4j.linspace(1, 5, 10);
 
         INDArray restored = Nd4j.read(dis);
 
         assertArrayEquals(exp.data().asFloat(), restored.data().asFloat(), 0.1f);
-        assertEquals(DataBuffer.Type.FLOAT, exp.data().dataType());
+        assertEquals(DataType.FLOAT, exp.data().dataType());
     }
 
     @Test

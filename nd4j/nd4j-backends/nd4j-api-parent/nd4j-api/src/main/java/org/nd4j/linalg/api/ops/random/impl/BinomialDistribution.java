@@ -1,9 +1,27 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.linalg.api.ops.random.impl;
 
 import lombok.NonNull;
 import org.nd4j.autodiff.samediff.SDVariable;
 import org.nd4j.autodiff.samediff.SameDiff;
+import org.nd4j.base.Preconditions;
 import org.nd4j.imports.NoOpNameFoundException;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.api.ops.random.BaseRandomOp;
 
@@ -39,7 +57,7 @@ public class BinomialDistribution extends BaseRandomOp {
      * @param probability
      */
     public BinomialDistribution(@NonNull INDArray z, int trials, double probability) {
-        init(z, z, z, z.lengthLong());
+        super(z, z, z);
         this.trials = trials;
         this.probability = probability;
         this.extraArgs = new Object[] {(double) this.trials, this.probability};
@@ -52,28 +70,19 @@ public class BinomialDistribution extends BaseRandomOp {
      * @param probabilities array with probability value for each trial
      */
     public BinomialDistribution(@NonNull INDArray z, int trials, @NonNull INDArray probabilities) {
-        if (trials > probabilities.lengthLong())
+        super(z, probabilities, z);
+        if (trials > probabilities.length())
             throw new IllegalStateException("Number of trials is > then amount of probabilities provided");
 
         if (probabilities.elementWiseStride() < 1)
             throw new IllegalStateException("Probabilities array shouldn't have negative elementWiseStride");
 
-        init(z, probabilities, z, z.lengthLong());
+        Preconditions.checkArgument(probabilities.dataType() == z.dataType(), "Probabilities and Z operand should have same data type");
 
         this.trials = trials;
         this.probability = 0.0;
         this.extraArgs = new Object[] {(double) this.trials, this.probability};
     }
-
-
-    @Override
-    public Map<String, Object> propertiesForFunction() {
-        Map<String,Object> ret = new LinkedHashMap<>();
-        ret.put("trials",trials);
-        ret.put("probability",probability);
-        return ret;
-    }
-
 
     /**
      * This op fills Z with binomial distribution over given trials with probability for each trial given as probabilities INDArray
@@ -96,11 +105,6 @@ public class BinomialDistribution extends BaseRandomOp {
     }
 
     @Override
-    public boolean isExecSpecial() {
-        return true;
-    }
-
-    @Override
     public String onnxName() {
         throw new NoOpNameFoundException("No onnx op opName found for " +  opName());
     }
@@ -115,5 +119,21 @@ public class BinomialDistribution extends BaseRandomOp {
     @Override
     public List<SDVariable> doDiff(List<SDVariable> f1) {
         return Collections.emptyList();
+    }
+
+    @Override
+    public void setZ(INDArray z){
+        //We want all 3 args set to z for this op
+        this.x = z;
+        this.y = z;
+        this.z = z;
+    }
+
+    @Override
+    public List<DataType> calculateOutputDataTypes(List<DataType> inputDataTypes){
+        Preconditions.checkState(inputDataTypes == null || inputDataTypes.isEmpty(), "Expected no input datatypes (no args) for %s, got %s", getClass(), inputDataTypes);
+        //Input data type specifies the shape; output data type should be any float
+        //TODO MAKE CONFIGUREABLE - https://github.com/deeplearning4j/deeplearning4j/issues/6854
+        return Collections.singletonList(DataType.DOUBLE);
     }
 }

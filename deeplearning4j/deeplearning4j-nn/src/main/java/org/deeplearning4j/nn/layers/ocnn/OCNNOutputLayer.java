@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.nn.layers.ocnn;
 
 
@@ -68,14 +84,13 @@ public class OCNNOutputLayer extends BaseOutputLayer<org.deeplearning4j.nn.conf.
 
 
     /** Compute score after labels and input have been set.
-     * @param fullNetworkL1 L1 regularization term for the entire network
-     * @param fullNetworkL2 L2 regularization term for the entire network
+     * @param fullNetRegTerm Regularization score term for the entire network
      * @param training whether score should be calculated at train or test time (this affects things like application of
      *                 dropout, etc)
      * @return score (loss function)
      */
     @Override
-    public double computeScore(double fullNetworkL1, double fullNetworkL2, boolean training, LayerWorkspaceMgr workspaceMgr) {
+    public double computeScore(double fullNetRegTerm, boolean training, LayerWorkspaceMgr workspaceMgr) {
         if (input == null)
             throw new IllegalStateException("Cannot calculate score without input and labels " + layerId());
         INDArray preOut = preOutput2d(training, workspaceMgr);
@@ -84,12 +99,11 @@ public class OCNNOutputLayer extends BaseOutputLayer<org.deeplearning4j.nn.conf.
 
         double score = lossFunction.computeScore(getLabels2d(workspaceMgr, ArrayType.FF_WORKING_MEM), preOut,
                 layerConf().getActivationFn(), maskArray,false);
-        score += fullNetworkL1 + fullNetworkL2;
         if(conf().isMiniBatch())
             score /= getInputMiniBatchSize();
 
+        score += fullNetRegTerm;
         this.score = score;
-
         return score;
     }
 
@@ -162,13 +176,8 @@ public class OCNNOutputLayer extends BaseOutputLayer<org.deeplearning4j.nn.conf.
         INDArray vGradView = gradientViews.get(V_KEY);
         double oneDivNu = 1.0 / layerConf().getNu();
         INDArray xTimesV = input.mmul(getParam(V_KEY));
-        INDArray derivW = layerConf().getActivationFn()
-                .getActivation(xTimesV.dup(),true).negi();
-        derivW = delta.isRowVector() ? derivW
-                .muliRowVector(delta).mean(0)
-                .muli(oneDivNu).addi(getParam(W_KEY)) : derivW
-                .muli(delta).mean(0)
-                .muli(oneDivNu).addi(getParam(W_KEY));
+        INDArray derivW = layerConf().getActivationFn().getActivation(xTimesV.dup(),true).negi();
+        derivW = derivW.muliColumnVector(delta).mean(0).muli(oneDivNu).addi(getParam(W_KEY));
         gradient.setGradientFor(W_KEY,gradientViews.get(W_KEY).assign(derivW));
 
         //dG -> sigmoid derivative
@@ -176,10 +185,7 @@ public class OCNNOutputLayer extends BaseOutputLayer<org.deeplearning4j.nn.conf.
         INDArray firstVertDerivV =  layerConf().getActivationFn()
                 .backprop(xTimesV.dup(),Nd4j.ones(xTimesV.shape()))
                 .getFirst().muliRowVector(getParam(W_KEY).neg());
-        firstVertDerivV = delta.isRowVector() ?
-                firstVertDerivV .muliRowVector(delta)
-                        .reshape('f',input.size(0),1,layerConf().getHiddenSize()) :
-                firstVertDerivV.muli(delta)
+        firstVertDerivV = firstVertDerivV.muliColumnVector(delta)
                         .reshape('f',input.size(0),1,layerConf().getHiddenSize());
         INDArray secondTermDerivV = input.reshape('f',
                 input.size(0),getParam(V_KEY).size(0),1);
@@ -192,7 +198,7 @@ public class OCNNOutputLayer extends BaseOutputLayer<org.deeplearning4j.nn.conf.
         INDArray firstDerivVBroadcast = Nd4j.createUninitialized(shape);
 
         INDArray mulResult = firstVertDerivV.broadcast(firstDerivVBroadcast);
-        int[] bcDims = Shape.getBroadcastDimensions(mulResult.shape(), secondTermDerivV.shape());
+        int[] bcDims = {0,1};
         Broadcast.mul(mulResult, secondTermDerivV, mulResult, bcDims);
 
         INDArray derivV = mulResult
@@ -222,28 +228,11 @@ public class OCNNOutputLayer extends BaseOutputLayer<org.deeplearning4j.nn.conf.
         throw new UnsupportedOperationException();
     }
 
-    @Override
-    public INDArray labelProbabilities(INDArray examples) {
-        float[] decision = examples.data().asFloat();
-        for(int i = 0; i < decision.length; i++) {
-            if(decision[i] < 0) {
-                decision[i] = 0.0f;
-            }
-            else {
-                decision[i] = 1.0f;
-            }
-        }
-
-        return Nd4j.create(decision);
-    }
-
 
     @Override
     public Layer.Type type() {
         return Type.FEED_FORWARD;
     }
-
-
 
 
     @Override
@@ -282,12 +271,11 @@ public class OCNNOutputLayer extends BaseOutputLayer<org.deeplearning4j.nn.conf.
 
     /**Compute the score for each example individually, after labels and input have been set.
      *
-     * @param fullNetworkL1 L1 regularization term for the entire network (or, 0.0 to not include regularization)
-     * @param fullNetworkL2 L2 regularization term for the entire network (or, 0.0 to not include regularization)
+     * @param fullNetRegTerm Regularization score term for the entire network (or, 0.0 to not include regularization)
      * @return A column INDArray of shape [numExamples,1], where entry i is the score of the ith example
      */
     @Override
-    public INDArray computeScoreForExamples(double fullNetworkL1, double fullNetworkL2, LayerWorkspaceMgr workspaceMgr) {
+    public INDArray computeScoreForExamples(double fullNetRegTerm, LayerWorkspaceMgr workspaceMgr) {
         //For RNN: need to sum up the score over each time step before returning.
 
         if (input == null || labels == null)
@@ -300,9 +288,8 @@ public class OCNNOutputLayer extends BaseOutputLayer<org.deeplearning4j.nn.conf.
                         layerConf().getActivationFn(), maskArray);
         INDArray summedScores = scoreArray.sum(1);
 
-        double l1l2 = fullNetworkL1 + fullNetworkL2;
-        if (l1l2 != 0.0) {
-            summedScores.addi(l1l2);
+        if (fullNetRegTerm != 0.0) {
+            summedScores.addi(fullNetRegTerm);
         }
 
         return summedScores;
@@ -315,7 +302,8 @@ public class OCNNOutputLayer extends BaseOutputLayer<org.deeplearning4j.nn.conf.
             double wSum = Transforms.pow(getParam(W_KEY),2).sumNumber().doubleValue() * 0.5;
             double vSum = Transforms.pow(getParam(V_KEY),2).sumNumber().doubleValue() * 0.5;
             org.deeplearning4j.nn.conf.ocnn.OCNNOutputLayer ocnnOutputLayer = (org.deeplearning4j.nn.conf.ocnn.OCNNOutputLayer) conf().getLayer();
-            INDArray rMeanSub  = relu.getActivation(getParam(R_KEY).sub(preOutput),true);
+            INDArray rSubPre = preOutput.rsub(getParam(R_KEY).getDouble(0));
+            INDArray rMeanSub  = relu.getActivation(rSubPre,true);
             double rMean = rMeanSub.meanNumber().doubleValue();
             double rSum = getParam(R_KEY).getDouble(0);
             double nuDiv = (1 / ocnnOutputLayer.getNu()) * rMean;
@@ -331,8 +319,8 @@ public class OCNNOutputLayer extends BaseOutputLayer<org.deeplearning4j.nn.conf.
 
         @Override
         public INDArray computeGradient(INDArray labels, INDArray preOutput, IActivation activationFn, INDArray mask) {
-            INDArray preAct = getParam(R_KEY).sub(preOutput);
-            INDArray target =   relu.backprop(getParam(R_KEY).sub(preOutput),Nd4j.ones(preAct.shape())).getFirst();
+            INDArray preAct = preOutput.rsub(getParam(R_KEY).getDouble(0));
+            INDArray target =   relu.backprop(preAct,Nd4j.ones(preAct.shape())).getFirst();
             return target;
         }
 

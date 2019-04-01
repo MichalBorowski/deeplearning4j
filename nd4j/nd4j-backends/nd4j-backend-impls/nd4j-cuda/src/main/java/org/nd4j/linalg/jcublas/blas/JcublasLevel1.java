@@ -1,22 +1,37 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.linalg.jcublas.blas;
 
+import lombok.val;
 import org.bytedeco.javacpp.DoublePointer;
 import org.bytedeco.javacpp.FloatPointer;
 import org.bytedeco.javacpp.IntPointer;
+import org.nd4j.base.Preconditions;
 import org.nd4j.jita.allocator.Allocator;
 import org.nd4j.jita.allocator.impl.AtomicAllocator;
 import org.nd4j.jita.allocator.pointers.cuda.cublasHandle_t;
 import org.nd4j.linalg.api.blas.impl.BaseLevel1;
 import org.nd4j.linalg.api.buffer.DataBuffer;
-import org.nd4j.linalg.api.complex.IComplexDouble;
-import org.nd4j.linalg.api.complex.IComplexFloat;
-import org.nd4j.linalg.api.complex.IComplexNDArray;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.ndarray.INDArray;
-import org.nd4j.linalg.api.ops.executioner.GridExecutioner;
 import org.nd4j.linalg.api.ops.executioner.OpExecutionerUtil;
-import org.nd4j.linalg.api.ops.impl.accum.ASum;
-import org.nd4j.linalg.api.ops.impl.accum.Dot;
-import org.nd4j.linalg.api.ops.impl.transforms.arithmetic.Axpy;
+import org.nd4j.linalg.api.ops.impl.reduce.same.ASum;
+import org.nd4j.linalg.api.ops.impl.reduce3.Dot;
+import org.nd4j.linalg.api.ops.impl.transforms.pairwise.arithmetic.Axpy;
 import org.nd4j.linalg.factory.DataTypeValidation;
 import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.jcublas.CublasPointer;
@@ -28,8 +43,10 @@ import org.nd4j.nativeblas.Nd4jBlas;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import static org.bytedeco.javacpp.cublas.*;
-import static org.bytedeco.javacpp.cuda.CUstream_st;
+import org.bytedeco.cuda.cudart.*;
+import org.bytedeco.cuda.cublas.*;
+import static org.bytedeco.cuda.global.cudart.*;
+import static org.bytedeco.cuda.global.cublas.*;
 
 /**
  * @author Adam Gibson
@@ -61,7 +78,7 @@ public class JcublasLevel1 extends BaseLevel1 {
         //        CublasPointer xCPointer = new CublasPointer(X, ctx);
         //        CublasPointer yCPointer = new CublasPointer(Y, ctx);
 
-        Dot dot = new Dot(X, Y);
+        val dot = new Dot(X, Y);
         Nd4j.getExecutioner().exec(dot);
 
         ret = dot.getFinalResult().floatValue();
@@ -91,8 +108,7 @@ public class JcublasLevel1 extends BaseLevel1 {
 
     @Override
     protected float sdot(long N, INDArray X, int incX, INDArray Y, int incY) {
-        if (Nd4j.dataType() != DataBuffer.Type.FLOAT)
-            logger.warn("FLOAT dot called");
+        Preconditions.checkArgument(X.dataType() == DataType.FLOAT, "Float dtype expected");
 
         DataTypeValidation.assertSameDataType(X, Y);
 
@@ -134,8 +150,7 @@ public class JcublasLevel1 extends BaseLevel1 {
 
     @Override
     protected double ddot(long N, INDArray X, int incX, INDArray Y, int incY) {
-        if (Nd4j.dataType() != DataBuffer.Type.DOUBLE)
-            logger.warn("DOUBLE dot called");
+        Preconditions.checkArgument(X.dataType() == DataType.DOUBLE, "Double dtype expected");
 
         Nd4j.getExecutioner().push();
 
@@ -166,32 +181,8 @@ public class JcublasLevel1 extends BaseLevel1 {
     }
 
     @Override
-    protected void cdotu_sub(long N, IComplexNDArray X, int incX, IComplexNDArray Y, int incY, IComplexNDArray dotu) {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    protected void cdotc_sub(long N, IComplexNDArray X, int incX, IComplexNDArray Y, int incY, IComplexNDArray dotc) {
-        throw new UnsupportedOperationException();
-
-    }
-
-    @Override
-    protected void zdotu_sub(long N, IComplexNDArray X, int incX, IComplexNDArray Y, int incY, IComplexNDArray dotu) {
-        throw new UnsupportedOperationException();
-
-    }
-
-    @Override
-    protected void zdotc_sub(long N, IComplexNDArray X, int incX, IComplexNDArray Y, int incY, IComplexNDArray dotc) {
-        throw new UnsupportedOperationException();
-
-    }
-
-    @Override
     protected float snrm2(long N, INDArray X, int incX) {
-        if (Nd4j.dataType() != DataBuffer.Type.FLOAT)
-            logger.warn("FLOAT nrm2 called");
+        Preconditions.checkArgument(X.dataType() == DataType.FLOAT, "Float dtype expected");
 
         Nd4j.getExecutioner().push();
 
@@ -219,8 +210,8 @@ public class JcublasLevel1 extends BaseLevel1 {
     @Override
     protected float hasum(long N, INDArray X, int incX) {
 
-        ASum asum = new ASum(X);
-        Nd4j.getExecutioner().exec(asum, Integer.MAX_VALUE);
+        val asum = new ASum(X);
+        Nd4j.getExecutioner().exec(asum);
 
         float ret = asum.getFinalResult().floatValue();
 
@@ -230,13 +221,13 @@ public class JcublasLevel1 extends BaseLevel1 {
     @Override
     protected float sasum(long N, INDArray X, int incX) {
         ASum asum = new ASum(X);
-        Nd4j.getExecutioner().exec(asum, Integer.MAX_VALUE);
+        Nd4j.getExecutioner().exec(asum);
 
         float ret = asum.getFinalResult().floatValue();
 
         return ret;
 /*
-        if (Nd4j.dataType() != DataBuffer.Type.FLOAT)
+        if (Nd4j.dataType() != DataType.FLOAT)
             logger.warn("FLOAT asum called");
         
         
@@ -275,8 +266,7 @@ public class JcublasLevel1 extends BaseLevel1 {
 
     @Override
     protected double dnrm2(long N, INDArray X, int incX) {
-        if (Nd4j.dataType() != DataBuffer.Type.DOUBLE)
-            logger.warn("DOUBLE nrm2 called");
+        Preconditions.checkArgument(X.dataType() == DataType.DOUBLE, "Double dtype expected");
 
         Nd4j.getExecutioner().push();
 
@@ -304,7 +294,7 @@ public class JcublasLevel1 extends BaseLevel1 {
     @Override
     protected double dasum(long N, INDArray X, int incX) {
         ASum asum = new ASum(X);
-        Nd4j.getExecutioner().exec(asum, Integer.MAX_VALUE);
+        Nd4j.getExecutioner().exec(asum);
 
         double ret = asum.getFinalResult().doubleValue();
 
@@ -337,71 +327,8 @@ public class JcublasLevel1 extends BaseLevel1 {
     }
 
     @Override
-    protected float scnrm2(long N, IComplexNDArray X, int incX) {
-        /*
-        CudaContext ctx = CudaContext.getBlasContext();
-        float[] ret = new float[1];
-        Pointer result = Pointer.to(ret);
-        
-        CublasPointer xCPointer = new CublasPointer(X, ctx);
-        
-        cublasHandle_t handle = ctx.getHandle();
-        synchronized (handle) {
-            cublasSetStream_v2(new cublasContext(handle), new CUstream_st(ctx.getOldStream()));
-        
-            JCublas2.cublasScnrm2(
-                    ContextHolder.getInstance().getHandle()
-                    , N
-                    , xCPointer.getDevicePointer()
-                    , incX
-                    , result);
-        }
-        
-        return ret[0];
-        */
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    protected float scasum(long N, IComplexNDArray X, int incX) {
-        /*
-        CudaContext ctx = CudaContext.getBlasContext();
-        float[] ret = new float[1];
-        Pointer result = Pointer.to(ret);
-        
-        CublasPointer xCPointer = new CublasPointer(X, ctx);
-        
-        cublasHandle_t handle = ctx.getHandle();
-        synchronized (handle) {
-            cublasSetStream_v2(new cublasContext(handle), new CUstream_st(ctx.getOldStream()));
-        
-            JCublas2.cublasScasum(
-                    ctx.getHandle()
-                    , N
-                    , xCPointer.getDevicePointer()
-                    , incX
-                    , result);
-        }
-        return ret[0];
-        */
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    protected double dznrm2(long N, IComplexNDArray X, int incX) {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    protected double dzasum(long N, IComplexNDArray X, int incX) {
-        throw new UnsupportedOperationException();
-
-    }
-
-    @Override
     protected int isamax(long N, INDArray X, int incX) {
-        if (Nd4j.dataType() != DataBuffer.Type.FLOAT)
-            logger.warn("FLOAT iamax called");
+        Preconditions.checkArgument(X.dataType() == DataType.FLOAT, "Float dtype expected");
 
         Nd4j.getExecutioner().push();
 
@@ -431,8 +358,7 @@ public class JcublasLevel1 extends BaseLevel1 {
 
     @Override
     protected int idamax(long N, INDArray X, int incX) {
-        if (Nd4j.dataType() != DataBuffer.Type.DOUBLE)
-            logger.warn("DOUBLE imax called");
+        Preconditions.checkArgument(X.dataType() == DataType.DOUBLE, "Double dtype expected");
 
         Nd4j.getExecutioner().push();
 
@@ -461,21 +387,9 @@ public class JcublasLevel1 extends BaseLevel1 {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
-
-    @Override
-    protected int icamax(long N, IComplexNDArray X, int incX) {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    protected int izamax(long N, IComplexNDArray X, int incX) {
-        throw new UnsupportedOperationException();
-    }
-
     @Override
     protected void sswap(long N, INDArray X, int incX, INDArray Y, int incY) {
-        if (Nd4j.dataType() != DataBuffer.Type.FLOAT)
-            logger.warn("FLOAT swap called");
+        Preconditions.checkArgument(X.dataType() == DataType.FLOAT, "Float dtype expected");
 
         Nd4j.getExecutioner().push();
 
@@ -498,8 +412,7 @@ public class JcublasLevel1 extends BaseLevel1 {
 
     @Override
     protected void scopy(long N, INDArray X, int incX, INDArray Y, int incY) {
-        if (Nd4j.dataType() != DataBuffer.Type.FLOAT)
-            logger.warn("FLOAT copy called");
+        Preconditions.checkArgument(X.dataType() == DataType.FLOAT, "Float dtype expected");
 
         Nd4j.getExecutioner().push();
 
@@ -528,11 +441,10 @@ public class JcublasLevel1 extends BaseLevel1 {
 
     @Override
     protected void saxpy(long N, float alpha, INDArray X, int incX, INDArray Y, int incY) {
-        if (Nd4j.dataType() != DataBuffer.Type.FLOAT)
-            logger.warn("FLOAT axpy called");
+        //Preconditions.checkArgument(X.dataType() == DataType.FLOAT, "Float dtype expected");
 
         //        CudaContext ctx = allocator.getFlowController().prepareAction(Y, X);
-        Nd4j.getExecutioner().exec(new Axpy(X, Y, alpha, N));
+        Nd4j.getExecutioner().exec(new Axpy(X, Y, Y, alpha));
 
         OpExecutionerUtil.checkForAny(Y);
         /*
@@ -568,7 +480,7 @@ public class JcublasLevel1 extends BaseLevel1 {
 
         //        cublasHandle_t handle = ctx.getHandle();
 
-        ((CudaExecutioner) Nd4j.getExecutioner()).exec(new Axpy(X, Y, alpha, N));
+        ((CudaExecutioner) Nd4j.getExecutioner()).exec(new Axpy(X, Y, Y, alpha));
 
         OpExecutionerUtil.checkForAny(Y);
 
@@ -602,7 +514,7 @@ public class JcublasLevel1 extends BaseLevel1 {
 
     @Override
     protected void dswap(long N, INDArray X, int incX, INDArray Y, int incY) {
-        if (Nd4j.dataType() != DataBuffer.Type.DOUBLE)
+        if (Nd4j.dataType() != DataType.DOUBLE)
             logger.warn("DOUBLE swap called");
 
         Nd4j.getExecutioner().push();
@@ -627,7 +539,7 @@ public class JcublasLevel1 extends BaseLevel1 {
 
     @Override
     protected void dcopy(long N, INDArray X, int incX, INDArray Y, int incY) {
-        if (Nd4j.dataType() != DataBuffer.Type.DOUBLE)
+        if (Nd4j.dataType() != DataType.DOUBLE)
             logger.warn("DOUBLE copy called");
 
         Nd4j.getExecutioner().push();
@@ -657,15 +569,12 @@ public class JcublasLevel1 extends BaseLevel1 {
 
     @Override
     protected void daxpy(long N, double alpha, INDArray X, int incX, INDArray Y, int incY) {
-        if (Nd4j.dataType() != DataBuffer.Type.DOUBLE)
-            logger.warn("DOUBLE axpy called");
-
         //CudaContext ctx = allocator.getFlowController().prepareAction(Y, X);
 
 
         //    logger.info("incX: {}, incY: {}, N: {}, X.length: {}, Y.length: {}", incX, incY, N, X.length(), Y.length());
 
-        Nd4j.getExecutioner().exec(new Axpy(X, Y, alpha, N));
+        Nd4j.getExecutioner().exec(new Axpy(X, Y, Y, alpha));
 
         OpExecutionerUtil.checkForAny(Y);
 
@@ -690,40 +599,6 @@ public class JcublasLevel1 extends BaseLevel1 {
     protected void daxpy(long N, double alpha, DataBuffer x, int offsetX, int incrX, DataBuffer y, int offsetY,
                     int incrY) {
         throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    protected void cswap(long N, IComplexNDArray X, int incX, IComplexNDArray Y, int incY) {
-        throw new UnsupportedOperationException();
-
-    }
-
-    @Override
-    protected void ccopy(long N, IComplexNDArray X, int incX, IComplexNDArray Y, int incY) {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    protected void caxpy(long N, IComplexFloat alpha, IComplexNDArray X, int incX, IComplexNDArray Y, int incY) {
-        throw new UnsupportedOperationException();
-
-    }
-
-    @Override
-    protected void zswap(long N, IComplexNDArray X, int incX, IComplexNDArray Y, int incY) {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    protected void zcopy(long N, IComplexNDArray X, int incX, IComplexNDArray Y, int incY) {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    protected void zaxpy(long N, IComplexDouble alpha, IComplexNDArray X, int incX, IComplexNDArray Y, int incY) {
-        throw new UnsupportedOperationException();
-
-
     }
 
     @Override
@@ -776,8 +651,7 @@ public class JcublasLevel1 extends BaseLevel1 {
 
     @Override
     protected void sscal(long N, float alpha, INDArray X, int incX) {
-        if (Nd4j.dataType() != DataBuffer.Type.FLOAT)
-            logger.warn("FLOAT scal called");
+        Preconditions.checkArgument(X.dataType() == DataType.FLOAT, "Float dtype expected");
 
         Nd4j.getExecutioner().push();
 
@@ -800,8 +674,7 @@ public class JcublasLevel1 extends BaseLevel1 {
 
     @Override
     protected void dscal(long N, double alpha, INDArray X, int incX) {
-        if (Nd4j.dataType() != DataBuffer.Type.DOUBLE)
-            logger.warn("DOUBLE scal called");
+        Preconditions.checkArgument(X.dataType() == DataType.DOUBLE, "Double dtype expected");
 
         Nd4j.getExecutioner().push();
 
@@ -820,29 +693,6 @@ public class JcublasLevel1 extends BaseLevel1 {
         allocator.registerAction(ctx, X);
 
         OpExecutionerUtil.checkForAny(X);
-    }
-
-    @Override
-    protected void cscal(long N, IComplexFloat alpha, IComplexNDArray X, int incX) {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    protected void zscal(long N, IComplexDouble alpha, IComplexNDArray X, int incX) {
-        throw new UnsupportedOperationException();
-
-
-    }
-
-    @Override
-    protected void csscal(long N, float alpha, IComplexNDArray X, int incX) {
-        throw new UnsupportedOperationException();
-
-    }
-
-    @Override
-    protected void zdscal(long N, double alpha, IComplexNDArray X, int incX) {
-        throw new UnsupportedOperationException();
     }
 
     @Override

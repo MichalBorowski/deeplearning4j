@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.nn.modelimport.keras.layers.convolutional;
 
 import lombok.Data;
@@ -20,7 +36,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.deeplearning4j.nn.modelimport.keras.layers.convolutional.KerasConvolutionUtils.*;
-import static org.deeplearning4j.nn.modelimport.keras.utils.KerasActivationUtils.getActivationFromConfig;
+import static org.deeplearning4j.nn.modelimport.keras.utils.KerasActivationUtils.getIActivationFromConfig;
 import static org.deeplearning4j.nn.modelimport.keras.utils.KerasInitilizationUtils.getWeightInitFromConfig;
 import static org.deeplearning4j.nn.modelimport.keras.utils.KerasLayerUtils.getHasBiasFromConfig;
 import static org.deeplearning4j.nn.modelimport.keras.utils.KerasLayerUtils.getNOutFromConfig;
@@ -109,8 +125,8 @@ public class KerasSeparableConvolution2D extends KerasConvolution {
 
         SeparableConvolution2D.Builder builder = new SeparableConvolution2D.Builder().name(this.layerName)
                 .nOut(getNOutFromConfig(layerConfig, conf)).dropOut(this.dropout)
-                .activation(getActivationFromConfig(layerConfig, conf))
-                .weightInit(depthWeightInit)
+                .activation(getIActivationFromConfig(layerConfig, conf))
+                .weightInit(depthWeightInit.getWeightInitFunction(depthDistribution))
                 .depthMultiplier(depthMultiplier)
                 .l1(this.weightL1Regularization).l2(this.weightL2Regularization)
                 .convolutionMode(getConvolutionModeFromConfig(layerConfig, conf))
@@ -118,8 +134,6 @@ public class KerasSeparableConvolution2D extends KerasConvolution {
                 .hasBias(hasBias)
                 .stride(getStrideFromConfig(layerConfig, 2, conf));
         int[] padding = getPaddingFromBorderModeConfig(layerConfig, 2, conf, kerasMajorVersion);
-        if (depthDistribution != null)
-            builder.dist(depthDistribution);
         if (hasBias)
             builder.biasInit(0.0);
         if (padding != null)

@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.linalg.dataset.api.preprocessor;
 
 import lombok.EqualsAndHashCode;
@@ -48,15 +64,15 @@ public class MinMaxStrategy implements NormalizerStrategy<MinMaxStats>, Serializ
     @Override
     public void preProcess(INDArray array, INDArray maskArray, MinMaxStats stats) {
         if (array.rank() <= 2) {
-            array.subiRowVector(stats.getLower());
-            array.diviRowVector(stats.getRange());
+            array.subiRowVector(stats.getLower().castTo(array.dataType()));
+            array.diviRowVector(stats.getRange().castTo(array.dataType()));
         }
         // if feature Rank is 3 (time series) samplesxfeaturesxtimesteps
         // if feature Rank is 4 (images) samplesxchannelsxrowsxcols
         // both cases operations should be carried out in dimension 1
         else {
-            Nd4j.getExecutioner().execAndReturn(new BroadcastSubOp(array, stats.getLower(), array, 1));
-            Nd4j.getExecutioner().execAndReturn(new BroadcastDivOp(array, stats.getRange(), array, 1));
+            Nd4j.getExecutioner().execAndReturn(new BroadcastSubOp(array, stats.getLower().castTo(array.dataType()), array, 1));
+            Nd4j.getExecutioner().execAndReturn(new BroadcastDivOp(array, stats.getRange().castTo(array.dataType()), array, 1));
         }
 
         // Scale by target range
@@ -86,8 +102,8 @@ public class MinMaxStrategy implements NormalizerStrategy<MinMaxStats>, Serializ
             array.muliRowVector(stats.getRange());
             array.addiRowVector(stats.getLower());
         } else {
-            Nd4j.getExecutioner().execAndReturn(new BroadcastMulOp(array, stats.getRange(), array, 1));
-            Nd4j.getExecutioner().execAndReturn(new BroadcastAddOp(array, stats.getLower(), array, 1));
+            Nd4j.getExecutioner().execAndReturn(new BroadcastMulOp(array, stats.getRange().castTo(array.dataType()), array, 1));
+            Nd4j.getExecutioner().execAndReturn(new BroadcastAddOp(array, stats.getLower().castTo(array.dataType()), array, 1));
         }
 
         if (maskArray != null) {

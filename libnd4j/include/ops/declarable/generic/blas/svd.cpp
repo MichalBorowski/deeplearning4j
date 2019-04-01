@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 //
 //  @author Yurii Shyrma (iuriish@yahoo.com), created on 20.01.2018
 //
@@ -12,8 +28,7 @@ namespace nd4j {
 namespace ops  {
 
 CUSTOM_OP_IMPL(svd, 1, 1, false, 0, 3) {
-    
-    NDArray<T>* x = INPUT_VARIABLE(0);    
+    auto x = INPUT_VARIABLE(0);
     
     const int rank =  x->rankOf();
     REQUIRE_TRUE(rank >= 2 , 0, "SVD OP: the rank of input array must be >=2, but got %i instead!", rank);
@@ -28,6 +43,12 @@ CUSTOM_OP_IMPL(svd, 1, 1, false, 0, 3) {
 }
 
 
+    DECLARE_TYPES(svd) {
+        getOpDescriptor()
+                ->setAllowedInputTypes(0, {DataType::FLOAT32, DataType ::DOUBLE, DataType::HALF})
+                ->setSameMode(true);
+    }
+
 DECLARE_SHAPE_FN(svd) {
 
     auto inShapeInfo = inputShape->at(0);
@@ -41,10 +62,9 @@ DECLARE_SHAPE_FN(svd) {
     
     Nd4jLong* sShapeInfo(nullptr);
     if(rank == 2) {
-        ALLOCATE(sShapeInfo, block.getWorkspace(), shape::shapeInfoLength(rank), Nd4jLong); 
-        sShapeInfo[0] = 2;
-        sShapeInfo[1] = 1;
-        sShapeInfo[2] = diagSize;
+        ALLOCATE(sShapeInfo, block.getWorkspace(), shape::shapeInfoLength(1), Nd4jLong); 
+        sShapeInfo[0] = 1;
+        sShapeInfo[1] = diagSize;
     }
     else {
         ALLOCATE(sShapeInfo, block.getWorkspace(), shape::shapeInfoLength(rank-1), Nd4jLong); 
@@ -54,7 +74,7 @@ DECLARE_SHAPE_FN(svd) {
         sShapeInfo[rank-1] = diagSize;
     }
     
-    shape::updateStrides(sShapeInfo, shape::order(inShapeInfo));
+    ShapeUtils::updateStridesAndType(sShapeInfo, inShapeInfo, shape::order(inShapeInfo));
     
     if(calcUV){
 

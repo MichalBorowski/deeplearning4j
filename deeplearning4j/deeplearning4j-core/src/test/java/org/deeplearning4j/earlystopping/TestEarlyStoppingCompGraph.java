@@ -1,20 +1,18 @@
-/*-
- *  
- *  * Copyright 2016 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
- *  
- */
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.deeplearning4j.earlystopping;
 
@@ -31,10 +29,7 @@ import org.deeplearning4j.earlystopping.termination.MaxScoreIterationTermination
 import org.deeplearning4j.earlystopping.termination.MaxTimeIterationTerminationCondition;
 import org.deeplearning4j.earlystopping.termination.ScoreImprovementEpochTerminationCondition;
 import org.deeplearning4j.earlystopping.trainer.EarlyStoppingGraphTrainer;
-import org.deeplearning4j.earlystopping.trainer.EarlyStoppingTrainer;
 import org.deeplearning4j.earlystopping.trainer.IEarlyStoppingTrainer;
-import org.deeplearning4j.eval.Evaluation;
-import org.deeplearning4j.eval.RegressionEvaluation;
 import org.deeplearning4j.nn.api.OptimizationAlgorithm;
 import org.deeplearning4j.nn.conf.ComputationGraphConfiguration;
 import org.deeplearning4j.nn.conf.NeuralNetConfiguration;
@@ -47,10 +42,14 @@ import org.deeplearning4j.nn.graph.ComputationGraph;
 import org.deeplearning4j.nn.weights.WeightInit;
 import org.deeplearning4j.optimize.listeners.ScoreIterationListener;
 import org.junit.Test;
+import org.nd4j.evaluation.classification.Evaluation;
+import org.nd4j.evaluation.regression.RegressionEvaluation;
 import org.nd4j.linalg.activations.Activation;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.dataset.DataSet;
 import org.nd4j.linalg.dataset.api.iterator.DataSetIterator;
 import org.nd4j.linalg.factory.Nd4j;
+import org.nd4j.linalg.learning.config.Adam;
 import org.nd4j.linalg.learning.config.Sgd;
 import org.nd4j.linalg.lossfunctions.LossFunctions;
 import org.slf4j.Logger;
@@ -66,14 +65,20 @@ import static org.junit.Assert.*;
 @Slf4j
 public class TestEarlyStoppingCompGraph extends BaseDL4JTest {
 
+    @Override
+    public DataType getDataType(){
+        return DataType.DOUBLE;
+    }
+
     @Test
     public void testEarlyStoppingIris() {
         ComputationGraphConfiguration conf = new NeuralNetConfiguration.Builder()
                         .optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT)
                         .updater(new Sgd(0.001)).weightInit(WeightInit.XAVIER).graphBuilder().addInputs("in")
                         .addLayer("0", new OutputLayer.Builder().nIn(4).nOut(3)
+                                .activation(Activation.SOFTMAX)
                                         .lossFunction(LossFunctions.LossFunction.MCXENT).build(), "in")
-                        .setOutputs("0").pretrain(false).backprop(true).build();
+                        .setOutputs("0").build();
         ComputationGraph net = new ComputationGraph(conf);
         net.setListeners(new ScoreIterationListener(1));
 
@@ -117,7 +122,7 @@ public class TestEarlyStoppingCompGraph extends BaseDL4JTest {
                         .weightInit(WeightInit.XAVIER).graphBuilder().addInputs("in")
                         .addLayer("0", new OutputLayer.Builder().nIn(4).nOut(3).activation(Activation.SOFTMAX)
                                         .lossFunction(LossFunctions.LossFunction.MCXENT).build(), "in")
-                        .setOutputs("0").pretrain(false).backprop(true).build();
+                        .setOutputs("0").build();
         ComputationGraph net = new ComputationGraph(conf);
         net.setListeners(new ScoreIterationListener(1));
 
@@ -152,8 +157,9 @@ public class TestEarlyStoppingCompGraph extends BaseDL4JTest {
                         .updater(new Sgd(1e-6)).weightInit(WeightInit.XAVIER).graphBuilder()
                         .addInputs("in")
                         .addLayer("0", new OutputLayer.Builder().nIn(4).nOut(3)
+                                .activation(Activation.SOFTMAX)
                                         .lossFunction(LossFunctions.LossFunction.MCXENT).build(), "in")
-                        .setOutputs("0").pretrain(false).backprop(true).build();
+                        .setOutputs("0").build();
         ComputationGraph net = new ComputationGraph(conf);
         net.setListeners(new ScoreIterationListener(1));
 
@@ -163,7 +169,7 @@ public class TestEarlyStoppingCompGraph extends BaseDL4JTest {
         EarlyStoppingConfiguration<ComputationGraph> esConf = new EarlyStoppingConfiguration.Builder<ComputationGraph>()
                         .epochTerminationConditions(new MaxEpochsTerminationCondition(10000))
                         .iterationTerminationConditions(new MaxTimeIterationTerminationCondition(3, TimeUnit.SECONDS),
-                                        new MaxScoreIterationTerminationCondition(7.5)) //Initial score is ~2.5
+                                        new MaxScoreIterationTerminationCondition(50)) //Initial score is ~8
                         .scoreCalculator(new DataSetLossCalculator(irisIter, true))
                         .modelSaver(saver).build();
 
@@ -193,8 +199,9 @@ public class TestEarlyStoppingCompGraph extends BaseDL4JTest {
                         .updater(new Sgd(0.0)).weightInit(WeightInit.XAVIER).graphBuilder()
                         .addInputs("in")
                         .addLayer("0", new OutputLayer.Builder().nIn(4).nOut(3)
+                                .activation(Activation.SOFTMAX)
                                         .lossFunction(LossFunctions.LossFunction.MCXENT).build(), "in")
-                        .setOutputs("0").pretrain(false).backprop(true).build();
+                        .setOutputs("0").build();
         ComputationGraph net = new ComputationGraph(conf);
         net.setListeners(new ScoreIterationListener(1));
 
@@ -205,7 +212,7 @@ public class TestEarlyStoppingCompGraph extends BaseDL4JTest {
                         .epochTerminationConditions(new MaxEpochsTerminationCondition(100),
                                         new ScoreImprovementEpochTerminationCondition(5))
                         .iterationTerminationConditions(new MaxTimeIterationTerminationCondition(3, TimeUnit.SECONDS),
-                                        new MaxScoreIterationTerminationCondition(7.5)) //Initial score is ~2.5
+                                        new MaxScoreIterationTerminationCondition(50)) //Initial score is ~8
                         .scoreCalculator(new DataSetLossCalculatorCG(irisIter, true)).modelSaver(saver).build();
 
         IEarlyStoppingTrainer trainer = new EarlyStoppingGraphTrainer(esConf, net, irisIter);
@@ -226,8 +233,9 @@ public class TestEarlyStoppingCompGraph extends BaseDL4JTest {
                         .optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT)
                         .updater(new Sgd(0.001)).weightInit(WeightInit.XAVIER).graphBuilder().addInputs("in")
                         .addLayer("0", new OutputLayer.Builder().nIn(4).nOut(3)
+                                .activation(Activation.SOFTMAX)
                                         .lossFunction(LossFunctions.LossFunction.MCXENT).build(), "in")
-                        .setOutputs("0").pretrain(false).backprop(true).build();
+                        .setOutputs("0").build();
         ComputationGraph net = new ComputationGraph(conf);
         net.setListeners(new ScoreIterationListener(1));
 
@@ -289,7 +297,7 @@ public class TestEarlyStoppingCompGraph extends BaseDL4JTest {
                     .graphBuilder()
                     .addInputs("in")
                     .layer("0", new DenseLayer.Builder().nIn(784).nOut(32).build(), "in")
-                    .layer("1", new OutputLayer.Builder().nIn(32).nOut(784).activation(Activation.SIGMOID).build(), "0")
+                    .layer("1", new OutputLayer.Builder().nIn(32).nOut(784).activation(Activation.SIGMOID).lossFunction(LossFunctions.LossFunction.MSE).build(), "0")
                     .setOutputs("1")
                     .build();
 
@@ -325,6 +333,7 @@ public class TestEarlyStoppingCompGraph extends BaseDL4JTest {
 
     @Test
     public void testAEScoreFunctionSimple() throws Exception {
+        DataType dt = Nd4j.defaultFloatingPointType();
 
         for(RegressionEvaluation.Metric metric : new RegressionEvaluation.Metric[]{RegressionEvaluation.Metric.MSE,
                 RegressionEvaluation.Metric.MAE}) {
@@ -335,7 +344,7 @@ public class TestEarlyStoppingCompGraph extends BaseDL4JTest {
                     .addInputs("in")
                     .layer("0", new AutoEncoder.Builder().nIn(784).nOut(32).build(), "in")
                     .setOutputs("0")
-                    .pretrain(true).backprop(false)
+
                     .build();
 
             ComputationGraph net = new ComputationGraph(conf);
@@ -361,7 +370,7 @@ public class TestEarlyStoppingCompGraph extends BaseDL4JTest {
                             .build();
 
             EarlyStoppingGraphTrainer trainer = new EarlyStoppingGraphTrainer(esConf, net, iter);
-            EarlyStoppingResult<ComputationGraph> result = trainer.fit();
+            EarlyStoppingResult<ComputationGraph> result = trainer.pretrain();
 
             assertNotNull(result.getBestModel());
             assertTrue(result.getBestModelScore() > 0.0);
@@ -384,7 +393,7 @@ public class TestEarlyStoppingCompGraph extends BaseDL4JTest {
                             .decoderLayerSizes(64)
                             .build(), "in")
                     .setOutputs("0")
-                    .pretrain(true).backprop(false)
+
                     .build();
 
             ComputationGraph net = new ComputationGraph(conf);
@@ -410,7 +419,7 @@ public class TestEarlyStoppingCompGraph extends BaseDL4JTest {
                             .build();
 
             EarlyStoppingGraphTrainer trainer = new EarlyStoppingGraphTrainer(esConf, net, iter);
-            EarlyStoppingResult<ComputationGraph> result = trainer.fit();
+            EarlyStoppingResult<ComputationGraph> result = trainer.pretrain();
 
             assertNotNull(result.getBestModel());
             assertTrue(result.getBestModelScore() > 0.0);
@@ -423,6 +432,7 @@ public class TestEarlyStoppingCompGraph extends BaseDL4JTest {
         for(boolean logProb : new boolean[]{false, true}) {
 
             ComputationGraphConfiguration conf = new NeuralNetConfiguration.Builder()
+                    .updater(new Adam(1e-5))
                     .graphBuilder()
                     .addInputs("in")
                     .layer("0", new VariationalAutoencoder.Builder()
@@ -432,7 +442,7 @@ public class TestEarlyStoppingCompGraph extends BaseDL4JTest {
                             .reconstructionDistribution(new BernoulliReconstructionDistribution(Activation.SIGMOID))
                             .build(), "in")
                     .setOutputs("0")
-                    .pretrain(true).backprop(false)
+
                     .build();
 
             ComputationGraph net = new ComputationGraph(conf);
@@ -459,7 +469,7 @@ public class TestEarlyStoppingCompGraph extends BaseDL4JTest {
                             .build();
 
             EarlyStoppingGraphTrainer trainer = new EarlyStoppingGraphTrainer(esConf, net, iter);
-            EarlyStoppingResult<ComputationGraph> result = trainer.fit();
+            EarlyStoppingResult<ComputationGraph> result = trainer.pretrain();
 
             assertNotNull(result.getBestModel());
             assertTrue(result.getBestModelScore() > 0.0);
@@ -517,6 +527,7 @@ public class TestEarlyStoppingCompGraph extends BaseDL4JTest {
                 .graphBuilder()
                 .addInputs("in")
                 .layer("0", new OutputLayer.Builder().nIn(4).nOut(3)
+                        .activation(Activation.SOFTMAX)
                         .lossFunction(LossFunctions.LossFunction.MCXENT).build(), "in")
                 .setOutputs("0")
                 .build();

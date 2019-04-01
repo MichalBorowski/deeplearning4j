@@ -1,18 +1,18 @@
-/*-
- *  * Copyright 2016 Skymind, Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
- */
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.datavec.api.transform;
 
@@ -38,15 +38,15 @@ import org.datavec.api.transform.sequence.trim.SequenceTrimTransform;
 import org.datavec.api.transform.sequence.window.ReduceSequenceByWindowTransform;
 import org.datavec.api.transform.sequence.window.WindowFunction;
 import org.datavec.api.transform.serde.JsonMappers;
-import org.datavec.api.transform.transform.categorical.CategoricalToIntegerTransform;
-import org.datavec.api.transform.transform.categorical.CategoricalToOneHotTransform;
-import org.datavec.api.transform.transform.categorical.IntegerToCategoricalTransform;
-import org.datavec.api.transform.transform.categorical.StringToCategoricalTransform;
+import org.datavec.api.transform.transform.categorical.*;
 import org.datavec.api.transform.transform.column.*;
 import org.datavec.api.transform.transform.condition.ConditionalCopyValueTransform;
 import org.datavec.api.transform.transform.condition.ConditionalReplaceValueTransform;
 import org.datavec.api.transform.transform.condition.ConditionalReplaceValueTransformWithDefault;
 import org.datavec.api.transform.transform.doubletransform.*;
+import org.datavec.api.transform.transform.floattransform.FloatColumnsMathOpTransform;
+import org.datavec.api.transform.transform.floattransform.FloatMathFunctionTransform;
+import org.datavec.api.transform.transform.floattransform.FloatMathOpTransform;
 import org.datavec.api.transform.transform.integer.ConvertToInteger;
 import org.datavec.api.transform.transform.integer.IntegerColumnsMathOpTransform;
 import org.datavec.api.transform.transform.integer.IntegerMathOpTransform;
@@ -772,6 +772,39 @@ public class TransformProcess implements Serializable {
         /**
          * Perform a mathematical operation (add, subtract, scalar max etc) on the specified double column, with a scalar
          *
+         * @param columnName The float column to perform the operation on
+         * @param mathOp     The mathematical operation
+         * @param scalar     The scalar value to use in the mathematical operation
+         */
+        public Builder floatMathOp(String columnName, MathOp mathOp, float scalar) {
+            return transform(new FloatMathOpTransform(columnName, mathOp, scalar));
+        }
+
+        /**
+         * Calculate and add a new float column by performing a mathematical operation on a number of existing columns.
+         * New column is added to the end.
+         *
+         * @param newColumnName Name of the new/derived column
+         * @param mathOp        Mathematical operation to execute on the columns
+         * @param columnNames   Names of the columns to use in the mathematical operation
+         */
+        public Builder floatColumnsMathOp(String newColumnName, MathOp mathOp, String... columnNames) {
+            return transform(new FloatColumnsMathOpTransform(newColumnName, mathOp, columnNames));
+        }
+
+        /**
+         * Perform a mathematical operation (such as sin(x), ceil(x), exp(x) etc) on a column
+         *
+         * @param columnName   Column name to operate on
+         * @param mathFunction MathFunction to apply to the column
+         */
+        public Builder floatMathFunction(String columnName, MathFunction mathFunction) {
+            return transform(new FloatMathFunctionTransform(columnName, mathFunction));
+        }
+
+        /**
+         * Perform a mathematical operation (add, subtract, scalar max etc) on the specified double column, with a scalar
+         *
          * @param columnName The double column to perform the operation on
          * @param mathOp     The mathematical operation
          * @param scalar     The scalar value to use in the mathematical operation
@@ -1223,6 +1256,19 @@ public class TransformProcess implements Serializable {
             return transform(new StringToTimeTransform(column, format, dateTimeZone));
         }
 
+
+        /**
+         * Convert a String column (containing a date/time String) to a time column (by parsing the date/time String)
+         *
+         * @param column       String column containing the date/time Strings
+         * @param format       Format of the strings. Time format is specified as per http://www.joda.org/joda-time/apidocs/org/joda/time/format/DateTimeFormat.html
+         * @param dateTimeZone Timezone of the column
+         * @param locale       Locale of the column
+         */
+        public Builder stringToTimeTransform(String column, String format, DateTimeZone dateTimeZone, Locale locale) {
+            return transform(new StringToTimeTransform(column, format, dateTimeZone, locale));
+        }
+
         /**
          * Append a String to a specified column
          *
@@ -1358,6 +1404,43 @@ public class TransformProcess implements Serializable {
         public Builder ndArrayDistanceTransform(String newColumnName, Distance distance, String firstCol,
                                                 String secondCol) {
             return transform(new NDArrayDistanceTransform(newColumnName, distance, firstCol, secondCol));
+        }
+
+        /**
+         * FirstDigitTransform converts a column to a categorical column, with values being the first digit of the number.<br>
+         * For example, "3.1415" becomes "3" and "2.0" becomes "2".<br>
+         * Negative numbers ignore the sign: "-7.123" becomes "7".<br>
+         * Note that two {@link FirstDigitTransform.Mode}s are supported, which determines how non-numerical entries should be handled:<br>
+         * EXCEPTION_ON_INVALID: output has 10 category values ("0", ..., "9"), and any non-numerical values result in an exception<br>
+         * INCLUDE_OTHER_CATEGORY: output has 11 category values ("0", ..., "9", "Other"), all non-numerical values are mapped to "Other"<br>
+         * <br>
+         * FirstDigitTransform is useful (combined with {@link CategoricalToOneHotTransform} and Reductions) to implement
+         * <a href="https://en.wikipedia.org/wiki/Benford%27s_law">Benford's law</a>.
+         *
+         * @param inputColumn  Input column name
+         * @param outputColumn Output column name. If same as input, input column is replaced
+         */
+        public Builder firstDigitTransform(String inputColumn, String outputColumn){
+            return firstDigitTransform(inputColumn, outputColumn, FirstDigitTransform.Mode.INCLUDE_OTHER_CATEGORY);
+        }
+
+        /**
+         * FirstDigitTransform converts a column to a categorical column, with values being the first digit of the number.<br>
+         * For example, "3.1415" becomes "3" and "2.0" becomes "2".<br>
+         * Negative numbers ignore the sign: "-7.123" becomes "7".<br>
+         * Note that two {@link FirstDigitTransform.Mode}s are supported, which determines how non-numerical entries should be handled:<br>
+         * EXCEPTION_ON_INVALID: output has 10 category values ("0", ..., "9"), and any non-numerical values result in an exception<br>
+         * INCLUDE_OTHER_CATEGORY: output has 11 category values ("0", ..., "9", "Other"), all non-numerical values are mapped to "Other"<br>
+         * <br>
+         * FirstDigitTransform is useful (combined with {@link CategoricalToOneHotTransform} and Reductions) to implement
+         * <a href="https://en.wikipedia.org/wiki/Benford%27s_law">Benford's law</a>.
+         *
+         * @param inputColumn  Input column name
+         * @param outputColumn Output column name. If same as input, input column is replaced
+         * @param mode See {@link FirstDigitTransform.Mode}
+         */
+        public Builder firstDigitTransform(String inputColumn, String outputColumn, FirstDigitTransform.Mode mode){
+            return transform(new FirstDigitTransform(inputColumn, outputColumn, mode));
         }
 
         /**

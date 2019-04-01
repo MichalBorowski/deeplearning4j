@@ -1,24 +1,23 @@
-/*-
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
  *
- *  * Copyright 2015 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
  *
- */
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.deeplearning4j.nn.conf;
 
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
@@ -29,21 +28,25 @@ import org.deeplearning4j.nn.conf.dropout.Dropout;
 import org.deeplearning4j.nn.conf.dropout.IDropout;
 import org.deeplearning4j.nn.conf.graph.GraphVertex;
 import org.deeplearning4j.nn.conf.inputs.InputType;
-import org.deeplearning4j.nn.conf.layers.misc.FrozenLayerWithBackprop;
-import org.deeplearning4j.nn.conf.layers.variational.ReconstructionDistribution;
-import org.deeplearning4j.nn.conf.serde.JsonMappers;
 import org.deeplearning4j.nn.conf.layers.*;
 import org.deeplearning4j.nn.conf.layers.misc.FrozenLayer;
+import org.deeplearning4j.nn.conf.layers.misc.FrozenLayerWithBackprop;
 import org.deeplearning4j.nn.conf.layers.recurrent.Bidirectional;
-import org.deeplearning4j.nn.conf.layers.samediff.BaseSameDiffLayer;
+import org.deeplearning4j.nn.conf.layers.samediff.AbstractSameDiffLayer;
+import org.deeplearning4j.nn.conf.layers.variational.ReconstructionDistribution;
 import org.deeplearning4j.nn.conf.layers.wrapper.BaseWrapperLayer;
+import org.deeplearning4j.nn.conf.serde.JsonMappers;
 import org.deeplearning4j.nn.conf.serde.legacyformat.LegacyGraphVertexDeserializer;
 import org.deeplearning4j.nn.conf.serde.legacyformat.LegacyLayerDeserializer;
 import org.deeplearning4j.nn.conf.serde.legacyformat.LegacyPreprocessorDeserializer;
 import org.deeplearning4j.nn.conf.serde.legacyformat.LegacyReconstructionDistributionDeserializer;
 import org.deeplearning4j.nn.conf.stepfunctions.StepFunction;
 import org.deeplearning4j.nn.conf.weightnoise.IWeightNoise;
+import org.deeplearning4j.nn.weights.IWeightInit;
 import org.deeplearning4j.nn.weights.WeightInit;
+import org.deeplearning4j.nn.weights.WeightInitDistribution;
+import org.deeplearning4j.nn.weights.WeightInitXavier;
+import org.deeplearning4j.util.NetworkUtils;
 import org.nd4j.base.Preconditions;
 import org.nd4j.linalg.activations.Activation;
 import org.nd4j.linalg.activations.IActivation;
@@ -51,6 +54,10 @@ import org.nd4j.linalg.activations.impl.ActivationSigmoid;
 import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.learning.config.IUpdater;
 import org.nd4j.linalg.learning.config.Sgd;
+import org.nd4j.linalg.learning.regularization.L1Regularization;
+import org.nd4j.linalg.learning.regularization.L2Regularization;
+import org.nd4j.linalg.learning.regularization.Regularization;
+import org.nd4j.linalg.learning.regularization.WeightDecay;
 import org.nd4j.linalg.lossfunctions.ILossFunction;
 import org.nd4j.linalg.primitives.Pair;
 import org.nd4j.serde.json.LegacyIActivationDeserializer;
@@ -71,6 +78,7 @@ import java.util.*;
 @Data
 @NoArgsConstructor
 @Slf4j
+@EqualsAndHashCode(exclude = {"iterationCount", "epochCount"})
 public class NeuralNetConfiguration implements Serializable, Cloneable {
 
     protected Layer layer;
@@ -86,9 +94,6 @@ public class NeuralNetConfiguration implements Serializable, Cloneable {
     protected StepFunction stepFunction;
     //minimize or maximize objective
     protected boolean minimize = true;
-    protected Map<String, Double> l1ByParam = new HashMap<>();
-    protected Map<String, Double> l2ByParam = new HashMap<>();
-    protected boolean pretrain;
 
     // this field defines preOutput cache
     protected CacheMode cacheMode;
@@ -117,10 +122,6 @@ public class NeuralNetConfiguration implements Serializable, Cloneable {
                 clone.stepFunction = clone.stepFunction.clone();
             if (clone.variables != null)
                 clone.variables = new ArrayList<>(clone.variables);
-            if (clone.l1ByParam != null)
-                clone.l1ByParam = new HashMap<>(clone.l1ByParam);
-            if (clone.l2ByParam != null)
-                clone.l2ByParam = new HashMap<>(clone.l2ByParam);
             return clone;
         } catch (CloneNotSupportedException e) {
             throw new RuntimeException(e);
@@ -140,39 +141,11 @@ public class NeuralNetConfiguration implements Serializable, Cloneable {
     public void addVariable(String variable) {
         if (!variables.contains(variable)) {
             variables.add(variable);
-            setLayerParamLR(variable);
         }
     }
 
     public void clearVariables() {
         variables.clear();
-        l1ByParam.clear();
-        l2ByParam.clear();
-    }
-
-    public void resetVariables() {
-        for (String s : variables) {
-            setLayerParamLR(s);
-        }
-    }
-
-    public void setLayerParamLR(String variable) {
-        double l1 = layer.getL1ByParam(variable);
-        if (Double.isNaN(l1))
-            l1 = 0.0; //Not set
-        double l2 = layer.getL2ByParam(variable);
-        if (Double.isNaN(l2))
-            l2 = 0.0; //Not set
-        l1ByParam.put(variable, l1);
-        l2ByParam.put(variable, l2);
-    }
-
-    public double getL1ByParam(String variable) {
-        return l1ByParam.get(variable);
-    }
-
-    public double getL2ByParam(String variable) {
-        return l2ByParam.get(variable);
     }
 
     /**
@@ -191,17 +164,6 @@ public class NeuralNetConfiguration implements Serializable, Cloneable {
 
         public ListBuilder(Builder globalConfig) {
             this(globalConfig, new HashMap<Integer, Builder>());
-        }
-
-        public ListBuilder backprop(boolean backprop) {
-            this.backprop = backprop;
-
-            return this;
-        }
-
-        public ListBuilder pretrain(boolean pretrain) {
-            this.pretrain = pretrain;
-            return this;
         }
 
         public ListBuilder layer(int ind, @NonNull Layer layer) {
@@ -294,38 +256,39 @@ public class NeuralNetConfiguration implements Serializable, Cloneable {
             WorkspaceMode wsmTest = (globalConfig.setIWM ? globalConfig.inferenceWorkspaceMode : inferenceWorkspaceMode);
 
 
-            return new MultiLayerConfiguration.Builder().backprop(backprop).inputPreProcessors(inputPreProcessors)
-                            .pretrain(pretrain).backpropType(backpropType).tBPTTForwardLength(tbpttFwdLength)
+            return new MultiLayerConfiguration.Builder().inputPreProcessors(inputPreProcessors)
+                            .backpropType(backpropType).tBPTTForwardLength(tbpttFwdLength)
                             .tBPTTBackwardLength(tbpttBackLength).setInputType(this.inputType)
                             .trainingWorkspaceMode(wsmTrain).cacheMode(globalConfig.cacheMode)
-                            .inferenceWorkspaceMode(wsmTest).confs(list).build();
+                            .inferenceWorkspaceMode(wsmTest).confs(list).validateOutputLayerConfig(validateOutputConfig)
+                            .build();
         }
 
         /** Helper class for setting input types */
         public class InputTypeBuilder {
             /**
-             * See {@link InputType#convolutional(int, int, int)}
+             * See {@link InputType#convolutional(long, long, long)}
              */
             public ListBuilder convolutional(int height, int width, int depth){
                 return ListBuilder.this.setInputType(InputType.convolutional(height, width, depth));
             }
 
             /**
-             * * See {@link InputType#convolutionalFlat(int, int, int)}
+             * * See {@link InputType#convolutionalFlat(long, long, long)}
              */
             public ListBuilder convolutionalFlat(int height, int width, int depth){
                 return ListBuilder.this.setInputType(InputType.convolutionalFlat(height, width, depth));
             }
 
             /**
-             * See {@link InputType#feedForward(int)}
+             * See {@link InputType#feedForward(long)}
              */
             public ListBuilder feedForward(int size){
                 return ListBuilder.this.setInputType(InputType.feedForward(size));
             }
 
             /**
-             * See {@link InputType#recurrent(int)}}
+             * See {@link InputType#recurrent(long)}}
              */
             public ListBuilder recurrent(int size){
                 return ListBuilder.this.setInputType(InputType.recurrent(size));
@@ -506,13 +469,11 @@ public class NeuralNetConfiguration implements Serializable, Cloneable {
     @Data
     public static class Builder implements Cloneable {
         protected IActivation activationFn = new ActivationSigmoid();
-        protected WeightInit weightInit = WeightInit.XAVIER;
+        protected IWeightInit weightInitFn = new WeightInitXavier();
         protected double biasInit = 0.0;
-        protected Distribution dist = null;
-        protected double l1 = Double.NaN;
-        protected double l2 = Double.NaN;
-        protected double l1Bias = Double.NaN;
-        protected double l2Bias = Double.NaN;
+        protected double gainInit = 1.0;
+        protected List<Regularization> regularization = new ArrayList<>();
+        protected List<Regularization> regularizationBias = new ArrayList<>();
         protected IDropout idropOut;
         protected IWeightNoise weightNoise;
         protected IUpdater iUpdater = new Sgd();
@@ -526,7 +487,6 @@ public class NeuralNetConfiguration implements Serializable, Cloneable {
         protected boolean minimize = true;
         protected GradientNormalization gradientNormalization = GradientNormalization.None;
         protected double gradientNormalizationThreshold = 1.0;
-        protected boolean pretrain = false;
         protected List<LayerConstraint> allParamConstraints;
         protected List<LayerConstraint> weightConstraints;
         protected List<LayerConstraint> biasConstraints;
@@ -553,7 +513,6 @@ public class NeuralNetConfiguration implements Serializable, Cloneable {
                 seed = newConf.seed;
                 stepFunction = newConf.stepFunction;
                 miniBatch = newConf.miniBatch;
-                pretrain = newConf.pretrain;
             }
         }
 
@@ -757,22 +716,40 @@ public class NeuralNetConfiguration implements Serializable, Cloneable {
             return activation(activation.getActivationFunction());
         }
 
+
         /**
-         * Weight initialization scheme.<br>
+         * Weight initialization scheme to use, for initial weight values
          * Note: values set by this method will be applied to all applicable layers in the network, unless a different
          * value is explicitly set on a given layer. In other words: values set via this method are used as the default
          * value, and can be overridden on a per-layer basis.
          *
-         * @see org.deeplearning4j.nn.weights.WeightInit
+         * @see IWeightInit
+         */
+        public Builder weightInit(IWeightInit weightInit) {
+            this.weightInitFn = weightInit;
+            return this;
+        }
+
+        /**
+         * Weight initialization scheme to use, for initial weight values
+         * Note: values set by this method will be applied to all applicable layers in the network, unless a different
+         * value is explicitly set on a given layer. In other words: values set via this method are used as the default
+         * value, and can be overridden on a per-layer basis.
+         *
+         * @see WeightInit
          */
         public Builder weightInit(WeightInit weightInit) {
-            this.weightInit = weightInit;
+            if(weightInit == WeightInit.DISTRIBUTION) {
+             //   throw new UnsupportedOperationException("Not supported!, Use weightInit(Distribution distribution) instead!");
+            }
+
+            this.weightInitFn = weightInit.getWeightInitFunction();
             return this;
         }
 
         /**
          * Set weight initialization scheme to random sampling via the specified distribution.
-         * Equivalent to: {@code .weightInit(WeightInit.DISTRIBUTION).dist(distribution)}<br>
+         * Equivalent to: {@code .weightInit(new WeightInitDistribution(distribution))}
          * Note: values set by this method will be applied to all applicable layers in the network, unless a different
          * value is explicitly set on a given layer. In other words: values set via this method are used as the default
          * value, and can be overridden on a per-layer basis.
@@ -780,8 +757,7 @@ public class NeuralNetConfiguration implements Serializable, Cloneable {
          * @param distribution Distribution to use for weight initialization
          */
         public Builder weightInit(Distribution distribution){
-            weightInit(WeightInit.DISTRIBUTION);
-            return dist(distribution);
+            return weightInit(new WeightInitDistribution(distribution));
         }
 
         /**
@@ -798,38 +774,54 @@ public class NeuralNetConfiguration implements Serializable, Cloneable {
         }
 
         /**
-         * Distribution to sample initial weights from. Used in conjunction with
-         * .weightInit(WeightInit.DISTRIBUTION).<br>
+         * Distribution to sample initial weights from.
+         * Equivalent to: {@code .weightInit(new WeightInitDistribution(distribution))}.<br>
          * Note: values set by this method will be applied to all applicable layers in the network, unless a different
          * value is explicitly set on a given layer. In other words: values set via this method are used as the default
          * value, and can be overridden on a per-layer basis.
          *
          * @see #weightInit(Distribution)
+         * @deprecated Use {@link #weightInit(Distribution)}
          */
+        @Deprecated
         public Builder dist(Distribution dist) {
-            this.dist = dist;
-            return this;
+            return weightInit(dist);
         }
 
         /**
-         * L1 regularization coefficient for the weights.<br>
+         * L1 regularization coefficient for the weights (excluding biases).<br>
          * Note: values set by this method will be applied to all applicable layers in the network, unless a different
          * value is explicitly set on a given layer. In other words: values set via this method are used as the default
          * value, and can be overridden on a per-layer basis.
          */
         public Builder l1(double l1) {
-            this.l1 = l1;
+            //Check if existing L1 exists; if so, replace it
+            NetworkUtils.removeInstances(this.regularization, L1Regularization.class);
+            if(l1 > 0.0) {
+                this.regularization.add(new L1Regularization(l1));
+            }
             return this;
         }
 
         /**
-         * L2 regularization coefficient for the weights.<br>
+         * L2 regularization coefficient for the weights (excluding biases).<br>
+         * <b>Note</b>: Generally, {@link WeightDecay} (set via {@link #weightDecay(double)} should be preferred to
+         * L2 regularization. See {@link WeightDecay} javadoc for further details.<br>
          * Note: values set by this method will be applied to all applicable layers in the network, unless a different
          * value is explicitly set on a given layer. In other words: values set via this method are used as the default
-         * value, and can be overridden on a per-layer basis.
+         * value, and can be overridden on a per-layer basis.<br>
+         * Note: L2 regularization and weight decay usually should not be used together; if any weight decay (or L2) has
+         * been added for the biases, these will be removed first.
+         *
+         * @see #weightDecay(double, boolean)
          */
         public Builder l2(double l2) {
-            this.l2 = l2;
+            //Check if existing L2 exists; if so, replace it. Also remove weight decay - it doesn't make sense to use both
+            NetworkUtils.removeInstances(this.regularization, L2Regularization.class);
+            if(l2 > 0.0) {
+                NetworkUtils.removeInstancesWithWarning(this.regularization, WeightDecay.class, "WeightDecay regularization removed: incompatible with added L2 regularization");
+                this.regularization.add(new L2Regularization(l2));
+            }
             return this;
         }
 
@@ -840,18 +832,123 @@ public class NeuralNetConfiguration implements Serializable, Cloneable {
          * value, and can be overridden on a per-layer basis.
          */
         public Builder l1Bias(double l1Bias) {
-            this.l1Bias = l1Bias;
+            NetworkUtils.removeInstances(this.regularizationBias, L1Regularization.class);
+            if(l1Bias > 0.0) {
+                this.regularizationBias.add(new L1Regularization(l1Bias));
+            }
             return this;
         }
 
         /**
          * L2 regularization coefficient for the bias.<br>
+         * <b>Note</b>: Generally, {@link WeightDecay} (set via {@link #weightDecayBias(double,boolean)} should be preferred to
+         * L2 regularization. See {@link WeightDecay} javadoc for further details.<br>
          * Note: values set by this method will be applied to all applicable layers in the network, unless a different
          * value is explicitly set on a given layer. In other words: values set via this method are used as the default
-         * value, and can be overridden on a per-layer basis.
+         * value, and can be overridden on a per-layer basis.<br>
+         * Note: L2 regularization and weight decay usually should not be used together; if any weight decay (or L2) has
+         * been added for the biases, these will be removed first.
+         *
+         * @see #weightDecayBias(double, boolean)
          */
         public Builder l2Bias(double l2Bias) {
-            this.l2Bias = l2Bias;
+            NetworkUtils.removeInstances(this.regularizationBias, L2Regularization.class);
+            if(l2Bias > 0.0) {
+                NetworkUtils.removeInstancesWithWarning(this.regularizationBias, WeightDecay.class, "L2 bias regularization removed: incompatible with added WeightDecay regularization");
+                this.regularizationBias.add(new L2Regularization(l2Bias));
+            }
+            return this;
+        }
+
+        /**
+         * Add weight decay regularization for the network parameters (excluding biases).<br>
+         * This applies weight decay <i>with</i> multiplying the learning rate - see {@link WeightDecay} for more details.<br>
+         * Note: values set by this method will be applied to all applicable layers in the network, unless a different
+         * value is explicitly set on a given layer. In other words: values set via this method are used as the default
+         * value, and can be overridden on a per-layer basis.<br>
+         *
+         * @param coefficient Weight decay regularization coefficient
+         * @see #weightDecay(double, boolean)
+         */
+        public Builder weightDecay(double coefficient) {
+            return weightDecay(coefficient, true);
+        }
+
+        /**
+         * Add weight decay regularization for the network parameters (excluding biases). See {@link WeightDecay} for more details.<br>
+         * Note: values set by this method will be applied to all applicable layers in the network, unless a different
+         * value is explicitly set on a given layer. In other words: values set via this method are used as the default
+         * value, and can be overridden on a per-layer basis.<br>
+         *
+         * @param coefficient Weight decay regularization coefficient
+         * @param applyLR     Whether the learning rate should be multiplied in when performing weight decay updates. See {@link WeightDecay} for more details.
+         * @see #weightDecay(double, boolean)
+         */
+        public Builder weightDecay(double coefficient, boolean applyLR) {
+            //Check if existing weight decay if it exists; if so, replace it. Also remove L2 - it doesn't make sense to use both
+            NetworkUtils.removeInstances(this.regularization, WeightDecay.class);
+            if(coefficient > 0.0) {
+                NetworkUtils.removeInstancesWithWarning(this.regularization, L2Regularization.class, "L2 regularization removed: incompatible with added WeightDecay regularization");
+                this.regularization.add(new WeightDecay(coefficient, applyLR));
+            }
+            return this;
+        }
+
+        /**
+         * Weight decay for the biases only - see {@link #weightDecay(double)} for more details.
+         * This applies weight decay <i>with</i> multiplying the learning rate.<br>
+         * Note: values set by this method will be applied to all applicable layers in the network, unless a different
+         * value is explicitly set on a given layer. In other words: values set via this method are used as the default
+         * value, and can be overridden on a per-layer basis.<br>
+         *
+         * @param coefficient Weight decay regularization coefficient
+         * @see #weightDecayBias(double, boolean)
+         */
+        public Builder weightDecayBias(double coefficient) {
+            return weightDecayBias(coefficient, true);
+        }
+
+        /**
+         * Weight decay for the biases only - see {@link #weightDecay(double)} for more details<br>
+         * Note: values set by this method will be applied to all applicable layers in the network, unless a different
+         * value is explicitly set on a given layer. In other words: values set via this method are used as the default
+         * value, and can be overridden on a per-layer basis.<br>
+         *
+         * @param coefficient Weight decay regularization coefficient
+         */
+        public Builder weightDecayBias(double coefficient, boolean applyLR) {
+            //Check if existing weight decay if it exists; if so, replace it. Also remove L2 - it doesn't make sense to use both
+            NetworkUtils.removeInstances(this.regularizationBias, WeightDecay.class);
+            if(coefficient > 0) {
+                NetworkUtils.removeInstancesWithWarning(this.regularizationBias, L2Regularization.class, "L2 bias regularization removed: incompatible with added WeightDecay regularization");
+                this.regularizationBias.add(new WeightDecay(coefficient, applyLR));
+            }
+            return this;
+        }
+
+        /**
+         * Set the regularization for the parameters (excluding biases) - for example {@link WeightDecay}<br>
+         * Note: values set by this method will be applied to all applicable layers in the network, unless a different
+         * value is explicitly set on a given layer. In other words: values set via this method are used as the default
+         * value, and can be overridden on a per-layer basis.<br>
+         *
+         * @param regularization Regularization to apply for the network parameters/weights (excluding biases)
+         */
+        public Builder regularization(List<Regularization> regularization) {
+            this.regularization = regularization;
+            return this;
+        }
+
+        /**
+         * Set the regularization for the biases only - for example {@link WeightDecay}<br>
+         * Note: values set by this method will be applied to all applicable layers in the network, unless a different
+         * value is explicitly set on a given layer. In other words: values set via this method are used as the default
+         * value, and can be overridden on a per-layer basis.<br>
+         *
+         * @param regularizationBias Regularization to apply for the network biases only
+         */
+        public Builder regularizationBias(List<Regularization> regularizationBias) {
+            this.regularizationBias = regularizationBias;
             return this;
         }
 
@@ -1070,7 +1167,6 @@ public class NeuralNetConfiguration implements Serializable, Cloneable {
             conf.seed = seed;
             conf.stepFunction = stepFunction;
             conf.miniBatch = miniBatch;
-            conf.pretrain = pretrain;
             conf.cacheMode = this.cacheMode;
 
             configureLayer(layer);
@@ -1092,8 +1188,8 @@ public class NeuralNetConfiguration implements Serializable, Cloneable {
             else
                 layerName = layer.getLayerName();
 
-            if(layer instanceof BaseSameDiffLayer){
-                BaseSameDiffLayer sdl = (BaseSameDiffLayer)layer;
+            if(layer instanceof AbstractSameDiffLayer){
+                AbstractSameDiffLayer sdl = (AbstractSameDiffLayer)layer;
                 sdl.applyGlobalConfig(this);
             }
 
@@ -1135,7 +1231,7 @@ public class NeuralNetConfiguration implements Serializable, Cloneable {
                     sl.setConvolutionMode(convolutionMode);
                 }
             }
-            LayerValidation.generalValidation(layerName, layer, idropOut, l2, l2Bias, l1, l1Bias, dist,
+            LayerValidation.generalValidation(layerName, layer, idropOut, regularization, regularizationBias,
                     allParamConstraints, weightConstraints, biasConstraints);
         }
 
@@ -1148,16 +1244,18 @@ public class NeuralNetConfiguration implements Serializable, Cloneable {
 
             if (layer instanceof BaseLayer) {
                 BaseLayer bLayer = (BaseLayer) layer;
-                if (Double.isNaN(bLayer.getL1()))
-                    bLayer.setL1(l1);
-                if (Double.isNaN(bLayer.getL2()))
-                    bLayer.setL2(l2);
+                if (bLayer.getRegularization() == null || bLayer.getRegularization().isEmpty())
+                    bLayer.setRegularization(regularization);
+                if (bLayer.getRegularizationBias() == null || bLayer.getRegularizationBias().isEmpty())
+                    bLayer.setRegularizationBias(regularizationBias);
                 if (bLayer.getActivationFn() == null)
                     bLayer.setActivationFn(activationFn);
-                if (bLayer.getWeightInit() == null)
-                    bLayer.setWeightInit(weightInit);
+                if (bLayer.getWeightInitFn() == null)
+                    bLayer.setWeightInitFn(weightInitFn);
                 if (Double.isNaN(bLayer.getBiasInit()))
                     bLayer.setBiasInit(biasInit);
+                if (Double.isNaN(bLayer.getGainInit()))
+                    bLayer.setGainInit(gainInit);
 
                 //Configure weight noise:
                 if(weightNoise != null && ((BaseLayer) layer).getWeightNoise() == null){
@@ -1166,10 +1264,10 @@ public class NeuralNetConfiguration implements Serializable, Cloneable {
 
                 //Configure updaters:
                 if(iUpdater != null && bLayer.getIUpdater() == null){
-                    bLayer.setIUpdater(iUpdater);
+                    bLayer.setIUpdater(iUpdater.clone());   //Clone the updater to avoid shared instances - in case of setLearningRate calls later
                 }
                 if(biasUpdater != null && bLayer.getBiasUpdater() == null){
-                    bLayer.setBiasUpdater(biasUpdater);
+                    bLayer.setBiasUpdater(biasUpdater.clone());     //Clone the updater to avoid shared instances - in case of setLearningRate calls later
                 }
 
                 if(bLayer.getIUpdater() == null && iUpdater == null && bLayer.initializer().numParams(bLayer) > 0){

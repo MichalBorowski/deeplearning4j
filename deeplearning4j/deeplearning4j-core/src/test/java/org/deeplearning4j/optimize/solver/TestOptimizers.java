@@ -1,12 +1,25 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.optimize.solver;
 
 import lombok.val;
 import org.deeplearning4j.BaseDL4JTest;
 import org.deeplearning4j.datasets.iterator.impl.IrisDataSetIterator;
-import org.deeplearning4j.nn.api.Layer;
-import org.deeplearning4j.nn.api.MaskState;
-import org.deeplearning4j.nn.api.Model;
-import org.deeplearning4j.nn.api.OptimizationAlgorithm;
+import org.deeplearning4j.nn.api.*;
 import org.deeplearning4j.nn.conf.CacheMode;
 import org.deeplearning4j.nn.conf.MultiLayerConfiguration;
 import org.deeplearning4j.nn.conf.NeuralNetConfiguration;
@@ -27,10 +40,10 @@ import org.deeplearning4j.optimize.solvers.StochasticGradientDescent;
 import org.deeplearning4j.optimize.stepfunctions.NegativeDefaultStepFunction;
 import org.junit.Test;
 import org.nd4j.linalg.activations.Activation;
-import org.nd4j.linalg.api.complex.IComplexNumber;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.ndarray.INDArray;
-import org.nd4j.linalg.api.ops.impl.transforms.Cos;
-import org.nd4j.linalg.api.ops.impl.transforms.Sin;
+import org.nd4j.linalg.api.ops.impl.transforms.strict.Cos;
+import org.nd4j.linalg.api.ops.impl.transforms.strict.Sin;
 import org.nd4j.linalg.api.rng.DefaultRandom;
 import org.nd4j.linalg.api.rng.Random;
 import org.nd4j.linalg.dataset.DataSet;
@@ -62,9 +75,7 @@ public class TestOptimizers extends BaseDL4JTest {
 
         OptimizationAlgorithm[] toTest =
                         {OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT, OptimizationAlgorithm.LINE_GRADIENT_DESCENT,
-                                        OptimizationAlgorithm.CONJUGATE_GRADIENT, OptimizationAlgorithm.LBFGS
-                        //OptimizationAlgorithm.HESSIAN_FREE	//Known to not work
-                        };
+                                        OptimizationAlgorithm.CONJUGATE_GRADIENT, OptimizationAlgorithm.LBFGS};
 
         for (OptimizationAlgorithm oa : toTest) {
             MultiLayerNetwork network = new MultiLayerNetwork(getMLPConfigIris(oa));
@@ -83,9 +94,7 @@ public class TestOptimizers extends BaseDL4JTest {
 
         OptimizationAlgorithm[] toTest =
                         {OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT, OptimizationAlgorithm.LINE_GRADIENT_DESCENT,
-                                        OptimizationAlgorithm.CONJUGATE_GRADIENT, OptimizationAlgorithm.LBFGS
-                        //OptimizationAlgorithm.HESSIAN_FREE	//Known to not work
-                        };
+                                        OptimizationAlgorithm.CONJUGATE_GRADIENT, OptimizationAlgorithm.LBFGS};
 
         DataSet ds = iter.next();
         ds.normalizeZeroMeanZeroUnitVariance();
@@ -128,7 +137,7 @@ public class TestOptimizers extends BaseDL4JTest {
                                                         .build())
                         .layer(1, new OutputLayer.Builder(LossFunction.MCXENT).nIn(3).nOut(3)
                                         .weightInit(WeightInit.XAVIER).activation(Activation.SOFTMAX).build())
-                        .backprop(true).pretrain(false).build();
+                        .build();
 
         return c;
     }
@@ -342,7 +351,7 @@ public class TestOptimizers extends BaseDL4JTest {
         }
 
         @Override
-        public int numParams(boolean backwards) {
+        public long numParams(boolean backwards) {
             return 0;
         }
 
@@ -425,7 +434,7 @@ public class TestOptimizers extends BaseDL4JTest {
             conf.addVariable("W"); //Normally done by ParamInitializers, but obviously that isn't done here
 
             Model m = new RastriginFunctionModel(10, conf);
-            int nParams = m.numParams();
+            int nParams = (int)m.numParams();
             if (i == 0) {
                 m.computeGradientAndScore(LayerWorkspaceMgr.noWorkspaces());
                 scores[0] = m.score(); //Before optimization
@@ -511,14 +520,9 @@ public class TestOptimizers extends BaseDL4JTest {
                 public Boolean apply(Number input) {
                     return Math.abs(input.doubleValue()) > 5.12;
                 }
-
-                @Override
-                public Boolean apply(IComplexNumber input) {
-                    throw new UnsupportedOperationException();
-                }
             });
 
-            int nExceeds512 = paramExceeds512.sum(Integer.MAX_VALUE).getInt(0);
+            int nExceeds512 = paramExceeds512.castTo(DataType.DOUBLE).sum(Integer.MAX_VALUE).getInt(0);
             if (nExceeds512 > 0)
                 this.score = Double.POSITIVE_INFINITY;
 
@@ -535,7 +539,7 @@ public class TestOptimizers extends BaseDL4JTest {
         }
 
         @Override
-        public int numParams(boolean backwards) {
+        public long numParams(boolean backwards) {
             return 0;
         }
 
@@ -714,14 +718,9 @@ public class TestOptimizers extends BaseDL4JTest {
                 public Boolean apply(Number input) {
                     return Math.abs(input.doubleValue()) > 5.0;
                 }
-
-                @Override
-                public Boolean apply(IComplexNumber input) {
-                    throw new UnsupportedOperationException();
-                }
             });
 
-            int nExceeds5 = paramExceeds5.sum(Integer.MAX_VALUE).getInt(0);
+            int nExceeds5 = paramExceeds5.castTo(DataType.DOUBLE).sum(Integer.MAX_VALUE).getInt(0);
             if (nExceeds5 > 0)
                 this.score = Double.POSITIVE_INFINITY;
             else {
@@ -740,7 +739,7 @@ public class TestOptimizers extends BaseDL4JTest {
         }
 
         @Override
-        public int numParams(boolean backwards) {
+        public long numParams(boolean backwards) {
             return 0;
         }
 
@@ -812,6 +811,11 @@ public class TestOptimizers extends BaseDL4JTest {
             // no-op
         }
 
+        @Override
+        public TrainingConfig getConfig() {
+            return conf.getLayer();
+        }
+
         /**
          * Init the model
          */
@@ -873,12 +877,7 @@ public class TestOptimizers extends BaseDL4JTest {
         }
 
         @Override
-        public double calcL2(boolean backpropParamsOnly) {
-            return 0;
-        }
-
-        @Override
-        public double calcL1(boolean backpropParamsOnly) {
+        public double calcRegularizationScore(boolean backpropParamsOnly){
             return 0;
         }
 
@@ -888,17 +887,12 @@ public class TestOptimizers extends BaseDL4JTest {
         }
 
         @Override
-        public void accumulateScore(double accum) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
         public INDArray params() {
             return parameters;
         }
 
         @Override
-        public int numParams() {
+        public long numParams() {
             // FIXME: int cast
             return (int) parameters.length();
         }
@@ -942,9 +936,6 @@ public class TestOptimizers extends BaseDL4JTest {
         }
 
         @Override
-        public void validateInput() {}
-
-        @Override
         public ConvexOptimizer getOptimizer() {
             throw new UnsupportedOperationException();
         }
@@ -952,11 +943,6 @@ public class TestOptimizers extends BaseDL4JTest {
         @Override
         public INDArray getParam(String param) {
             return parameters;
-        }
-
-        @Override
-        public void initParams() {
-            throw new UnsupportedOperationException();
         }
 
         @Override
@@ -991,16 +977,6 @@ public class TestOptimizers extends BaseDL4JTest {
 
         @Override
         public Pair<Gradient, INDArray> backpropGradient(INDArray epsilon, LayerWorkspaceMgr mgr) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public Layer transpose() {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public Layer clone() {
             throw new UnsupportedOperationException();
         }
 
@@ -1079,6 +1055,11 @@ public class TestOptimizers extends BaseDL4JTest {
         @Override
         public LayerHelper getHelper() {
             return null;
+        }
+
+        @Override
+        public boolean updaterDivideByMinibatch(String paramName) {
+            return true;
         }
     }
 }

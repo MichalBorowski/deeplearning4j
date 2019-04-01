@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.nn.misc;
 
 import org.apache.commons.io.FileUtils;
@@ -18,6 +34,7 @@ import org.deeplearning4j.nn.conf.preprocessor.FeedForwardToCnnPreProcessor;
 import org.junit.Test;
 import org.nd4j.linalg.activations.Activation;
 import org.nd4j.linalg.api.buffer.DataBuffer;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.io.ClassPathResource;
@@ -89,7 +106,7 @@ public class TestMemoryReports extends BaseDL4JTest {
         for (Pair<? extends Layer, InputType> p : l) {
 
             MultiLayerConfiguration conf = new NeuralNetConfiguration.Builder().list().layer(0, p.getFirst().clone())
-                            .layer(1, p.getFirst().clone()).build();
+                            .layer(1, p.getFirst().clone()).validateOutputLayerConfig(false).build();
 
             MemoryReport mr = conf.getMemoryReport(p.getSecond());
             //            System.out.println(mr.toString());
@@ -118,7 +135,7 @@ public class TestMemoryReports extends BaseDL4JTest {
 
             ComputationGraphConfiguration conf = new NeuralNetConfiguration.Builder().graphBuilder().addInputs("in")
                             .addLayer("0", p.getFirst().clone(), "in").addLayer("1", p.getFirst().clone(), "0")
-                            .setOutputs("1").build();
+                            .setOutputs("1").validateOutputLayerConfig(false).build();
 
             MemoryReport mr = conf.getMemoryReport(p.getSecond());
             //            System.out.println(mr.toString());
@@ -210,36 +227,36 @@ public class TestMemoryReports extends BaseDL4JTest {
         int total15Minibatch = numParams + 15 * actSize;
 
         //Fixed: should be just params
-        long fixedBytes = mr.getTotalMemoryBytes(0, MemoryUseMode.INFERENCE, CacheMode.NONE, DataBuffer.Type.FLOAT);
-        long varBytes = mr.getTotalMemoryBytes(1, MemoryUseMode.INFERENCE, CacheMode.NONE, DataBuffer.Type.FLOAT)
+        long fixedBytes = mr.getTotalMemoryBytes(0, MemoryUseMode.INFERENCE, CacheMode.NONE, DataType.FLOAT);
+        long varBytes = mr.getTotalMemoryBytes(1, MemoryUseMode.INFERENCE, CacheMode.NONE, DataType.FLOAT)
                         - fixedBytes;
 
         assertEquals(numParams * 4, fixedBytes);
         assertEquals(actSize * 4, varBytes);
 
-        long minibatch15 = mr.getTotalMemoryBytes(15, MemoryUseMode.INFERENCE, CacheMode.NONE, DataBuffer.Type.FLOAT);
+        long minibatch15 = mr.getTotalMemoryBytes(15, MemoryUseMode.INFERENCE, CacheMode.NONE, DataType.FLOAT);
         assertEquals(total15Minibatch * 4, minibatch15);
 
         //        System.out.println(fixedBytes + "\t" + varBytes);
         //        System.out.println(mr.toString());
 
         assertEquals(actSize * 4, mr.getMemoryBytes(MemoryType.ACTIVATIONS, 1, MemoryUseMode.TRAINING, CacheMode.NONE,
-                        DataBuffer.Type.FLOAT));
+                        DataType.FLOAT));
         assertEquals(actSize * 4, mr.getMemoryBytes(MemoryType.ACTIVATIONS, 1, MemoryUseMode.INFERENCE, CacheMode.NONE,
-                        DataBuffer.Type.FLOAT));
+                        DataType.FLOAT));
 
         int inputActSize = 10 + 20;
         assertEquals(inputActSize * 4, mr.getMemoryBytes(MemoryType.ACTIVATION_GRADIENTS, 1, MemoryUseMode.TRAINING,
-                        CacheMode.NONE, DataBuffer.Type.FLOAT));
+                        CacheMode.NONE, DataType.FLOAT));
         assertEquals(0, mr.getMemoryBytes(MemoryType.ACTIVATION_GRADIENTS, 1, MemoryUseMode.INFERENCE, CacheMode.NONE,
-                        DataBuffer.Type.FLOAT));
+                        DataType.FLOAT));
 
         //Variable working memory - due to preout during backprop. But not it's the MAX value, as it can be GC'd or workspaced
         int workingMemVariable = 27;
         assertEquals(workingMemVariable * 4, mr.getMemoryBytes(MemoryType.WORKING_MEMORY_VARIABLE, 1,
-                        MemoryUseMode.TRAINING, CacheMode.NONE, DataBuffer.Type.FLOAT));
+                        MemoryUseMode.TRAINING, CacheMode.NONE, DataType.FLOAT));
         assertEquals(0, mr.getMemoryBytes(MemoryType.WORKING_MEMORY_VARIABLE, 1, MemoryUseMode.INFERENCE,
-                        CacheMode.NONE, DataBuffer.Type.FLOAT));
+                        CacheMode.NONE, DataType.FLOAT));
     }
 
     @Test

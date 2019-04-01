@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.rng;
 
 import lombok.extern.slf4j.Slf4j;
@@ -16,6 +32,7 @@ import org.nd4j.rng.deallocator.NativePack;
 import org.nd4j.rng.deallocator.NativeRandomDeallocator;
 
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Basic NativeRandom implementation
@@ -25,16 +42,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 @Slf4j
 public abstract class NativeRandom implements Random {
     protected NativeOps nativeOps;
-    protected DataBuffer stateBuffer;
     protected Pointer statePointer;
-    protected long seed;
-    protected long amplifier;
-    protected long generation;
-    protected long numberOfElements;
-    protected AtomicInteger position = new AtomicInteger(0);
-    protected LongPointer hostPointer;
-    protected boolean isDestroyed = false;
-    protected NativeRandomDeallocator deallocator;
+
+    protected AtomicLong currentPosition = new AtomicLong(0);
 
     // special stuff for gaussian
     protected double z0, z1, u0, u1;
@@ -42,21 +52,7 @@ public abstract class NativeRandom implements Random {
     protected double mean = 0.0;
     protected double stdDev = 1.0;
 
-    // hack to attach deallocator
-    protected NativePack pack;
-
-
-    public long getBufferSize() {
-        return numberOfElements;
-    }
-
-    public int getPosition() {
-        return position.get();
-    }
-
-    public long getGeneration() {
-        return generation;
-    }
+    protected long seed;
 
     public NativeRandom() {
         this(System.currentTimeMillis());
@@ -67,24 +63,8 @@ public abstract class NativeRandom implements Random {
     }
 
     public NativeRandom(long seed, long numberOfElements) {
-        this.amplifier = seed;
-        this.generation = 1;
         this.seed = seed;
-        this.numberOfElements = numberOfElements;
-
-        nativeOps = NativeOpsHolder.getInstance().getDeviceNativeOps();
-
-        stateBuffer = Nd4j.getDataBufferFactory().createDouble(numberOfElements);
-
         init();
-
-        hostPointer = new LongPointer(stateBuffer.addressPointer());
-
-        deallocator = NativeRandomDeallocator.getInstance();
-
-        pack = new NativePack(statePointer.address(), statePointer);
-
-        deallocator.trackStatePointer(pack);
     }
 
     public abstract void init();
@@ -104,29 +84,8 @@ public abstract class NativeRandom implements Random {
     }
 
     @Override
-    public void setSeed(long seed) {
-        synchronized (this) {
-            this.seed = seed;
-            this.amplifier = seed;
-            this.position.set(0);
-            nativeOps.refreshBuffer(getExtraPointers(), seed, statePointer);
-        }
-    }
-
-    @Override
-    public long getSeed() {
-        return seed;
-    }
-
-    @Override
     public void nextBytes(byte[] bytes) {
         throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public int nextInt() {
-        int next = (int) (amplifier == seed ? nextLong() : nextLong() * amplifier + 11);
-        return next < 0 ? -1 * next : next;
     }
 
     @Override
@@ -142,24 +101,8 @@ public abstract class NativeRandom implements Random {
     }
 
     @Override
-    public long nextLong() {
-        long next = 0;
-        synchronized (this) {
-            if (position.get() >= numberOfElements) {
-                position.set(0);
-                generation++;
-            }
-
-            next = hostPointer.get(position.getAndIncrement());
-
-            if (generation > 1)
-                next = next ^ generation + 11;
-
-            if (amplifier != seed)
-                next = next ^ amplifier + 11;
-        }
-
-        return next < 0 ? -1 * next : next;
+    public int nextInt(int a, int n) {
+        return nextInt(n - a) + a;
     }
 
     public abstract PointerPointer getExtraPointers();
@@ -320,26 +263,14 @@ public abstract class NativeRandom implements Random {
         return statePointer;
     }
 
-    /**
-     * This method returns pointer to RNG buffer
-     *
-     * @return
-     */
-    @Override
-    public DataBuffer getStateBuffer() {
-        return stateBuffer;
-    }
-
     @Override
     public void reSeed() {
-        reSeed(System.currentTimeMillis());
+        setSeed(System.currentTimeMillis());
     }
 
     @Override
     public void reSeed(long amplifier) {
-        this.amplifier = amplifier;
-
-        nativeOps.reSeedBuffer(getExtraPointers(), amplifier, getStatePointer());
+        setSeed(amplifier);
     }
 
     @Override
@@ -347,5 +278,10 @@ public abstract class NativeRandom implements Random {
         /*
             Do nothing here, since we use WeakReferences for actual deallocation
          */
+    }
+
+    @Override
+    public long getPosition() {
+        return currentPosition.get();
     }
 }

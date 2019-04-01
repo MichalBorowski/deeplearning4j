@@ -1,9 +1,32 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.nn.conf.serde;
 
+import lombok.extern.slf4j.Slf4j;
+import org.deeplearning4j.nn.conf.NeuralNetConfiguration;
 import org.deeplearning4j.nn.conf.Updater;
+import org.deeplearning4j.nn.conf.distribution.Distribution;
 import org.deeplearning4j.nn.conf.layers.BaseLayer;
 import org.deeplearning4j.nn.conf.layers.Layer;
+import org.deeplearning4j.nn.weights.*;
 import org.nd4j.linalg.learning.config.*;
+import org.nd4j.linalg.learning.regularization.L1Regularization;
+import org.nd4j.linalg.learning.regularization.Regularization;
+import org.nd4j.linalg.learning.regularization.WeightDecay;
 import org.nd4j.shade.jackson.core.JsonParser;
 import org.nd4j.shade.jackson.core.JsonProcessingException;
 import org.nd4j.shade.jackson.databind.DeserializationContext;
@@ -14,6 +37,7 @@ import org.nd4j.shade.jackson.databind.deser.std.StdDeserializer;
 import org.nd4j.shade.jackson.databind.node.ObjectNode;
 
 import java.io.IOException;
+import java.util.ArrayList;
 
 /**
  * A custom (abstract) deserializer that handles backward compatibility (currently only for updater refactoring that
@@ -21,10 +45,12 @@ import java.io.IOException;
  * We deserialize the config using the default deserializer, then handle the new IUpdater (which will be null for
  * 0.8.0 and earlier configs) if necessary
  *
- * Overall design: http://stackoverflow.com/questions/18313323/how-do-i-call-the-default-deserializer-from-a-custom-deserializer-in-jackson
+ * Overall design: <a href="http://stackoverflow.com/questions/18313323/how-do-i-call-the-default-deserializer-from-a-custom-deserializer-in-jackson">
+ *     http://stackoverflow.com/questions/18313323/how-do-i-call-the-default-deserializer-from-a-custom-deserializer-in-jackson</a>
  *
  * @author Alex Black
  */
+@Slf4j
 public abstract class BaseNetConfigDeserializer<T> extends StdDeserializer<T> implements ResolvableDeserializer {
 
     protected final JsonDeserializer<?> defaultDeserializer;
@@ -57,6 +83,24 @@ public abstract class BaseNetConfigDeserializer<T> extends StdDeserializer<T> im
             }
         }
         return true;
+    }
+
+    protected boolean requiresRegularizationFromLegacy(Layer[] layers){
+        for(Layer l : layers){
+            if(l instanceof BaseLayer && ((BaseLayer)l).getRegularization() == null){
+                return true;
+            }
+        }
+        return false;
+    }
+
+    protected boolean requiresWeightInitFromLegacy(Layer[] layers){
+        for(Layer l : layers){
+            if(l instanceof BaseLayer && ((BaseLayer)l).getWeightInitFn() == null){
+                return true;
+            }
+        }
+        return false;
     }
 
     protected void handleUpdaterBackwardCompatibility(BaseLayer layer, ObjectNode on){
@@ -136,6 +180,63 @@ public abstract class BaseNetConfigDeserializer<T> extends StdDeserializer<T> im
                 }
 
                 layer.setIUpdater(iu);
+            }
+        }
+    }
+
+    protected void handleL1L2BackwardCompatibility(BaseLayer baseLayer, ObjectNode on){
+        if(on != null && (on.has("l1") || on.has("l2"))){
+            //Legacy format JSON
+            baseLayer.setRegularization(new ArrayList<Regularization>());
+            baseLayer.setRegularizationBias(new ArrayList<Regularization>());
+
+            if(on.has("l1")){
+                double l1 = on.get("l1").doubleValue();
+                if(l1 > 0.0){
+                    baseLayer.getRegularization().add(new L1Regularization(l1));
+                }
+            }
+            if(on.has("l2")){
+                double l2 = on.get("l2").doubleValue();
+                if(l2 > 0.0){
+                    //Default to non-LR based WeightDecay, to match behaviour in 1.0.0-beta3
+                    baseLayer.getRegularization().add(new WeightDecay(l2, false));
+                }
+            }
+            if(on.has("l1Bias")){
+                double l1Bias = on.get("l1Bias").doubleValue();
+                if(l1Bias > 0.0){
+                    baseLayer.getRegularizationBias().add(new L1Regularization(l1Bias));
+                }
+            }
+            if(on.has("l2Bias")){
+                double l2Bias = on.get("l2Bias").doubleValue();
+                if(l2Bias > 0.0){
+                    //Default to non-LR based WeightDecay, to match behaviour in 1.0.0-beta3
+                    baseLayer.getRegularizationBias().add(new WeightDecay(l2Bias, false));
+                }
+            }
+        }
+    }
+
+    protected void handleWeightInitBackwardCompatibility(BaseLayer baseLayer, ObjectNode on){
+        if(on != null && (on.has("weightInit") )){
+            //Legacy format JSON
+            if(on.has("weightInit")){
+                String wi = on.get("weightInit").asText();
+                try{
+                    WeightInit w = WeightInit.valueOf(wi);
+                    Distribution d = null;
+                    if(w == WeightInit.DISTRIBUTION && on.has("dist")){
+                        //TODO deserialize distribution
+                        String dist = on.get("dist").asText();
+                        d = NeuralNetConfiguration.mapper().readValue(dist, Distribution.class);
+                    }
+                    IWeightInit iwi = w.getWeightInitFunction(d);
+                    baseLayer.setWeightInitFn(iwi);
+                } catch (Throwable t){
+                    log.warn("Failed to infer weight initialization from legacy JSON format",t);
+                }
             }
         }
     }

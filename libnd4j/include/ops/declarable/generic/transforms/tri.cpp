@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 //
 // @author Yurii Shyrma, created on 31.03.2018
 //
@@ -12,7 +28,7 @@ namespace ops  {
 //////////////////////////////////////////////////////////////////////////
 CUSTOM_OP_IMPL(tri, -2, 1, false, 0, 1) {
 	
-    NDArray<T>* output = OUTPUT_VARIABLE(0);
+    auto output = OUTPUT_VARIABLE(0);
 
     const int diag = block.getIArguments()->size() > 2 ? INT_ARG(2) : 0;
 
@@ -21,6 +37,13 @@ CUSTOM_OP_IMPL(tri, -2, 1, false, 0, 1) {
 
     return Status::OK();
 }
+
+        DECLARE_TYPES(tri) {
+            getOpDescriptor()
+//                    ->setAllowedInputTypes(0, {ALL_FLOATS})
+//                    ->setAllowedInputTypes(1, {ALL_FLOATS})
+                    ->setAllowedOutputTypes(0, {ALL_FLOATS, ALL_INTS});
+        }
 
 
 DECLARE_SHAPE_FN(tri) {
@@ -36,7 +59,7 @@ DECLARE_SHAPE_FN(tri) {
     outShapeInfo[1] = rows;
     outShapeInfo[2] = cols;
 
-	shape::updateStrides(outShapeInfo, 'c');
+	ShapeUtils::updateStridesAndType(outShapeInfo, block.dataType(), 'c');
 
     return SHAPELIST(outShapeInfo);    
 }

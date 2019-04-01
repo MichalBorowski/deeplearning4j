@@ -1,22 +1,23 @@
-/*-
- *  * Copyright 2016 Skymind, Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
- */
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.datavec.api.transform.transform.time;
 
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import org.datavec.api.transform.metadata.ColumnMetaData;
 import org.datavec.api.transform.metadata.TimeMetaData;
 import org.datavec.api.transform.transform.BaseColumnTransform;
@@ -35,21 +36,24 @@ import java.text.DateFormat;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.TimeZone;
+import java.util.Locale;
 import java.util.regex.Pattern;
 
 /**
  * Convert a String column to a time column by parsing the date/time String, using a JodaTime.
  * <p>
- * Time format is specified as per http://www.joda.org/joda-time/apidocs/org/joda/time/format/DateTimeFormat.html
+ * Time format is specified as per <a href="http://www.joda.org/joda-time/apidocs/org/joda/time/format/DateTimeFormat.html">http://www.joda.org/joda-time/apidocs/org/joda/time/format/DateTimeFormat.html</a>
  *
  * @author Alex Black
  */
 @Data
+@EqualsAndHashCode(exclude = {"formatter", "formatters"})
 @JsonIgnoreProperties({"formatters", "formatter"})
 public class StringToTimeTransform extends BaseColumnTransform {
 
     private final String timeFormat;
     private final DateTimeZone timeZone;
+    private final Locale locale;
     private final Long minValidTime;
     private final Long maxValidTime;
     //formats from: http://www.java2s.com/Tutorials/Java/Data_Type_How_to/Legacy_Date_Format/Guess_the_format_pattern_based_on_date_value.htm
@@ -80,16 +84,35 @@ public class StringToTimeTransform extends BaseColumnTransform {
      * @param timeZone   Timezone for time parsing
      */
     public StringToTimeTransform(String columnName,  TimeZone timeZone) {
-        this(columnName, null, timeZone, null, null);
+        this(columnName, null, timeZone, null, null, null);
     }
 
     /**
      * @param columnName Name of the String column
-     * @param timeFormat Time format, as per http://www.joda.org/joda-time/apidocs/org/joda/time/format/DateTimeFormat.html
+     * @param timeZone   Timezone for time parsing
+     * @param locale     Locale for i18n
+     */
+    public StringToTimeTransform(String columnName,  TimeZone timeZone, Locale locale) {
+        this(columnName, null, timeZone, locale, null, null);
+    }
+
+    /**
+     * @param columnName Name of the String column
+     * @param timeFormat Time format, as per <a href="http://www.joda.org/joda-time/apidocs/org/joda/time/format/DateTimeFormat.html">http://www.joda.org/joda-time/apidocs/org/joda/time/format/DateTimeFormat.html</a>
      * @param timeZone   Timezone for time parsing
      */
     public StringToTimeTransform(String columnName, String timeFormat, TimeZone timeZone) {
-        this(columnName, timeFormat, timeZone, null, null);
+        this(columnName, timeFormat, timeZone, null, null, null);
+    }
+
+    /**
+     * @param columnName Name of the String column
+     * @param timeFormat Time format, as per <a href="http://www.joda.org/joda-time/apidocs/org/joda/time/format/DateTimeFormat.html">http://www.joda.org/joda-time/apidocs/org/joda/time/format/DateTimeFormat.html</a>
+     * @param timeZone   Timezone for time parsing
+     * @param locale     Locale for i18n
+     */
+    public StringToTimeTransform(String columnName, String timeFormat, TimeZone timeZone, Locale locale) {
+        this(columnName, timeFormat, timeZone, locale, null, null);
     }
 
 
@@ -102,57 +125,79 @@ public class StringToTimeTransform extends BaseColumnTransform {
      *
      * @param columnName Name of the String column
      * @param timeZone   Timezone for time parsing
+     * @param locale     Locale for i18n
      */
-    public StringToTimeTransform(String columnName, DateTimeZone timeZone) {
-        this(columnName, null, timeZone, null, null);
+    public StringToTimeTransform(String columnName, DateTimeZone timeZone, Locale locale) {
+        this(columnName, null, timeZone, locale, null, null);
     }
 
 
     /**
      * @param columnName Name of the String column
-     * @param timeFormat Time format, as per http://www.joda.org/joda-time/apidocs/org/joda/time/format/DateTimeFormat.html
+     * @param timeFormat Time format, as per <a href="http://www.joda.org/joda-time/apidocs/org/joda/time/format/DateTimeFormat.html">http://www.joda.org/joda-time/apidocs/org/joda/time/format/DateTimeFormat.html</a>
      * @param timeZone   Timezone for time parsing
      */
     public StringToTimeTransform(String columnName, String timeFormat, DateTimeZone timeZone) {
-        this(columnName, timeFormat, timeZone, null, null);
+        this(columnName, timeFormat, timeZone, null, null, null);
+    }
+
+    /**
+     * @param columnName Name of the String column
+     * @param timeFormat Time format, as per <a href="http://www.joda.org/joda-time/apidocs/org/joda/time/format/DateTimeFormat.html">http://www.joda.org/joda-time/apidocs/org/joda/time/format/DateTimeFormat.html</a>
+     * @param timeZone   Timezone for time parsing
+     * @param locale     Locale for i18n
+     */
+    public StringToTimeTransform(String columnName, String timeFormat, DateTimeZone timeZone, Locale locale) {
+        this(columnName, timeFormat, timeZone, locale, null, null);
     }
 
     /**
      * @param columnName   Name of the String column
-     * @param timeFormat   Time format, as per http://www.joda.org/joda-time/apidocs/org/joda/time/format/DateTimeFormat.html
+     * @param timeFormat   Time format, as per <a href="http://www.joda.org/joda-time/apidocs/org/joda/time/format/DateTimeFormat.html">http://www.joda.org/joda-time/apidocs/org/joda/time/format/DateTimeFormat.html</a>
      * @param timeZone     Timezone for time parsing
+     * @param locale       Locale for i18n
      * @param minValidTime Min valid time (epoch millisecond format). If null: no restriction in min valid time
      * @param maxValidTime Max valid time (epoch millisecond format). If null: no restriction in max valid time
      */
     public StringToTimeTransform(@JsonProperty("columnName") String columnName,
                                  @JsonProperty("timeFormat") String timeFormat, @JsonProperty("timeZone") TimeZone timeZone,
+                                 @JsonProperty("locale") Locale locale,
                                  @JsonProperty("minValidTime") Long minValidTime, @JsonProperty("maxValidTime") Long maxValidTime) {
-        this(columnName, timeFormat, DateTimeZone.forTimeZone(timeZone), minValidTime, maxValidTime);
+        this(columnName, timeFormat, DateTimeZone.forTimeZone(timeZone), locale, minValidTime, maxValidTime);
     }
 
     /**
      * @param columnName   Name of the String column
-     * @param timeFormat   Time format, as per http://www.joda.org/joda-time/apidocs/org/joda/time/format/DateTimeFormat.html
+     * @param timeFormat   Time format, as per <a href="http://www.joda.org/joda-time/apidocs/org/joda/time/format/DateTimeFormat.html">http://www.joda.org/joda-time/apidocs/org/joda/time/format/DateTimeFormat.html</a>
      * @param timeZone     Timezone for time parsing
+     * @param locale       Locale for i18n
      * @param minValidTime Min valid time (epoch millisecond format). If null: no restriction in min valid time
      * @param maxValidTime Max valid time (epoch millisecond format). If null: no restriction in max valid time
      */
-    public StringToTimeTransform(String columnName, String timeFormat, DateTimeZone timeZone, Long minValidTime,
+    public StringToTimeTransform(String columnName, String timeFormat, DateTimeZone timeZone, Locale locale, Long minValidTime,
                                  Long maxValidTime) {
         super(columnName);
         this.timeFormat = timeFormat;
         this.timeZone = timeZone;
+        this.locale = locale;
         this.minValidTime = minValidTime;
         this.maxValidTime = maxValidTime;
         if(timeFormat != null)
-            this.formatter = DateTimeFormat.forPattern(timeFormat).withZone(timeZone);
+            if (locale != null) {
+                this.formatter = DateTimeFormat.forPattern(timeFormat).withZone(timeZone).withLocale(locale);
+            } else {
+                this.formatter = DateTimeFormat.forPattern(timeFormat).withZone(timeZone);
+            }
         else {
             List<DateTimeFormatter> dateFormatList = new ArrayList<>();
             formatters = new DateTimeFormatter[formats.length];
             for(int i = 0; i < formatters.length; i++) {
-                dateFormatList.add(DateTimeFormat.forPattern(formats[i]).withZone(timeZone));
+                if (locale != null) {
+                    dateFormatList.add(DateTimeFormat.forPattern(formats[i]).withZone(timeZone).withLocale(locale));
+                } else {
+                    dateFormatList.add(DateTimeFormat.forPattern(formats[i]).withZone(timeZone));
+                }
             }
-
             formatters = dateFormatList.toArray(new DateTimeFormatter[dateFormatList.size()]);
         }
     }

@@ -1,7 +1,24 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.linalg.compression;
 
 import lombok.Data;
 import org.nd4j.linalg.api.buffer.DataBuffer;
+import org.nd4j.linalg.api.buffer.DataType;
 
 import java.io.Serializable;
 import java.nio.ByteBuffer;
@@ -24,6 +41,8 @@ public class CompressionDescriptor implements Cloneable, Serializable {
     private long compressedLength;
     private long numberOfElements;
     private long originalElementSize;
+    private DataType originalDataType;
+
     //40 bytes for the compression descriptor bytebuffer
     public final static int COMPRESSION_BYTE_BUFFER_LENGTH = 40;
 
@@ -41,6 +60,7 @@ public class CompressionDescriptor implements Cloneable, Serializable {
         this.originalLength = buffer.length() * buffer.getElementSize();
         this.numberOfElements = buffer.length();
         this.originalElementSize = buffer.getElementSize();
+        this.originalDataType = buffer.dataType();
     }
 
     /**
@@ -92,6 +112,7 @@ public class CompressionDescriptor implements Cloneable, Serializable {
         compressionDescriptor.setCompressedLength(byteBuffer.getLong());
         compressionDescriptor.setNumberOfElements(byteBuffer.getLong());
         compressionDescriptor.setOriginalElementSize(byteBuffer.getLong());
+        compressionDescriptor.setOriginalDataType(DataType.values()[byteBuffer.getInt()]);
         return compressionDescriptor;
     }
 
@@ -108,9 +129,9 @@ public class CompressionDescriptor implements Cloneable, Serializable {
      * @return the bytebuffer described above
      */
     public ByteBuffer toByteBuffer() {
-        //2 ints  at 4 bytes a piece, this includes the compression algorithm
+        //3 ints  at 4 bytes a piece, this includes the compression algorithm
         //that we convert to enum
-        int enumSize = 2 * 4;
+        int enumSize = 3 * 4;
         //4 longs at 8 bytes a piece
         int sizesLength = 4 * 8;
         ByteBuffer directAlloc = ByteBuffer.allocateDirect(enumSize + sizesLength).order(ByteOrder.nativeOrder());
@@ -120,6 +141,7 @@ public class CompressionDescriptor implements Cloneable, Serializable {
         directAlloc.putLong(compressedLength);
         directAlloc.putLong(numberOfElements);
         directAlloc.putLong(originalElementSize);
+        directAlloc.putInt(originalDataType.ordinal());
         directAlloc.rewind();
         return directAlloc;
     }
@@ -133,6 +155,7 @@ public class CompressionDescriptor implements Cloneable, Serializable {
         descriptor.compressedLength = this.compressedLength;
         descriptor.numberOfElements = this.numberOfElements;
         descriptor.originalElementSize = this.originalElementSize;
+        descriptor.originalDataType = this.originalDataType;
 
         return descriptor;
     }

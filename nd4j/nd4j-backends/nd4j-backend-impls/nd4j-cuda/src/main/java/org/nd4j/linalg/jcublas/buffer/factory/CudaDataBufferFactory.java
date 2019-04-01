@@ -1,21 +1,18 @@
-/*-
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
  *
- *  * Copyright 2015 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
  *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
  *
- */
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.nd4j.linalg.jcublas.buffer.factory;
 
@@ -26,6 +23,7 @@ import org.bytedeco.javacpp.IntPointer;
 import org.bytedeco.javacpp.Pointer;
 import org.bytedeco.javacpp.indexer.*;
 import org.nd4j.linalg.api.buffer.DataBuffer;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.buffer.LongBuffer;
 import org.nd4j.linalg.api.buffer.factory.DataBufferFactory;
 import org.nd4j.linalg.api.memory.MemoryWorkspace;
@@ -67,20 +65,28 @@ public class CudaDataBufferFactory implements DataBufferFactory {
 
     @Override
     public DataBuffer create(DataBuffer underlyingBuffer, long offset, long length) {
-        if (underlyingBuffer.dataType() == DataBuffer.Type.DOUBLE) {
-            return new CudaDoubleDataBuffer(underlyingBuffer, length, offset);
-        } else if (underlyingBuffer.dataType() == DataBuffer.Type.FLOAT) {
-            return new CudaFloatDataBuffer(underlyingBuffer, length, offset);
-
-        } else if (underlyingBuffer.dataType() == DataBuffer.Type.INT) {
-            return new CudaIntDataBuffer(underlyingBuffer, length, offset);
-        } else if (underlyingBuffer.dataType() == DataBuffer.Type.HALF) {
-            return new CudaHalfDataBuffer(underlyingBuffer, length, offset);
-        } else if (underlyingBuffer.dataType() == DataBuffer.Type.LONG) {
-            return new CudaLongDataBuffer(underlyingBuffer, length, offset);
+        switch (underlyingBuffer.dataType()) {
+            case DOUBLE:
+                return new CudaDoubleDataBuffer(underlyingBuffer, length, offset);
+            case FLOAT:
+                return new CudaFloatDataBuffer(underlyingBuffer, length, offset);
+            case HALF:
+                return new CudaHalfDataBuffer(underlyingBuffer, length, offset);
+            case LONG:
+                return new CudaLongDataBuffer(underlyingBuffer, length, offset);
+            case INT:
+                return new CudaIntDataBuffer(underlyingBuffer, length, offset);
+            case SHORT:
+                return new CudaShortDataBuffer(underlyingBuffer, length, offset);
+            case UBYTE:
+                return new CudaUByteDataBuffer(underlyingBuffer, length, offset);
+            case BYTE:
+                return new CudaByteDataBuffer(underlyingBuffer, length, offset);
+            case BOOL:
+                return new CudaBoolDataBuffer(underlyingBuffer, length, offset);
+            default:
+                throw new ND4JIllegalStateException("Unknown data buffer type: " + underlyingBuffer.dataType().toString());
         }
-
-        throw new ND4JIllegalStateException("Unknown data buffer type: " + underlyingBuffer.dataType().toString());
     }
 
     /**
@@ -335,6 +341,61 @@ public class CudaDataBufferFactory implements DataBufferFactory {
     }
 
     @Override
+    public DataBuffer create(DataType dataType, long length, boolean initialize) {
+        switch (dataType) {
+            case LONG:
+                return new CudaLongDataBuffer(length, initialize);
+            case INT:
+                return new CudaIntDataBuffer(length, initialize);
+            case SHORT:
+                return new CudaShortDataBuffer(length, initialize);
+            case UBYTE:
+                return new CudaUByteDataBuffer(length, initialize);
+            case BYTE:
+                return new CudaByteDataBuffer(length, initialize);
+            case DOUBLE:
+                return new CudaDoubleDataBuffer(length, initialize);
+            case FLOAT:
+                return new CudaFloatDataBuffer(length, initialize);
+            case HALF:
+                return new CudaHalfDataBuffer(length, initialize);
+            case BOOL:
+                return new CudaBoolDataBuffer(length, initialize);
+            default:
+                throw new UnsupportedOperationException("Unknown data type: [" + dataType + "]");
+        }
+    }
+
+    @Override
+    public DataBuffer create(DataType dataType, long length, boolean initialize, MemoryWorkspace workspace) {
+        if (workspace == null)
+            return create(dataType, length, initialize);
+
+        switch (dataType) {
+            case LONG:
+                return new CudaLongDataBuffer(length, initialize, workspace);
+            case INT:
+                return new CudaIntDataBuffer(length, initialize, workspace);
+            case SHORT:
+                return new CudaShortDataBuffer(length, initialize, workspace);
+            case UBYTE:
+                return new CudaUByteDataBuffer(length, initialize, workspace);
+            case BYTE:
+                return new CudaByteDataBuffer(length, initialize, workspace);
+            case DOUBLE:
+                return new CudaDoubleDataBuffer(length, initialize, workspace);
+            case FLOAT:
+                return new CudaFloatDataBuffer(length, initialize, workspace);
+            case HALF:
+                return new CudaHalfDataBuffer(length, initialize, workspace);
+            case BOOL:
+                return new CudaBoolDataBuffer(length, initialize, workspace);
+            default:
+                throw new UnsupportedOperationException("Unknown data type: [" + dataType + "]");
+        }
+    }
+
+    @Override
     public DataBuffer createInt(long length) {
         return new CudaIntDataBuffer(length);
     }
@@ -483,7 +544,7 @@ public class CudaDataBufferFactory implements DataBufferFactory {
      * opType and length.
      */
     @Override
-    public DataBuffer create(Pointer pointer, DataBuffer.Type type, long length, Indexer indexer) {
+    public DataBuffer create(Pointer pointer, DataType type, long length, Indexer indexer) {
         switch (type) {
             case LONG:
                 return new CudaLongDataBuffer(pointer, indexer, length);

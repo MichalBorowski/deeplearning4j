@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.spark.models.sequencevectors;
 
 import lombok.NonNull;
@@ -170,9 +186,11 @@ public class SparkSequenceVectors<T extends SequenceElement> extends SequenceVec
         /**
          * Here we s
          */
-        if (paramServerConfiguration == null)
-            paramServerConfiguration = VoidConfiguration.builder().faultToleranceStrategy(FaultToleranceStrategy.NONE)
-                            .numberOfShards(2).unicastPort(40123).multicastPort(40124).build();
+        if (paramServerConfiguration == null) {
+            paramServerConfiguration = VoidConfiguration.builder()
+                    .numberOfShards(2).unicastPort(40123).multicastPort(40124).build();
+            paramServerConfiguration.setFaultToleranceStrategy(FaultToleranceStrategy.NONE);
+        }
 
         isAutoDiscoveryMode = paramServerConfiguration.getShardAddresses() != null
                         && !paramServerConfiguration.getShardAddresses().isEmpty() ? false : true;
@@ -218,7 +236,7 @@ public class SparkSequenceVectors<T extends SequenceElement> extends SequenceVec
             } else {
                 // for single host (aka driver-only, aka spark-local) just run on loopback interface
                 paramServerConfiguration.setShardAddresses(
-                                Arrays.asList("127.0.0.1:" + paramServerConfiguration.getUnicastPort()));
+                                Arrays.asList("127.0.0.1:" + paramServerConfiguration.getPortSupplier().getPort()));
                 paramServerConfiguration.setFaultToleranceStrategy(FaultToleranceStrategy.NONE);
             }
 

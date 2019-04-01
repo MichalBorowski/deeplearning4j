@@ -1,20 +1,18 @@
-/*-
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
  *
- *  * Copyright 2015 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
  *
- */
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.deeplearning4j.nn.layers.feedforward.autoencoder;
 
@@ -62,7 +60,7 @@ public class AutoEncoder extends BasePretrainNetwork<org.deeplearning4j.nn.conf.
         INDArray W = getParamWithNoise(PretrainParamInitializer.WEIGHT_KEY, training, workspaceMgr);
         INDArray hBias = getParamWithNoise(PretrainParamInitializer.BIAS_KEY, training, workspaceMgr);
         INDArray ret = workspaceMgr.createUninitialized(ArrayType.ACTIVATIONS, v.size(0), W.size(1));
-        INDArray preAct = v.mmuli(W, ret).addiRowVector(hBias);
+        INDArray preAct = v.castTo(W.dataType()).mmuli(W, ret).addiRowVector(hBias);
         ret = layerConf().getActivationFn().getActivation(preAct, training);
         return workspaceMgr.leverageTo(ArrayType.ACTIVATIONS, ret);
     }
@@ -71,7 +69,7 @@ public class AutoEncoder extends BasePretrainNetwork<org.deeplearning4j.nn.conf.
     public INDArray decode(INDArray y, LayerWorkspaceMgr workspaceMgr) {
         INDArray W = getParamWithNoise(PretrainParamInitializer.WEIGHT_KEY, true, workspaceMgr);
         INDArray vBias = getParamWithNoise(PretrainParamInitializer.VISIBLE_BIAS_KEY, true, workspaceMgr);
-        INDArray preAct = y.mmul(W.transposei()).addiRowVector(vBias);
+        INDArray preAct = y.mmul(W.transpose()).addiRowVector(vBias);
         return workspaceMgr.leverageTo(ArrayType.ACTIVATIONS, layerConf().getActivationFn().getActivation(preAct, true));
 
     }
@@ -108,7 +106,7 @@ public class AutoEncoder extends BasePretrainNetwork<org.deeplearning4j.nn.conf.
         INDArray hiddenLoss = layerConf().getSparsity() == 0 ? visibleLoss.mmul(W).muli(y).muli(y.rsub(1))
                         : visibleLoss.mmul(W).muli(y).muli(y.add(-layerConf().getSparsity()));
 
-        INDArray wGradient = corruptedX.transposei().mmul(hiddenLoss).addi(visibleLoss.transposei().mmul(y));
+        INDArray wGradient = corruptedX.transpose().mmul(hiddenLoss).addi(visibleLoss.transpose().mmul(y));
         INDArray hBiasGradient = hiddenLoss.sum(0);
         INDArray vBiasGradient = visibleLoss.sum(0);
 

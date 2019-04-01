@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.jita.allocator.context.impl;
 
 import lombok.extern.slf4j.Slf4j;
@@ -19,10 +35,10 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 
-import static org.bytedeco.javacpp.cublas.cublasContext;
-import static org.bytedeco.javacpp.cublas.cublasCreate_v2;
-import static org.bytedeco.javacpp.cusolver.cusolverDnContext;
-import static org.bytedeco.javacpp.cusolver.cusolverDnCreate;
+import org.bytedeco.cuda.cublas.*;
+import org.bytedeco.cuda.cusolver.*;
+import static org.bytedeco.cuda.global.cublas.*;
+import static org.bytedeco.cuda.global.cusolver.*;
 
 /**
  * This is context pool implementation, addressing shared cublas allocations together with shared stream pools
@@ -167,7 +183,7 @@ public class BasicContextPool implements ContextPool {
     }
 
     protected CudaContext createNewStream(Integer deviceId) {
-        log.debug("Creating new stream for thread: [{}], device: [{}]...", Thread.currentThread().getId(), deviceId);
+        log.trace("Creating new stream for thread: [{}], device: [{}]...", Thread.currentThread().getId(), deviceId);
         //JCuda.cudaSetDevice(deviceId);
         nativeOps.setDevice(new CudaPointer(deviceId));
 

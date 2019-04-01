@@ -1,8 +1,25 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.arrow;
 
 import com.google.flatbuffers.FlatBufferBuilder;
 import org.apache.arrow.flatbuf.*;
 import org.nd4j.linalg.api.buffer.DataBuffer;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.exception.ND4JIllegalStateException;
 import org.nd4j.linalg.factory.Nd4j;
@@ -44,8 +61,8 @@ public class ArrowSerde {
             stride[i] /= elementSize;
         }
 
-        DataBuffer.Type  type = typeFromTensorType(b,elementSize);
-        DataBuffer dataBuffer = DataBufferStruct.createFromByteBuffer(tensor.getByteBuffer(),(int) tensor.data().offset(),type,length,elementSize);
+        DataType  type = typeFromTensorType(b,elementSize);
+        DataBuffer dataBuffer = DataBufferStruct.createFromByteBuffer(tensor.getByteBuffer(),(int) tensor.data().offset(),type,length);
         INDArray arr = Nd4j.create(dataBuffer,shape);
         arr.setShapeAndStride(shape,stride);
         return arr;
@@ -85,8 +102,9 @@ public class ArrowSerde {
      * @return the offset added
      */
     public static int addDataForArr(FlatBufferBuilder bufferBuilder, INDArray arr) {
-        int offset = DataBufferStruct.createDataBufferStruct(bufferBuilder,arr.data());
-        int ret = Buffer.createBuffer(bufferBuilder,offset,arr.data().length() * arr.data().getElementSize());
+        DataBuffer toAdd = arr.isView() ? arr.dup().data() : arr.data();
+        int offset = DataBufferStruct.createDataBufferStruct(bufferBuilder,toAdd);
+        int ret = Buffer.createBuffer(bufferBuilder,offset,toAdd.length() * toAdd.getElementSize());
         return ret;
 
     }
@@ -104,8 +122,10 @@ public class ArrowSerde {
                 Tensor.addTypeType(bufferBuilder,Type.Int);
                 break;
             case FLOAT:
-            case DOUBLE:
                 Tensor.addTypeType(bufferBuilder,Type.FloatingPoint);
+                break;
+            case DOUBLE:
+                Tensor.addTypeType(bufferBuilder,Type.Decimal);
                 break;
         }
     }
@@ -145,29 +165,28 @@ public class ArrowSerde {
     }
 
 
+
     /**
      * Create thee databuffer type frm the given type,
      * relative to the bytes in arrow in class:
      * {@link Type}
-     * @param type the type to create the nd4j {@link DataBuffer.Type} from
+     * @param type the type to create the nd4j {@link DataType} from
      * @param elementSize the element size
      * @return the data buffer type
      */
-    public static DataBuffer.Type typeFromTensorType(byte type,int elementSize) {
-        if(type == Type.Decimal || type == Type.FloatingPoint) {
-            if(elementSize == 4) {
-                return DataBuffer.Type.FLOAT;
-            }
-            else if(elementSize == 8) {
-                return DataBuffer.Type.DOUBLE;
-            }
+    public static DataType typeFromTensorType(byte type, int elementSize) {
+        if(type == Type.FloatingPoint) {
+            return DataType.FLOAT;
+        }
+        else if(type == Type.Decimal) {
+            return DataType.DOUBLE;
         }
         else if(type == Type.Int) {
             if(elementSize == 4) {
-                return DataBuffer.Type.INT;
+                return DataType.INT;
             }
             else if(elementSize == 8) {
-                return DataBuffer.Type.LONG;
+                return DataType.LONG;
             }
         }
         else {

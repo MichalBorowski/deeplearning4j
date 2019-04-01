@@ -1,25 +1,23 @@
-/*-
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
  *
- *  * Copyright 2015 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
  *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
  *
- */
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.nd4j.linalg.api.ops;
 
 import org.nd4j.linalg.api.buffer.DataBuffer;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.ndarray.INDArray;
 
 import java.nio.Buffer;
@@ -45,11 +43,21 @@ import java.nio.Buffer;
 public interface Op {
     enum Type {
         SCALAR,
-        TRANSFORM,
+        SCALAR_BOOL,
+        TRANSFORM_SAME,
+        TRANSFORM_FLOAT,
+        TRANSFORM_ANY,
+        TRANSFORM_BOOL,
+        TRANSFORM_STRICT,
         PAIRWISE,
+        PAIRWISE_BOOL,
         SPECIAL,
         BROADCAST,
-        REDUCE,
+        BROADCAST_BOOL,
+        REDUCE_LONG,
+        REDUCE_SAME,
+        REDUCE_FLOAT,
+        REDUCE_BOOL,
         INDEXREDUCE,
         VARIANCE,
         REDUCE3,
@@ -58,7 +66,6 @@ public interface Op {
         AGGREGATION,
         CUSTOM,
         GRADIENT,
-        SHAPE,
         CONDITIONAL,
         LOOP,
         LOOP_COND,
@@ -73,18 +80,10 @@ public interface Op {
     }
 
     /**
-     * Whether the executioner
-     * needs to do a special call or not
-     * @return true if the executioner needs to do a special
-     * call or not false otherwise
-     */
-    boolean isExecSpecial();
-
-    /**
      * Returns the extra args as a data buffer
      * @return
      */
-    DataBuffer extraArgsDataBuff();
+    DataBuffer extraArgsDataBuff(DataType bufferType);
 
     /**
      * Returns a buffer of either float
@@ -129,34 +128,6 @@ public interface Op {
      */
     INDArray z();
 
-
-
-    /**
-     * The number of elements to do a op over
-     *
-     * @return the op
-     */
-    long n();
-
-
-
-    /**
-     * Initialize the operation based on the parameters
-     *
-     * @param x the input
-     * @param y the pairwise transform ndarray
-     * @param z the resulting ndarray
-     * @param n the number of elements
-     */
-    void init(INDArray x, INDArray y, INDArray z, long n);
-
-    /**
-     * Number processed
-     *
-     * @return the number of elements accumulated
-     */
-    long numProcessed();
-
     /**
      * Extra arguments
      *
@@ -184,30 +155,6 @@ public interface Op {
     void setY(INDArray y);
 
     /**
-     * Returns whether the op should be executed or not (through the executioner)
-     *
-     * @return true if the op is pass through false otherwise
-     */
-    boolean isPassThrough();
-
-    /**
-     * Execute the op if its pass through (not needed most of the time)
-     */
-    void exec();
-
-    /**
-     * Exec along each dimension
-     * @param dimensions the dimensions to execute on
-     */
-    void exec(int... dimensions);
-
-    /**
-     * Change n
-     * @param n
-     */
-    void setN(long n);
-
-    /**
      *
      * @param extraArgs
      */
@@ -224,5 +171,4 @@ public interface Op {
      * @return the equivalent {@link CustomOp}
      */
     CustomOp toCustomOp();
-
 }

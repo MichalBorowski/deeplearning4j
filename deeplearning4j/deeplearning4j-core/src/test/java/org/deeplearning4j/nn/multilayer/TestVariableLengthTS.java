@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.nn.multilayer;
 
 import org.deeplearning4j.BaseDL4JTest;
@@ -10,6 +26,8 @@ import org.deeplearning4j.nn.conf.preprocessor.FeedForwardToRnnPreProcessor;
 import org.deeplearning4j.nn.conf.preprocessor.RnnToFeedForwardPreProcessor;
 import org.deeplearning4j.nn.gradient.Gradient;
 import org.deeplearning4j.nn.weights.WeightInit;
+import org.deeplearning4j.nn.workspace.ArrayType;
+import org.deeplearning4j.nn.workspace.LayerWorkspaceMgr;
 import org.deeplearning4j.util.TimeSeriesUtils;
 import org.junit.Test;
 import org.nd4j.linalg.activations.Activation;
@@ -23,8 +41,6 @@ import org.nd4j.linalg.indexing.NDArrayIndex;
 import org.nd4j.linalg.learning.config.NoOp;
 import org.nd4j.linalg.learning.config.Sgd;
 import org.nd4j.linalg.lossfunctions.LossFunctions;
-import org.deeplearning4j.nn.workspace.ArrayType;
-import org.deeplearning4j.nn.workspace.LayerWorkspaceMgr;
 
 import java.util.Arrays;
 import java.util.List;
@@ -55,7 +71,7 @@ public class TestVariableLengthTS extends BaseDL4JTest {
                             .updater(new Sgd(0.1)).seed(12345).list()
                             .layer(0, new GravesLSTM.Builder().activation(Activation.TANH).nIn(2).nOut(2).build())
                             .layer(1, new RnnOutputLayer.Builder().lossFunction(LossFunctions.LossFunction.MSE).nIn(2)
-                                            .nOut(1).build())
+                                            .nOut(1).activation(Activation.TANH).build())
                             .build();
 
             MultiLayerNetwork net = new MultiLayerNetwork(conf);
@@ -136,7 +152,7 @@ public class TestVariableLengthTS extends BaseDL4JTest {
         Random r = new Random(12345);
 
         for (int nExamples : miniBatchSizes) {
-            Nd4j.getRandom().setSeed(12345);
+            Nd4j.getRandom().setSeed(1234);
 
             MultiLayerConfiguration conf = new NeuralNetConfiguration.Builder()
                             .optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT)
@@ -144,8 +160,8 @@ public class TestVariableLengthTS extends BaseDL4JTest {
                             .layer(0, new DenseLayer.Builder().activation(Activation.TANH).nIn(2).nOut(2).build())
                             .layer(1, new DenseLayer.Builder().activation(Activation.TANH).nIn(2).nOut(2).build())
                             .layer(2, new GravesLSTM.Builder().activation(Activation.TANH).nIn(2).nOut(2).build())
-                            .layer(3, new RnnOutputLayer.Builder().lossFunction(LossFunctions.LossFunction.MSE).nIn(2)
-                                            .nOut(1).build())
+                            .layer(3, new RnnOutputLayer.Builder().lossFunction(LossFunctions.LossFunction.MEAN_ABSOLUTE_ERROR).nIn(2)
+                                            .nOut(1).activation(Activation.TANH).build())
                             .inputPreProcessor(0, new RnnToFeedForwardPreProcessor())
                             .inputPreProcessor(2, new FeedForwardToRnnPreProcessor()).build();
 
@@ -284,7 +300,7 @@ public class TestVariableLengthTS extends BaseDL4JTest {
                         MultiLayerConfiguration conf =
                                         new NeuralNetConfiguration.Builder().seed(12345L).list()
                                                         .layer(0, new GravesLSTM.Builder().nIn(nIn).nOut(5)
-                                                                        .weightInit(WeightInit.DISTRIBUTION)
+
                                                                         .dist(new NormalDistribution(0, 1))
                                                                         .updater(new NoOp()).build())
                                                         .layer(1, new RnnOutputLayer.Builder(
@@ -293,7 +309,7 @@ public class TestVariableLengthTS extends BaseDL4JTest {
                                                                                         .nIn(5).nOut(nOut)
                                                                                         .weightInit(WeightInit.ZERO)
                                                                                         .updater(new NoOp()).build())
-                                                        .pretrain(false).backprop(true).build();
+                                                        .build();
                         MultiLayerNetwork mln = new MultiLayerNetwork(conf);
                         mln.init();
 
@@ -347,7 +363,7 @@ public class TestVariableLengthTS extends BaseDL4JTest {
                         MultiLayerConfiguration conf =
                                         new NeuralNetConfiguration.Builder().seed(12345L).list()
                                                         .layer(0, new GravesLSTM.Builder().nIn(nIn).nOut(5)
-                                                                        .weightInit(WeightInit.DISTRIBUTION)
+
                                                                         .dist(new NormalDistribution(0, 1))
                                                                         .updater(new NoOp()).build())
                                                         .layer(1, new RnnOutputLayer.Builder(
@@ -356,23 +372,23 @@ public class TestVariableLengthTS extends BaseDL4JTest {
                                                                                         .nIn(5).nOut(nOut)
                                                                                         .weightInit(WeightInit.XAVIER)
                                                                                         .updater(new NoOp()).build())
-                                                        .pretrain(false).backprop(true).build();
+                                                        .build();
                         MultiLayerNetwork mln = new MultiLayerNetwork(conf);
                         mln.init();
 
                         MultiLayerConfiguration conf2 =
                                         new NeuralNetConfiguration.Builder().seed(12345L).list()
                                                         .layer(0, new GravesLSTM.Builder().nIn(nIn).nOut(5)
-                                                                        .weightInit(WeightInit.DISTRIBUTION)
+
                                                                         .dist(new NormalDistribution(0, 1))
                                                                         .updater(new NoOp()).build())
                                                         .layer(1, new RnnOutputLayer.Builder(
-                                                                        LossFunctions.LossFunction.MCXENT)
-                                                                                        .activation(Activation.SOFTMAX)
+                                                                        LossFunctions.LossFunction.MSE)
+                                                                                        .activation(Activation.IDENTITY)
                                                                                         .nIn(5).nOut(nOut)
                                                                                         .weightInit(WeightInit.XAVIER)
                                                                                         .updater(new NoOp()).build())
-                                                        .pretrain(false).backprop(true).build();
+                                                        .build();
                         MultiLayerNetwork mln2 = new MultiLayerNetwork(conf2);
                         mln2.init();
 
@@ -557,8 +573,8 @@ public class TestVariableLengthTS extends BaseDL4JTest {
 
         for(char c : new char[]{'f','c'}) {
 
-            INDArray in = Nd4j.linspace(1, 3 * 5 * 10, 3 * 5 * 10).reshape('f', 3, 5, 10).dup(c);
-            INDArray inMask = Nd4j.linspace(1, 30, 30).reshape('f', 3, 10).dup(c); //Minibatch, TS length
+            INDArray in = Nd4j.linspace(1, 3 * 5 * 10, 3 * 5 * 10, Nd4j.dataType()).reshape('f', 3, 5, 10).dup(c);
+            INDArray inMask = Nd4j.linspace(1, 30, 30, Nd4j.dataType()).reshape('f', 3, 10).dup(c); //Minibatch, TS length
 
             INDArray inReverseExp = reverseTimeSeries(in);
             INDArray inMaskReverseExp = Nd4j.create(inMask.shape());
@@ -585,7 +601,7 @@ public class TestVariableLengthTS extends BaseDL4JTest {
         }
         INDArray out = Nd4j.createUninitialized(in.shape(), 'f');
         CustomOp op = DynamicCustomOp.builder("reverse")
-                .addIntegerArguments(new int[]{0,1})
+                .addIntegerArguments(2)
                 .addInputs(in)
                 .addOutputs(out)
                 .callInplace(false)

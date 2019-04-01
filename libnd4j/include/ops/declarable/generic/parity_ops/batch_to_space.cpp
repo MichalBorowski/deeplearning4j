@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 /* Copyright 2016 The TensorFlow Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,6 +42,12 @@ namespace nd4j {
 namespace ops {
     const int kMaxSpaceToBatchBlockDims = 4;
 
+    DECLARE_TYPES(batch_to_space) {
+        getOpDescriptor()
+                ->setAllowedInputTypes(nd4j::DataType::ANY)
+                ->setSameMode(true);
+    }
+
     CUSTOM_OP_IMPL(batch_to_space, 1, 1, false, 0, -2) {
         auto input = INPUT_VARIABLE(0);
 
@@ -48,7 +70,7 @@ namespace ops {
 
             block_dims = (int) blocks->lengthOf();
 
-            REQUIRE_TRUE(blocks->isVector(), 0, "BatchToSpace: blocks supposed to be vector, but got %iD instead", blocks->rankOf());
+            REQUIRE_TRUE(blocks->isVector() || blocks->lengthOf() == 1, 0, "BatchToSpace: blocks supposed to be vector or scalar, but got %iD instead", blocks->rankOf());
             REQUIRE_TRUE(input->rankOf() >= 1 + blocks->lengthOf() + 1, 0, "BatchToSpace: blocks length + 2 should match input rank at least");
             REQUIRE_TRUE(crops->rankOf() == 2, 0, "BatchToSpace: padding should have rank of 2, but got %i instead", crops->rankOf());
             REQUIRE_TRUE(crops->columns() == 2 && blocks->lengthOf() == crops->rows(), 0, "BatchToSpace: padding should have M rows and 2 columns");
@@ -152,8 +174,8 @@ namespace ops {
         internal_input_shape.emplace_back(depth);
         internal_output_shape.emplace_back(depth);
 
-        Nd4jLong* internal_crops = &crops_shape.data()[2 * removed_prefix_block_dims];
-        Nd4jLong* internal_block_shape = &block_shape.data()[removed_prefix_block_dims];
+        auto internal_crops = &crops_shape.data()[2 * removed_prefix_block_dims];
+        auto internal_block_shape = &block_shape.data()[removed_prefix_block_dims];
 
         helpers::_batchToSpace(internal_block_dims, output, input, internal_output_shape, internal_input_shape, internal_block_shape, internal_crops);
 
@@ -240,7 +262,7 @@ namespace ops {
 
         external_output_shape.emplace_back(orig_input_batch_size / block_shape_product);
 
-        Nd4jLong input_batch_size = orig_input_batch_size;
+        auto input_batch_size = orig_input_batch_size;
         for (int block_dim = 0; block_dim < removed_prefix_block_dims; ++block_dim) {
             const Nd4jLong size = shape::sizeAt(in, block_dim + 1);
             input_batch_size *= size;
@@ -276,7 +298,8 @@ namespace ops {
         //nd4j_printv("STB shape: ", external_output_shape);
 
         // we always give out C order here
-        shape::shapeBuffer((int) external_output_shape.size(), external_output_shape.data(), newShape);
+        shape::shapeBuffer((int) external_output_shape.size(), ArrayOptions::dataType(in), external_output_shape.data(), newShape);
+        ArrayOptions::setDataType(newShape, ArrayOptions::dataType(in)); // as in TF
 
         return SHAPELIST(newShape);
     }

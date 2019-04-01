@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 //
 // @author raver119@gmail.com
 //
@@ -11,6 +27,13 @@
 
 namespace nd4j {
 namespace ops {
+
+    DECLARE_TYPES(space_to_depth) {
+        getOpDescriptor()
+                ->setAllowedInputTypes(nd4j::DataType::ANY)
+                ->setSameMode(true);
+    }
+
     CUSTOM_OP_IMPL(space_to_depth, 1, 1, false, 0, 2) {
         int block_size = INT_ARG(0);
         bool isNHWC = INT_ARG(1) == 1;
@@ -30,7 +53,7 @@ namespace ops {
 
         helpers::_spaceTodepth(input, output, block_size, isNHWC);        
 
-        return ND4J_STATUS_OK;
+        return Status::OK();
     }
     
 
@@ -55,7 +78,9 @@ namespace ops {
             shape = {{bS, oH, oW, oD }};
         else 
             shape = {{bS, oD, oH, oW }};
-        shape::shapeBuffer(4, shape.data(), newShape);
+        shape::shapeBuffer(4, block.dataType(), shape.data(), newShape);
+        // TF DOC: A Tensor. Has the same type as input.
+        ArrayOptions::setDataType(newShape, ArrayOptions::dataType(in));
 
         return SHAPELIST(newShape);
     }

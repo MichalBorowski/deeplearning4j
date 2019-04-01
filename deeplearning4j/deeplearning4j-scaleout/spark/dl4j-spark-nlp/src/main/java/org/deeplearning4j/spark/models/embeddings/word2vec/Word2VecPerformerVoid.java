@@ -1,20 +1,18 @@
-/*-
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
  *
- *  * Copyright 2015 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
  *
- */
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.deeplearning4j.spark.models.embeddings.word2vec;
 
@@ -25,6 +23,7 @@ import org.apache.spark.broadcast.Broadcast;
 import org.deeplearning4j.models.embeddings.inmemory.InMemoryLookupTable;
 import org.deeplearning4j.models.word2vec.VocabWord;
 import org.nd4j.linalg.api.buffer.DataBuffer;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.primitives.Pair;
@@ -319,7 +318,7 @@ public class Word2VecPerformerVoid implements VoidFunction<Pair<List<VocabWord>,
                 double g = (1 - code - f) * (useAdaGrad ? w1.getGradient(i, alpha, this.alpha) : alpha);
 
 
-                if (neu1e.data().dataType() == DataBuffer.Type.DOUBLE) {
+                if (neu1e.data().dataType() == DataType.DOUBLE) {
                     Nd4j.getBlasWrapper().axpy(g, syn1, neu1e);
                     Nd4j.getBlasWrapper().axpy(g, l1, syn1);
                 } else {
@@ -367,19 +366,19 @@ public class Word2VecPerformerVoid implements VoidFunction<Pair<List<VocabWord>,
                                                     this.alpha)
                                     : (label - expTable[(int) ((f + MAX_EXP) * (expTable.length / MAX_EXP / 2))])
                                                     * alpha;
-                if (syn1Neg.data().dataType() == DataBuffer.Type.DOUBLE)
+                if (syn1Neg.data().dataType() == DataType.DOUBLE)
                     Nd4j.getBlasWrapper().axpy(g, neu1e, l1);
                 else
                     Nd4j.getBlasWrapper().axpy((float) g, neu1e, l1);
 
-                if (syn1Neg.data().dataType() == DataBuffer.Type.DOUBLE)
+                if (syn1Neg.data().dataType() == DataType.DOUBLE)
                     Nd4j.getBlasWrapper().axpy(g, syn1Neg, l1);
                 else
                     Nd4j.getBlasWrapper().axpy((float) g, syn1Neg, l1);
             }
         }
 
-        if (neu1e.data().dataType() == DataBuffer.Type.DOUBLE)
+        if (neu1e.data().dataType() == DataType.DOUBLE)
             Nd4j.getBlasWrapper().axpy(1.0, neu1e, l1);
 
         else

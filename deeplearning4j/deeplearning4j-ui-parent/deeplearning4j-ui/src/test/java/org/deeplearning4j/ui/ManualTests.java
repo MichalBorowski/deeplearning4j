@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.ui;
 
 import org.apache.commons.io.IOUtils;
@@ -33,6 +49,7 @@ import org.junit.Ignore;
 import org.junit.Test;
 import org.nd4j.linalg.activations.Activation;
 import org.nd4j.linalg.api.buffer.DataBuffer;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.buffer.util.DataTypeUtil;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.dataset.DataSet;
@@ -86,8 +103,7 @@ public class ManualTests {
 
     @Test
     public void testTsne() throws Exception {
-        Nd4j.ENFORCE_NUMERICAL_STABILITY = true;
-        DataTypeUtil.setDTypeForContext(DataBuffer.Type.DOUBLE);
+        DataTypeUtil.setDTypeForContext(DataType.DOUBLE);
         Nd4j.getRandom().setSeed(123);
         BarnesHutTsne b = new BarnesHutTsne.Builder().stopLyingIteration(10).setMaxIter(10).theta(0.5).learningRate(500)
                         .useAdaGrad(true).build();
@@ -161,7 +177,7 @@ public class ManualTests {
                         .layer(7, new DenseLayer.Builder().name("ffn1").nOut(160).dropOut(0.5).build())
                         .layer(8, new OutputLayer.Builder(LossFunctions.LossFunction.NEGATIVELOGLIKELIHOOD)
                                         .nOut(outputNum).activation(Activation.SOFTMAX).build())
-                        .backprop(true).pretrain(false)
+
                         .setInputType(InputType.convolutional(numRows, numColumns, nChannels));
 
         MultiLayerNetwork model = new MultiLayerNetwork(builder.build());
@@ -176,7 +192,7 @@ public class ManualTests {
             lfwNext.scale();
             trainTest = lfwNext.splitTestAndTrain(splitTrainNum, new Random(seed)); // train set that is the result
             trainInput = trainTest.getTrain(); // get feature matrix and labels for training
-            testInput.add(trainTest.getTest().getFeatureMatrix());
+            testInput.add(trainTest.getTest().getFeatures());
             testLabels.add(trainTest.getTest().getLabels());
             model.fit(trainInput);
         }
@@ -280,7 +296,7 @@ public class ManualTests {
                         .layer(4, new DenseLayer.Builder().activation(Activation.RELU).nOut(500).build())
                         .layer(5, new OutputLayer.Builder(LossFunctions.LossFunction.NEGATIVELOGLIKELIHOOD)
                                         .nOut(outputNum).activation(Activation.SOFTMAX).build())
-                        .backprop(true).pretrain(false).setInputType(InputType.convolutional(28, 28, nChannels));
+                        .setInputType(InputType.convolutional(28, 28, nChannels));
 
         MultiLayerConfiguration conf = builder.build();
         MultiLayerNetwork model = new MultiLayerNetwork(conf);
@@ -315,7 +331,7 @@ public class ManualTests {
         Evaluation eval = new Evaluation(outputNum);
         while (mnistTest.hasNext()) {
             DataSet ds = mnistTest.next();
-            INDArray output = model.output(ds.getFeatureMatrix(), false);
+            INDArray output = model.output(ds.getFeatures(), false);
             eval.eval(ds.getLabels(), output);
         }
         log.info(eval.stats());

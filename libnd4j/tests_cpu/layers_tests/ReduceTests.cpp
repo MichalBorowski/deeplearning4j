@@ -1,8 +1,27 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 //
 // Created by agibsonccc on 1/15/17.
 //
 #include <helpers/ShapeUtils.h>
 #include "testinclude.h"
+#include <loops/reduce3.h>
+#include <loops/reduce_float.h>
+#include <ArrayOptions.h>
 
 class ReduceTest : public testing::Test {
 public:
@@ -46,9 +65,10 @@ public:
 
 TEST_F(EuclideanDistanceTest,Test1) {
     //int *tadShapeBuffer = shape::computeResultShape(shapeBuffer,dimension,dimensionLength);
-    auto tadShapeBuffer = nd4j::ShapeUtils<float>::evalReduceShapeInfo('c', dim, shapeBuffer, false, true, nullptr);
+    nd4j::ArrayOptions::setDataType(shapeBuffer, nd4j::DataType::FLOAT32);
+    auto tadShapeBuffer = nd4j::ShapeUtils::evalReduceShapeInfo('c', dim, shapeBuffer, false, true, nullptr);
     //shape::printShapeInfoLinear("tadShape", tadShapeBuffer);
-    functions::reduce3::Reduce3<float>::exec(opNum,
+    functions::reduce3::Reduce3<float, float>::exec(opNum,
                                              x,
                                              shapeBuffer,
                                              extraVals,
@@ -65,19 +85,20 @@ TEST_F(EuclideanDistanceTest,Test1) {
 
 
 TEST_F(StdTest,MultiDimTest) {
-    auto xShapeInfo = shape::shapeBuffer(4, examplesShape);
+    auto xShapeInfo = shape::shapeBuffer(4, nd4j::DataType::FLOAT32, examplesShape);
     //int *resultShapeInfo = shape::computeResultShape(xShapeInfo,dimensionsForStd,dimensionLength);
-    auto resultShapeInfo = nd4j::ShapeUtils<float>::evalReduceShapeInfo('c', dimsForStd, xShapeInfo, false, true, nullptr);
+    auto resultShapeInfo = nd4j::ShapeUtils::evalReduceShapeInfo('c', dimsForStd, xShapeInfo, false, true, nullptr);
     int resultLengthAssertion = 5;
     ASSERT_EQ(resultLengthAssertion,shape::length(resultShapeInfo));
-    shape::TAD *tad = new shape::TAD(xShapeInfo,dimensionsForStd,dimensionLength);
+    shape::TAD *tad = new shape::TAD;
+    tad->init(xShapeInfo,dimensionsForStd,dimensionLength);
     float none[1] = {0};
     tad->createTadOnlyShapeInfo();
     tad->createOffsets();
     int tadElementWiseStride = shape::elementWiseStride(tad->tadOnlyShapeInfo);
-    ASSERT_EQ(-1,tadElementWiseStride);
+    ASSERT_EQ(0,tadElementWiseStride);
     float *result = new float[shape::length(resultShapeInfo)];
-    functions::reduce::ReduceFunction<float>::exec(
+    functions::reduce::ReduceFloatFunction<float,float>::exec(
             opNum,
             x,
             xShapeInfo,
@@ -104,18 +125,19 @@ TEST_F(StdTest,MultiDimTest) {
 
 TEST_F(ReduceTest,MatrixTest) {
     int opNum = 4;
-    auto xShapeInfo = shape::shapeBuffer(2, shape);
+    auto xShapeInfo = shape::shapeBuffer(2,  nd4j::DataType::FLOAT32, shape);
     //int *resultShapeInfo = shape::computeResultShape(xShapeInfo,dimension,dimensionLength);
-    auto resultShapeInfo = nd4j::ShapeUtils<float>::evalReduceShapeInfo('c', dim, xShapeInfo, false, true, nullptr);
+    auto resultShapeInfo = nd4j::ShapeUtils::evalReduceShapeInfo('c', dim, xShapeInfo, false, true, nullptr);
     int resultLengthAssertion = 3;
     ASSERT_EQ(resultLengthAssertion,shape::length(resultShapeInfo));
-    shape::TAD *tad = new shape::TAD(xShapeInfo,dimension,dimensionLength);
+    shape::TAD *tad = new shape::TAD;
+    tad->init(xShapeInfo,dimension,dimensionLength);
     float none[1] = {0};
     tad->createTadOnlyShapeInfo();
     tad->createOffsets();
     auto tadElementWiseStride = shape::elementWiseStride(tad->tadOnlyShapeInfo);
     ASSERT_EQ(3,tadElementWiseStride);
-    functions::reduce::ReduceFunction<float>::exec(
+    functions::reduce::ReduceFloatFunction<float,float>::exec(
             opNum,
             x,
             xShapeInfo,

@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.linalg.compression;
 
 import lombok.Getter;
@@ -9,8 +25,7 @@ import org.bytedeco.javacpp.Pointer;
 import org.bytedeco.javacpp.indexer.Indexer;
 import org.nd4j.linalg.api.buffer.BaseDataBuffer;
 import org.nd4j.linalg.api.buffer.DataBuffer;
-import org.nd4j.linalg.api.complex.IComplexDouble;
-import org.nd4j.linalg.api.complex.IComplexFloat;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.ops.performance.PerformanceTracker;
 import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.memory.MemcpyDirection;
@@ -44,8 +59,8 @@ public class CompressedDataBuffer extends BaseDataBuffer {
      */
     @Override
     protected void initTypeAndSize() {
-        type = Type.COMPRESSED;
-        allocationMode = AllocationMode.JAVACPP;
+        type = DataType.COMPRESSED;
+        allocationMode = AllocationMode.MIXED_DATA_TYPES;
     }
 
     @Override
@@ -53,14 +68,15 @@ public class CompressedDataBuffer extends BaseDataBuffer {
         //        logger.info("Writing out CompressedDataBuffer");
         // here we should mimic to usual DataBuffer array
         out.writeUTF(allocationMode.name());
-        out.writeInt((int) compressionDescriptor.getCompressedLength());
-        out.writeUTF(Type.COMPRESSED.name());
+        out.writeLong(compressionDescriptor.getCompressedLength());
+        out.writeUTF(DataType.COMPRESSED.name());
         // at this moment we don't care about mimics anymore
-        //ByteRawIndexer indexer = new ByteRawIndexer((BytePointer) pointer);
+        //ByteIndexer indexer = ByteIndexer.create((BytePointer) pointer);
         out.writeUTF(compressionDescriptor.getCompressionAlgorithm());
         out.writeLong(compressionDescriptor.getCompressedLength());
         out.writeLong(compressionDescriptor.getOriginalLength());
         out.writeLong(compressionDescriptor.getNumberOfElements());
+        out.writeInt(compressionDescriptor.getOriginalDataType().ordinal());
         //        out.write(((BytePointer) pointer).getStringBytes());
         for (int x = 0; x < pointer.capacity() * pointer.sizeof(); x++) {
             byte b = pointer.asByteBuffer().get(x);
@@ -78,20 +94,20 @@ public class CompressedDataBuffer extends BaseDataBuffer {
      * @param s
      * @return
      */
-    public static DataBuffer readUnknown(DataInputStream s, long length) {
-        DataBuffer buffer = Nd4j.createBuffer(length);
-        buffer.read(s);
+    public static DataBuffer readUnknown(DataInputStream s, AllocationMode allocMode, long length, DataType type) {
         // if buffer is uncompressed, it'll be valid buffer, so we'll just return it
-        if (buffer.dataType() != Type.COMPRESSED)
+        if (type != DataType.COMPRESSED) {
+            DataBuffer buffer = Nd4j.createBuffer(type, length, false);
+            buffer.read(s, allocMode, length, type);
             return buffer;
-        else {
+        } else {
             try {
-
                 // if buffer is compressed one, we''ll restore it here
                 String compressionAlgorithm = s.readUTF();
                 long compressedLength = s.readLong();
                 long originalLength = s.readLong();
                 long numberOfElements = s.readLong();
+                DataType originalType = DataType.values()[s.readInt()];
 
                 byte[] temp = new byte[(int) compressedLength];
                 for (int i = 0; i < compressedLength; i++) {
@@ -104,6 +120,7 @@ public class CompressedDataBuffer extends BaseDataBuffer {
                 descriptor.setCompressionAlgorithm(compressionAlgorithm);
                 descriptor.setOriginalLength(originalLength);
                 descriptor.setNumberOfElements(numberOfElements);
+                descriptor.setOriginalDataType(originalType);
                 return new CompressedDataBuffer(pointer, descriptor);
             } catch (Exception e) {
                 throw new RuntimeException(e);
@@ -177,16 +194,6 @@ public class CompressedDataBuffer extends BaseDataBuffer {
      */
     @Override
     public DataBuffer create(int[] data) {
-        throw new UnsupportedOperationException("This operation isn't supported for CompressedDataBuffer");
-    }
-
-    @Override
-    public IComplexFloat getComplexFloat(long i) {
-        throw new UnsupportedOperationException("This operation isn't supported for CompressedDataBuffer");
-    }
-
-    @Override
-    public IComplexDouble getComplexDouble(long i) {
         throw new UnsupportedOperationException("This operation isn't supported for CompressedDataBuffer");
     }
 }

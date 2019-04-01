@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.nn.layers.recurrent;
 
 import lombok.extern.slf4j.Slf4j;
@@ -92,8 +108,8 @@ public class BidirectionalTest extends BaseDL4JTest {
 
             assertEquals(net1.numParams(), net2.numParams());
             for (int i = 0; i < 3; i++) {
-                int n1 = net1.getLayer(i).numParams();
-                int n2 = net2.getLayer(i).numParams();
+                int n1 = (int)net1.getLayer(i).numParams();
+                int n2 = (int)net2.getLayer(i).numParams();
                 assertEquals(n1, n2);
             }
 
@@ -191,8 +207,8 @@ public class BidirectionalTest extends BaseDL4JTest {
 
             assertEquals(net1.numParams(), net2.numParams());
             for (int i = 0; i < 3; i++) {
-                int n1 = net1.getLayer(i).numParams();
-                int n2 = net2.getLayer(i).numParams();
+                int n1 = (int)net1.getLayer(i).numParams();
+                int n2 = (int)net2.getLayer(i).numParams();
                 assertEquals(n1, n2);
             }
 
@@ -637,8 +653,8 @@ public class BidirectionalTest extends BaseDL4JTest {
                         .activation(Activation.SOFTMAX)
                         .lossFunction(LossFunctions.LossFunction.MCXENT).build(), "RNN")
                 .setOutputs("OUT")
-                .pretrain(true)
-                .backprop(true);
+
+                ;
 
         ComputationGraph net = new ComputationGraph(builder.build());
         net.init();

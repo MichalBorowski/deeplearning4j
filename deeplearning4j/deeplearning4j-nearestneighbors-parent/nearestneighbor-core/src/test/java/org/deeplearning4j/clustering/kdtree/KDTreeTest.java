@@ -1,25 +1,25 @@
-/*-
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
  *
- *  * Copyright 2015 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
  *
- */
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.deeplearning4j.clustering.kdtree;
 
 import com.google.common.primitives.Doubles;
+import org.junit.BeforeClass;
 import org.junit.Test;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.primitives.Pair;
@@ -36,14 +36,20 @@ import static org.junit.Assert.assertTrue;
  * Created by agibsonccc on 1/1/15.
  */
 public class KDTreeTest {
+
+    @BeforeClass
+    public static void beforeClass(){
+        Nd4j.setDataType(DataType.FLOAT);
+    }
+
     @Test
     public void testTree() {
         KDTree tree = new KDTree(2);
-        INDArray half = Nd4j.create(Nd4j.createBuffer(new double[] {0.5, 0.5}));
-        INDArray one = Nd4j.create(Nd4j.createBuffer(new double[] {1, 1}));
+        INDArray half = Nd4j.create(new double[] {0.5, 0.5}, new long[]{1,2}).castTo(DataType.FLOAT);
+        INDArray one = Nd4j.create(new double[] {1, 1}, new long[]{1,2}).castTo(DataType.FLOAT);
         tree.insert(half);
         tree.insert(one);
-        Pair<Double, INDArray> pair = tree.nn(Nd4j.create(Nd4j.createBuffer(new double[] {0.5, 0.5})));
+        Pair<Double, INDArray> pair = tree.nn(Nd4j.create(new double[] {0.5, 0.5}, new long[]{1,2}).castTo(DataType.FLOAT));
         assertEquals(half, pair.getValue());
     }
 
@@ -63,7 +69,7 @@ public class KDTreeTest {
 
         for (int i = 0; i < elements; i++) {
             double[] features = Doubles.toArray(lists.get(i));
-            INDArray ind = Nd4j.create(Nd4j.createBuffer(features));
+            INDArray ind = Nd4j.create(features, new long[]{1, features.length}, DataType.FLOAT);
             kdTree.insert(ind);
             assertEquals(i + 1, kdTree.size());
         }
@@ -82,7 +88,7 @@ public class KDTreeTest {
             for (int k = 0; k < n; k++) {
                 vec.add((k == i) ? 1.0 : 0.0);
             }
-            INDArray indVec = Nd4j.create(Nd4j.createBuffer(Doubles.toArray(vec)));
+            INDArray indVec = Nd4j.create(Doubles.toArray(vec), new long[]{1, vec.size()}, DataType.FLOAT);
             kdTree.insert(indVec);
         }
         Random rand = new Random();
@@ -92,7 +98,7 @@ public class KDTreeTest {
         for (int k = 0; k < n; k++) {
             pt.add(rand.nextDouble());
         }
-        Pair<Double, INDArray> result = kdTree.nn(Nd4j.create(Nd4j.createBuffer(Doubles.toArray(pt))));
+        Pair<Double, INDArray> result = kdTree.nn(Nd4j.create(Doubles.toArray(pt), new long[]{1, pt.size()}, DataType.FLOAT));
 
         // Always true for points in the unitary hypercube
         assertTrue(result.getKey() < Double.MAX_VALUE);

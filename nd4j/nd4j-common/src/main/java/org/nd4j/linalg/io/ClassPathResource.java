@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.linalg.io;
 
 import org.apache.commons.compress.compressors.FileNameUtil;
@@ -156,7 +172,7 @@ public class ClassPathResource extends AbstractFileResolvingResource {
                 stream = getStreamFromZip.getStream();
                 zipFile = getStreamFromZip.getZipFile();
 
-                Preconditions.checkState(entry.isDirectory(), "Source must be a directory");
+                Preconditions.checkState(entry.isDirectory(), "Source must be a directory: %s", entry.getName());
 
                 String pathNoSlash = this.path;
                 if(pathNoSlash.endsWith("/") || pathNoSlash.endsWith("\\")){
@@ -195,7 +211,12 @@ public class ClassPathResource extends AbstractFileResolvingResource {
             }
 
         } else {
-            File source = new File(path);
+            File source;
+            try{
+                source = new File(url.toURI());
+            } catch (URISyntaxException e) {
+                throw new IOException("Error converting URL to a URI - path may be invalid? Path=" + url);
+            }
             Preconditions.checkState(source.isDirectory(), "Source must be a directory: %s", source);
             Preconditions.checkState(destination.exists() && destination.isDirectory(), "Destination must be a directory and must exist: %s", destination);
             FileUtils.copyDirectory(source, destination);
@@ -229,7 +250,9 @@ public class ClassPathResource extends AbstractFileResolvingResource {
         if (is == null) {
             throw new FileNotFoundException(path + " cannot be opened because it does not exist");
         } else {
-            return is;
+            if(is instanceof BufferedInputStream)
+                return is;
+            return new BufferedInputStream(is);
         }
     }
 

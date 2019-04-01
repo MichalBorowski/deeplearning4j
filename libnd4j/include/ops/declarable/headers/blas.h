@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 //
 //  @author raver119@gmail.com
 //
@@ -26,7 +42,7 @@ namespace nd4j {
          * 1: transB (where applicable)
          */
         #if NOT_EXCLUDED(OP_matmul)
-        DECLARE_CUSTOM_OP(matmul, 2, 1, false, -2, -2);
+        DECLARE_CUSTOM_OP(matmul, 2, 1, false, 0, -2);
         #endif
 
         /**
@@ -69,7 +85,7 @@ namespace nd4j {
         #endif
 
         /**
-         * performs singular value decomposition (SVD) of one one or more matrices, evaluates the SVD of each inner-most 2D matrix in input array:
+         * performs singular value decomposition (SVD) of one or more matrices, evaluates the SVD of each inner-most 2D matrix in input array:
          * x[..., :, :] = u[..., :, :] * s[...,:] * transpose(v[..., :, :]) 
          *
          * Input array:

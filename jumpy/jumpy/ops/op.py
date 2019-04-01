@@ -1,22 +1,24 @@
-# Copyright 2016 Skymind,Inc. All Rights Reserved.
+################################################################################
+# Copyright (c) 2015-2018 Skymind, Inc.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
+# This program and the accompanying materials are made available under the
+# terms of the Apache License, Version 2.0 which is available at
+# https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-# ==============================================================================
+# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+# License for the specific language governing permissions and limitations
+# under the License.
+#
+# SPDX-License-Identifier: Apache-2.0
+################################################################################
+
 
 from jumpy.java_classes import *
 from jumpy.ndarray import array
 from jumpy.ndarray import ndarray
-
+import inspect
 
 _INDArray_class = 'org.nd4j.linalg.api.ndarray.INDArray'
 
@@ -28,6 +30,7 @@ def _is_nd4j(x):
 def _is_jumpy(x):
     return type(x) == ndarray
 
+
 '''
 Use the @op decorator over a method to automatically
 take care of nd4j<->jumpy conversions. e.g:
@@ -36,10 +39,10 @@ take care of nd4j<->jumpy conversions. e.g:
 
 @op
 def reshape(arr, shape):
-	# we are in nd4j space now
-	# arr is an INDArray instance
-	# we return a INDArray instance as well
-	return arr.reshape(*shape)
+    # we are in nd4j space now
+    # arr is an INDArray instance
+    # we return a INDArray instance as well
+    return arr.reshape(*shape)
 
 
 # use in jumpy space:
@@ -61,6 +64,16 @@ def op(f):
         for i, arg in enumerate(args):
             if _is_jumpy(arg):
                 args[i] = arg.array
+            elif type(arg) is list:
+                for j, a in enumerate(arg):
+                    if _is_jumpy(a):
+                        arg[j] = a.array
+            elif type(arg) is tuple:
+                arg = list(arg)
+                for j, a in enumerate(arg):
+                    if _is_jumpy(a):
+                        arg[j] = a.array
+                args[i] = tuple(arg)
         for k in kwargs:
             v = kwargs[k]
             if _is_jumpy(v):

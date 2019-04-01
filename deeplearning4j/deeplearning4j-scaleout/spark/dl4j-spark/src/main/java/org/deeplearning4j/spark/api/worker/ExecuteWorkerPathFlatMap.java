@@ -1,7 +1,26 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.spark.api.worker;
 
+import org.apache.spark.broadcast.Broadcast;
 import org.datavec.spark.functions.FlatMapFunctionAdapter;
 import org.datavec.spark.transform.BaseFlatMapFunctionAdaptee;
+import org.datavec.spark.util.SerializableHadoopConfig;
+import org.deeplearning4j.api.loader.DataSetLoader;
 import org.deeplearning4j.spark.api.TrainingResult;
 import org.deeplearning4j.spark.api.TrainingWorker;
 import org.deeplearning4j.spark.api.WorkerConfiguration;
@@ -22,8 +41,8 @@ import java.util.List;
 public class ExecuteWorkerPathFlatMap<R extends TrainingResult>
                 extends BaseFlatMapFunctionAdaptee<Iterator<String>, R> {
 
-    public ExecuteWorkerPathFlatMap(TrainingWorker<R> worker) {
-        super(new ExecuteWorkerPathFlatMapAdapter<>(worker));
+    public ExecuteWorkerPathFlatMap(TrainingWorker<R> worker, DataSetLoader loader, Broadcast<SerializableHadoopConfig> hadoopConfig) {
+        super(new ExecuteWorkerPathFlatMapAdapter<>(worker, loader, hadoopConfig));
     }
 }
 
@@ -37,10 +56,14 @@ public class ExecuteWorkerPathFlatMap<R extends TrainingResult>
  */
 class ExecuteWorkerPathFlatMapAdapter<R extends TrainingResult> implements FlatMapFunctionAdapter<Iterator<String>, R> {
     private final FlatMapFunctionAdapter<Iterator<DataSet>, R> workerFlatMap;
+    private final DataSetLoader dataSetLoader;
     private final int maxDataSetObjects;
+    private final Broadcast<SerializableHadoopConfig> hadoopConfig;
 
-    public ExecuteWorkerPathFlatMapAdapter(TrainingWorker<R> worker) {
+    public ExecuteWorkerPathFlatMapAdapter(TrainingWorker<R> worker, DataSetLoader dataSetLoader, Broadcast<SerializableHadoopConfig> hadoopConfig) {
         this.workerFlatMap = new ExecuteWorkerFlatMapAdapter<>(worker);
+        this.dataSetLoader = dataSetLoader;
+        this.hadoopConfig = hadoopConfig;
 
         //How many dataset objects of size 'dataSetObjectNumExamples' should we load?
         //Only pass on the required number, not all of them (to avoid async preloading data that won't be used)
@@ -68,6 +91,6 @@ class ExecuteWorkerPathFlatMapAdapter<R extends TrainingResult> implements FlatM
             list.add(iter.next());
         }
 
-        return workerFlatMap.call(new PathSparkDataSetIterator(list.iterator()));
+        return workerFlatMap.call(new PathSparkDataSetIterator(list.iterator(), dataSetLoader, hadoopConfig));
     }
 }

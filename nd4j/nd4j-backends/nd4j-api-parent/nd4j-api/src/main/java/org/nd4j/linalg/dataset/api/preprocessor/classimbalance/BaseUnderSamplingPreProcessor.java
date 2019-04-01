@@ -1,5 +1,22 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.linalg.dataset.api.preprocessor.classimbalance;
 
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.api.ops.random.impl.BernoulliDistribution;
 import org.nd4j.linalg.factory.Nd4j;
@@ -57,7 +74,7 @@ public abstract class BaseUnderSamplingPreProcessor {
                 currentLabel = label.get(NDArrayIndex.all(), NDArrayIndex.point(0),
                                 NDArrayIndex.interval(currentTimeSliceStart, currentTimeSliceEnd));
                 if (minorityLabel == 0) {
-                    currentLabel = Transforms.not(currentLabel);
+                    currentLabel = currentLabel.rsub(1.0);  //rsub(1.0) is equivalent to swapping 0s and 1s
                 }
             }
 
@@ -84,8 +101,8 @@ public abstract class BaseUnderSamplingPreProcessor {
     */
     private INDArray calculateBernoulli(INDArray minorityLabels, INDArray labelMask, double targetMinorityDist) {
 
-        INDArray minorityClass = minorityLabels.dup().muli(labelMask);
-        INDArray majorityClass = Transforms.not(minorityLabels).muli(labelMask);
+        INDArray minorityClass = minorityLabels.castTo(Nd4j.defaultFloatingPointType()).muli(labelMask);
+        INDArray majorityClass = minorityLabels.rsub(1.0).muli(labelMask);      //rsub(1.0) is equivalent to swapping 0s and 1s
 
         //all minorityLabel class, keep masks as is
         //presence of minoriy class and donotmask minority windows set to true return label as is
@@ -115,7 +132,9 @@ public abstract class BaseUnderSamplingPreProcessor {
         }
         if (label.size(1) == 2) {
             //check if label is of size one hot
-            if (!label.sum(1).mul(labelMask).equals(labelMask)) {
+            INDArray sum1 = label.sum(1).mul(labelMask);
+            INDArray floatMask = labelMask.castTo(label.dataType());
+            if (!sum1.equals(floatMask)) {
                 throw new IllegalArgumentException("Labels of size minibatchx2xtimesteps are expected to be one hot."
                                 + label.toString() + "\n is not one-hot");
             }

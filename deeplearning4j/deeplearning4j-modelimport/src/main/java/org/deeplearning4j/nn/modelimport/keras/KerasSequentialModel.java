@@ -1,20 +1,18 @@
-/*-
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
  *
- *  * Copyright 2016 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
  *
- */
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.deeplearning4j.nn.modelimport.keras;
 
@@ -34,10 +32,7 @@ import org.deeplearning4j.nn.multilayer.MultiLayerNetwork;
 import org.nd4j.linalg.primitives.Pair;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import static org.deeplearning4j.nn.modelimport.keras.utils.KerasModelUtils.importWeights;
 
@@ -100,8 +95,20 @@ public class KerasSequentialModel extends KerasModel {
         if (!modelConfig.containsKey(config.getModelFieldConfig()))
             throw new InvalidKerasConfigurationException(
                     "Could not find layer configurations (no " + config.getModelFieldConfig() + " field found)");
+
+        // Prior to Keras 2.2.3 the "config" of a Sequential model was a list of layer configurations. For consistency
+        // "config" is now an object containing a "name" and "layers", the latter contain the same data as before.
+        // This change only affects Sequential models.
+        List<Object> layerList;
+        try {
+            layerList = (List<Object>) modelConfig.get(config.getModelFieldConfig());
+        } catch (Exception e) {
+            HashMap layerMap = (HashMap<String, Object>) modelConfig.get(config.getModelFieldConfig());
+            layerList =  (List<Object>) layerMap.get("layers");
+        }
+
         Pair<Map<String, KerasLayer>, List<KerasLayer>> layerPair =
-                prepareLayers((List<Object>) modelConfig.get(config.getModelFieldConfig()));
+                prepareLayers(layerList);
         this.layers = layerPair.getFirst();
         this.layersOrdered = layerPair.getSecond();
 
@@ -168,6 +175,11 @@ public class KerasSequentialModel extends KerasModel {
                     "MultiLayerNetwork expects only 1 output (found " + this.outputLayerNames.size() + ")");
 
         NeuralNetConfiguration.Builder modelBuilder = new NeuralNetConfiguration.Builder();
+
+        if (optimizer != null) {
+            modelBuilder.updater(optimizer);
+        }
+
         NeuralNetConfiguration.ListBuilder listBuilder = modelBuilder.list();
 
         /* Add layers one at a time. */

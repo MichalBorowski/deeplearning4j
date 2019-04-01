@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 //
 // @author raver119@gmail.com
 //
@@ -8,9 +24,6 @@
 #ifdef __CUDACC__
 #include <curand.h>
 #endif
-
-#define MAX_INT 2147483647
-#define MAX_UINT 18446744073709551615LLU
 
 #include <helpers/helper_generator.h>
 
@@ -104,7 +117,7 @@ namespace nd4j {
              * @return
              */
             inline _CUDA_D T nextT() {
-                return (T) nextUInt() / (T) MAX_UINT;
+                return (T) nextUInt() / (T) nd4j::DataTypeUtils::max<Nd4jULong>();
             }
 
             /**
@@ -137,7 +150,7 @@ namespace nd4j {
              *  relative methods are made as workaround for lock-free concurrent execution
              */
             inline _CUDA_D int relativeInt(Nd4jLong index) {
-                return (int) (relativeUInt(index) % ((unsigned int) MAX_INT + 1));
+                return (int) (relativeUInt(index) % (nd4j::DataTypeUtils::max<uint32_t>() + 1));
             }
 
             /**
@@ -177,8 +190,8 @@ namespace nd4j {
             inline _CUDA_D T relativeT(Nd4jLong index) {
                 if (sizeof(T) < 4) {
                     // FIXME: this is fast hack for short types, like fp16. This should be improved.
-                    return (T)((float) relativeUInt(index) / (float) MAX_UINT);
-                } else return (T) relativeUInt(index) / (T) MAX_UINT;
+                    return (T)((float) relativeUInt(index) / (float) nd4j::DataTypeUtils::max<uint32_t>());
+                } else return (T) relativeUInt(index) / (T) nd4j::DataTypeUtils::max<uint32_t>();
             }
 
             /**

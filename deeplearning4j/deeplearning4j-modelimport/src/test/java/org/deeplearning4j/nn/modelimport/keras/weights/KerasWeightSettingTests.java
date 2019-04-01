@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.nn.modelimport.keras.weights;
 
 import lombok.extern.slf4j.Slf4j;
@@ -19,6 +35,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.Arrays;
+
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
 
 @Slf4j
 public class KerasWeightSettingTests {
@@ -119,11 +138,11 @@ public class KerasWeightSettingTests {
 
         INDArray weights = model.getLayer(0).getParam("W");
         val weightShape = weights.shape();
-        assert (weightShape[0] == 4);
-        assert (weightShape[1] == 6);
+        assertEquals(4, weightShape[0]);
+        assertEquals(6, weightShape[1]);
 
         INDArray bias = model.getLayer(0).getParam("b");
-        assert (bias.length() == 6);
+        assertEquals(6, bias.length());
         logSuccess(modelPath);
     }
 
@@ -138,22 +157,28 @@ public class KerasWeightSettingTests {
         long nIn = 5;
         long nOut = 6;
 
-        assert (depthWeightShape[0] == depthMult);
-        assert (depthWeightShape[1] == nIn);
-        assert (depthWeightShape[2] == kernel);
-        assert (depthWeightShape[3] == kernel);
+        assertEquals(depthMult, depthWeightShape[0]);
+        assertEquals(nIn, depthWeightShape[1]);
+        assertEquals(kernel, depthWeightShape[2]);
+        assertEquals(kernel, depthWeightShape[3]);
 
         INDArray weights = model.getLayer(0).getParam("pW");
         val weightShape = weights.shape();
 
 
-        assert (weightShape[0] == nOut);
-        assert (weightShape[1] == nIn * depthMult);
-        assert (weightShape[2] == 1);
-        assert (weightShape[3] == 1);
+        assertEquals(nOut, weightShape[0]);
+        assertEquals(nIn * depthMult, weightShape[1]);
+        assertEquals(1, weightShape[2]);
+        assertEquals(1, weightShape[3]);
 
         INDArray bias = model.getLayer(0).getParam("b");
-        assert (bias.length() == 6);
+        assertEquals(6, bias.length());
+
+        INDArray input = Nd4j.ones(1, 5, 3, 4);
+        INDArray output = model.output(input);
+
+        assertArrayEquals(new long[] {1, 6, 1, 2}, output.shape());
+
         logSuccess(modelPath);
     }
 
@@ -162,13 +187,13 @@ public class KerasWeightSettingTests {
 
         INDArray weights = model.getLayer(0).getParam("W");
         val weightShape = weights.shape();
-        assert (weightShape[0] == 6);
-        assert (weightShape[1] == 5);
-        assert (weightShape[2] == 3);
-        assert (weightShape[3] == 3);
+        assertEquals(6, weightShape[0]);
+        assertEquals(5, weightShape[1]);
+        assertEquals(3, weightShape[2]);
+        assertEquals(3, weightShape[3]);
 
         INDArray bias = model.getLayer(0).getParam("b");
-        assert (bias.length() == 6);
+        assertEquals(6,bias.length());
         logSuccess(modelPath);
     }
 
@@ -183,7 +208,7 @@ public class KerasWeightSettingTests {
         int[] inShape = new int[]{5, 5, 5};
         INDArray input = Nd4j.zeros(mb, inShape[0], inShape[1], inShape[2]);
         INDArray output = model.output(input);
-        assert Arrays.equals(output.shape(), new long[]{mb, nOut});
+        assertArrayEquals(new long[]{mb, nOut}, output.shape());
         logSuccess(modelPath);
     }
 
@@ -197,7 +222,7 @@ public class KerasWeightSettingTests {
 
         INDArray input = Nd4j.zeros(mb, inputLength);
         INDArray output = model.output(input);
-        assert Arrays.equals(output.shape(), new long[]{mb, nOut, inputLength - kernel + 1});
+        assertArrayEquals(new long[]{mb, nOut, inputLength - kernel + 1}, output.shape());
         logSuccess(modelPath);
     }
 
@@ -213,7 +238,7 @@ public class KerasWeightSettingTests {
 
         INDArray input = Nd4j.zeros(10, 4, 6, 6);
         INDArray output = model.output(input);
-        assert Arrays.equals(output.shape(), new long[]{10, 16, 3, 3});
+        assertArrayEquals(new long[]{10, 16, 3, 3}, output.shape());
         logSuccess(modelPath);
     }
 
@@ -224,7 +249,7 @@ public class KerasWeightSettingTests {
         INDArray input[] = new INDArray[]{Nd4j.zeros(10, 4, 6, 6), Nd4j.zeros(10, 16, 3, 3)};
         INDArray[] output = model.output(input);
         log.info(Arrays.toString(output[0].shape()));
-        assert Arrays.equals(output[0].shape(), new long[]{10, 32, 3, 3});
+        assertArrayEquals(new long[]{10, 32, 3, 3}, output[0].shape());
         logSuccess(modelPath);
     }
 
@@ -246,12 +271,12 @@ public class KerasWeightSettingTests {
 
         INDArray embeddingWeight = model.getLayer(0).getParam("W");
         val embeddingWeightShape = embeddingWeight.shape();
-        assert (embeddingWeightShape[0] == nIn);
-        assert (embeddingWeightShape[1] == outputDim);
+        assertEquals(nIn, embeddingWeightShape[0]);
+        assertEquals(outputDim, embeddingWeightShape[1]);
 
         INDArray inEmbedding = Nd4j.zeros(mb, inputLength);
         INDArray output = model.output(inEmbedding);
-        assert Arrays.equals(output.shape(), new long[]{mb, nOut, inputLength});
+        assertArrayEquals(new long[]{mb, nOut, inputLength}, output.shape());
         logSuccess(modelPath);
     }
 
@@ -272,12 +297,12 @@ public class KerasWeightSettingTests {
 
         INDArray embeddingWeight = model.getLayer(0).getParam("W");
         val embeddingWeightShape = embeddingWeight.shape();
-        assert (embeddingWeightShape[0] == nIn);
-        assert (embeddingWeightShape[1] == outputDim);
+        assertEquals(nIn, embeddingWeightShape[0]);
+        assertEquals(outputDim, embeddingWeightShape[1]);
 
         INDArray inEmbedding = Nd4j.zeros(mb, inputLength);
         INDArray output = model.output(inEmbedding);
-        assert Arrays.equals(output.shape(), new long[]{mb, nOut, inputLength - kernel + 1});
+        assertArrayEquals(new long[]{mb, nOut, inputLength - kernel + 1}, output.shape());
         logSuccess(modelPath);
     }
 

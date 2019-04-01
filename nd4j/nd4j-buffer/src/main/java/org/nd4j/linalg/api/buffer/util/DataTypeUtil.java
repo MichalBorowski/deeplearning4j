@@ -1,7 +1,24 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.linalg.api.buffer.util;
 
 import org.nd4j.context.Nd4jContext;
 import org.nd4j.linalg.api.buffer.DataBuffer;
+import org.nd4j.linalg.api.buffer.DataType;
 
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -13,7 +30,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  */
 public class DataTypeUtil {
 
-    private volatile transient static DataBuffer.Type dtype;
+    private volatile transient static DataType dtype;
     private static final ReadWriteLock lock = new ReentrantReadWriteLock();
 
 
@@ -22,7 +39,7 @@ public class DataTypeUtil {
      * @param type
      * @return
      */
-    public static int lengthForDtype(DataBuffer.Type type) {
+    public static int lengthForDtype(DataType type) {
         switch (type) {
             case DOUBLE:
                 return 8;
@@ -47,18 +64,18 @@ public class DataTypeUtil {
      * Get the allocation mode from the context
      * @return
      */
-    public static DataBuffer.Type getDtypeFromContext(String dType) {
+    public static DataType getDtypeFromContext(String dType) {
         switch (dType) {
             case "double":
-                return DataBuffer.Type.DOUBLE;
+                return DataType.DOUBLE;
             case "float":
-                return DataBuffer.Type.FLOAT;
+                return DataType.FLOAT;
             case "int":
-                return DataBuffer.Type.INT;
+                return DataType.INT;
             case "half":
-                return DataBuffer.Type.HALF;
+                return DataType.HALF;
             default:
-                return DataBuffer.Type.FLOAT;
+                return DataType.FLOAT;
         }
     }
 
@@ -67,7 +84,7 @@ public class DataTypeUtil {
      * @param allocationMode
      * @return
      */
-    public static String getDTypeForName(DataBuffer.Type allocationMode) {
+    public static String getDTypeForName(DataType allocationMode) {
         switch (allocationMode) {
             case DOUBLE:
                 return "double";
@@ -86,7 +103,7 @@ public class DataTypeUtil {
      * get the allocation mode from the context
      * @return
      */
-    public static DataBuffer.Type getDtypeFromContext() {
+    public static DataType getDtypeFromContext() {
         try {
             lock.readLock().lock();
 
@@ -113,7 +130,7 @@ public class DataTypeUtil {
      * or an @link{IllegalArgumentException} is thrown
      * @param allocationModeForContext
      */
-    public static void setDTypeForContext(DataBuffer.Type allocationModeForContext) {
+    public static void setDTypeForContext(DataType allocationModeForContext) {
         try {
             lock.writeLock().lock();
 

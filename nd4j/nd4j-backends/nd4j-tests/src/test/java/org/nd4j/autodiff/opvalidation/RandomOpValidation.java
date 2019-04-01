@@ -1,19 +1,36 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.autodiff.opvalidation;
 
 import lombok.extern.slf4j.Slf4j;
 import org.junit.Test;
-import org.nd4j.autodiff.OpValidationSuite;
+import org.nd4j.OpValidationSuite;
 import org.nd4j.autodiff.samediff.SDVariable;
 import org.nd4j.autodiff.samediff.SameDiff;
 import org.nd4j.autodiff.validation.OpTestCase;
 import org.nd4j.autodiff.validation.OpValidation;
 import org.nd4j.autodiff.validation.TestCase;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.iter.NdIndexIterator;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.api.ops.random.custom.RandomBernoulli;
 import org.nd4j.linalg.api.ops.random.custom.RandomExponential;
-import org.nd4j.linalg.api.ops.random.impl.BernoulliDistribution;
 import org.nd4j.linalg.api.ops.random.impl.BinomialDistribution;
+import org.nd4j.linalg.api.shape.LongShapeDescriptor;
 import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.factory.Nd4jBackend;
 import org.nd4j.linalg.function.Function;
@@ -34,14 +51,13 @@ public class RandomOpValidation extends BaseOpValidation {
 
     @Test
     public void testRandomOpsSDVarShape() {
-        OpValidationSuite.ignoreFailing();
-
+        Nd4j.getRandom().setSeed(12345);
         List<String> failed = new ArrayList<>();
 
         for (double[] shape : Arrays.asList(new double[]{1000.0}, new double[]{100, 10}, new double[]{40, 5, 5})) {
 
             for (int i = 0; i < 4; i++) {
-                INDArray arr = Nd4j.trueVector(shape);
+                INDArray arr = Nd4j.create(shape).castTo(DataType.INT);
 
                 Nd4j.getRandom().setSeed(12345);
                 SameDiff sd = SameDiff.create();
@@ -53,7 +69,7 @@ public class RandomOpValidation extends BaseOpValidation {
                 switch (i) {
                     case 0:
                         name = "randomUniform";
-                        rand = sd.randomUniform(1, 2, shapeVar);
+                        rand = sd.random().uniform(1, 2, shapeVar);
                         checkFn = in -> {
                             double min = in.minNumber().doubleValue();
                             double max = in.maxNumber().doubleValue();
@@ -65,7 +81,7 @@ public class RandomOpValidation extends BaseOpValidation {
                         break;
                     case 1:
                         name = "randomNormal";
-                        rand = sd.randomNormal(1, 1, shapeVar);
+                        rand = sd.random().normal(1, 1, shapeVar);
                         checkFn = in -> {
                             double mean = in.meanNumber().doubleValue();
                             double stdev = in.std(true).getDouble(0);
@@ -76,12 +92,12 @@ public class RandomOpValidation extends BaseOpValidation {
                         break;
                     case 2:
                         name = "randomBernoulli";
-                        rand = sd.randomBernoulli(0.5, shapeVar);
+                        rand = sd.random().bernoulli(0.5, shapeVar);
                         checkFn = in -> {
                             double mean = in.meanNumber().doubleValue();
                             double min = in.minNumber().doubleValue();
                             double max = in.maxNumber().doubleValue();
-                            int sum0 = Transforms.not(in.dup()).sumNumber().intValue();
+                            int sum0 = Transforms.not(in.castTo(DataType.BOOL)).castTo(DataType.DOUBLE).sumNumber().intValue();
                             int sum1 = in.sumNumber().intValue();
                             if ((in.length() == 1 && min == max && (min == 0 || min == 1)) ||
                                     (Math.abs(mean - 0.5) < 0.1 && min == 0 && max == 1 && (sum0 + sum1) == in.length()))
@@ -92,7 +108,7 @@ public class RandomOpValidation extends BaseOpValidation {
                     case 3:
                         name = "randomExponential";
                         final double lambda = 2;
-                        rand = sd.randomExponential(lambda, shapeVar);
+                        rand = sd.random().exponential(lambda, shapeVar);
                         checkFn = in -> {
                             double mean = in.meanNumber().doubleValue();
                             double min = in.minNumber().doubleValue();
@@ -118,7 +134,8 @@ public class RandomOpValidation extends BaseOpValidation {
                 TestCase tc = new TestCase(sd)
                         .gradCheckSkipVariables("shape")
                         .testName(msg)
-                        .expected(rand, checkFn);
+                        .expected(rand, checkFn)
+                        .testFlatBufferSerialization(TestCase.TestSerialization.NONE);  //Can't compare values due to randomness
 
                 log.info("TEST: " + msg);
 
@@ -134,8 +151,6 @@ public class RandomOpValidation extends BaseOpValidation {
 
     @Test
     public void testRandomOpsLongShape() {
-        OpValidationSuite.ignoreFailing();
-
         List<String> failed = new ArrayList<>();
 
         for (long[] shape : Arrays.asList(new long[]{1000}, new long[]{100, 10}, new long[]{40, 5, 5})) {
@@ -151,12 +166,12 @@ public class RandomOpValidation extends BaseOpValidation {
                 switch (i) {
                     case 0:
                         name = "randomBernoulli";
-                        rand = sd.randomBernoulli(0.5, shape);
+                        rand = sd.random().bernoulli(0.5, shape);
                         checkFn = in -> {
                             double mean = in.meanNumber().doubleValue();
                             double min = in.minNumber().doubleValue();
                             double max = in.maxNumber().doubleValue();
-                            int sum0 = Transforms.not(in.dup()).sumNumber().intValue();
+                            int sum0 = Transforms.not(in.castTo(DataType.BOOL)).castTo(DataType.DOUBLE).sumNumber().intValue();
                             int sum1 = in.sumNumber().intValue();
                             if ((in.length() == 1 && min == max && (min == 0 || min == 1)) ||
                                     (Math.abs(mean - 0.5) < 0.1 && min == 0 && max == 1 && (sum0 + sum1) == in.length()))
@@ -166,18 +181,18 @@ public class RandomOpValidation extends BaseOpValidation {
                         break;
                     case 1:
                         name = "normal";
-                        rand = sd.randomNormal(1, 2, shape);
+                        rand = sd.random().normal(1, 2, shape);
                         checkFn = in -> {
                             double mean = in.meanNumber().doubleValue();
                             double stdev = in.std(true).getDouble(0);
-                            if (in.length() == 1 || (Math.abs(mean - 1) < 0.1 && Math.abs(stdev - 2) < 0.1))
+                            if (in.length() == 1 || (Math.abs(mean - 1) < 0.2 && Math.abs(stdev - 2) < 0.1))
                                 return null;
                             return "Failed: mean = " + mean + ", stdev = " + stdev;
                         };
                         break;
                     case 2:
                         name = "randomBinomial";
-                        rand = sd.randomBinomial(4, 0.5, shape);
+                        rand = sd.random().binomial(4, 0.5, shape);
                         checkFn = in -> {
                             NdIndexIterator iter = new NdIndexIterator(in.shape());
                             while(iter.hasNext()){
@@ -192,7 +207,7 @@ public class RandomOpValidation extends BaseOpValidation {
                         break;
                     case 3:
                         name = "randomUniform";
-                        rand = sd.randomUniform(1, 2, shape);
+                        rand = sd.random().uniform(1, 2, shape);
                         checkFn = in -> {
                             double min = in.minNumber().doubleValue();
                             double max = in.maxNumber().doubleValue();
@@ -203,8 +218,12 @@ public class RandomOpValidation extends BaseOpValidation {
                         };
                         break;
                     case 4:
+                        if(OpValidationSuite.IGNORE_FAILING){
+                            //https://github.com/deeplearning4j/deeplearning4j/issues/6036
+                            continue;
+                        }
                         name = "truncatednormal";
-                        rand = sd.randomNormalTruncated(1, 2, shape);
+                        rand = sd.random().normalTruncated(1, 2, shape);
                         checkFn = in -> {
                             double mean = in.meanNumber().doubleValue();
                             double stdev = in.std(true).getDouble(0);
@@ -215,11 +234,13 @@ public class RandomOpValidation extends BaseOpValidation {
                         break;
                     case 5:
                         name = "lognormal";
-                        rand = sd.randomLogNormal(1, 2, shape);
+                        rand = sd.random().logNormal(1, 2, shape);
+                        //Note: lognormal parameters are mean and stdev of LOGARITHM of values
                         checkFn = in -> {
-                            double mean = in.meanNumber().doubleValue();
-                            double stdev = in.std(true).getDouble(0);
-                            if (in.length() == 1 || (Math.abs(mean - 1) < 0.1 && Math.abs(stdev - 2) < 0.1))
+                            INDArray log = Transforms.log(in, true);
+                            double mean = log.meanNumber().doubleValue();
+                            double stdev = log.std(true).getDouble(0);
+                            if (in.length() == 1 || (Math.abs(mean - 1) < 0.2 && Math.abs(stdev - 2) < 0.1))
                                 return null;
                             return "Failed: mean = " + mean + ", stdev = " + stdev;
                         };
@@ -239,7 +260,8 @@ public class RandomOpValidation extends BaseOpValidation {
                 TestCase tc = new TestCase(sd)
                         .gradCheckSkipVariables("shape")
                         .testName(msg)
-                        .expected(rand, checkFn);
+                        .expected(rand, checkFn)
+                        .testFlatBufferSerialization(TestCase.TestSerialization.NONE);  //Can't compare values due to randomness
 
                 log.info("TEST: " + msg);
 
@@ -276,7 +298,7 @@ public class RandomOpValidation extends BaseOpValidation {
 //        OpTestCase tc = new OpTestCase(new DistributionUniform(arr, Nd4j.createUninitialized(new long[]{100}), 0, 1));
         OpTestCase tc = new OpTestCase(new RandomBernoulli(arr, Nd4j.createUninitialized(new long[]{100}), 0.5));
 
-        tc.expectedOutput(0, new long[]{100}, in -> {
+        tc.expectedOutput(0, LongShapeDescriptor.fromShape(new long[]{100}, DataType.FLOAT), in -> {
             double min = in.minNumber().doubleValue();
             double max = in.maxNumber().doubleValue();
             double mean = in.meanNumber().doubleValue();
@@ -328,16 +350,16 @@ public class RandomOpValidation extends BaseOpValidation {
         };
 
         List<INDArray> exp = Arrays.asList(
-                Nd4j.trueVector(new double[]{3, 6, 9, 12, 15}),
-                Nd4j.trueVector(new double[]{3, 2.5, 2, 1.5}),
-                Nd4j.trueVector(new double[]{0, 1, 2, 3, 4}));
+                Nd4j.create(new double[]{3, 6, 9, 12, 15}).castTo(DataType.FLOAT),
+                Nd4j.create(new double[]{3, 2.5, 2, 1.5}).castTo(DataType.FLOAT),
+                Nd4j.create(new double[]{0, 1, 2, 3, 4}).castTo(DataType.FLOAT));
 
         for(int i=0; i<testCases.length; i++ ){
             double[] d = testCases[i];
             INDArray e = exp.get(i);
 
             SameDiff sd = SameDiff.create();
-            SDVariable range = sd.range(d[0], d[1], d[2]);
+            SDVariable range = sd.range(d[0], d[1], d[2], DataType.FLOAT);
 
             SDVariable loss = range.std(true);
 

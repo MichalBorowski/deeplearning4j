@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.jita.allocator.utils;
 
 import lombok.NonNull;
@@ -5,7 +21,9 @@ import org.bytedeco.javacpp.LongPointer;
 import org.nd4j.jita.allocator.impl.AllocationShape;
 import org.nd4j.jita.allocator.impl.AtomicAllocator;
 import org.nd4j.linalg.api.buffer.DataBuffer;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.ndarray.INDArray;
+import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.jcublas.buffer.CudaDoubleDataBuffer;
 import org.nd4j.linalg.jcublas.buffer.JCudaBuffer;
 
@@ -23,8 +41,7 @@ public class AllocationUtils {
         if (shape.getElementSize() > 0)
             return shape.getElementSize();
         else
-            return (shape.getDataType() == DataBuffer.Type.FLOAT ? 4
-                            : shape.getDataType() == DataBuffer.Type.DOUBLE ? 8 : 2);
+            return Nd4j.sizeOfDataType(shape.getDataType());
     }
 
     /**

@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.nn.layers.recurrent;
 
 import org.deeplearning4j.BaseDL4JTest;
@@ -18,6 +34,7 @@ import org.nd4j.linalg.activations.Activation;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.learning.config.NoOp;
+import org.nd4j.linalg.lossfunctions.LossFunctions;
 import org.nd4j.linalg.primitives.Pair;
 
 import java.util.Arrays;
@@ -41,7 +58,7 @@ public class TestRnnLayers extends BaseDL4JTest {
                 .list()
                 .layer(new SimpleRnn.Builder().nIn(nIn).nOut(3).build())
                 .layer(new LSTM.Builder().nIn(3).nOut(5).build())
-                .layer(new RnnOutputLayer.Builder().nOut(nOut).build())
+                .layer(new RnnOutputLayer.Builder().nOut(nOut).activation(Activation.SOFTMAX).build())
                 .build();
 
 
@@ -115,21 +132,21 @@ public class TestRnnLayers extends BaseDL4JTest {
                     .seed(12345)
                     .list()
                     .layer(layer)
-                    .layer(new RnnOutputLayer.Builder().activation(Activation.TANH).nIn(10).nOut(10).build())
+                    .layer(new RnnOutputLayer.Builder().activation(Activation.TANH).lossFunction(LossFunctions.LossFunction.MSE).nIn(10).nOut(10).build())
                     .build();
 
             MultiLayerConfiguration confD = new NeuralNetConfiguration.Builder()
                     .seed(12345)
                     .list()
                     .layer(layerD)
-                    .layer(new RnnOutputLayer.Builder().activation(Activation.TANH).nIn(10).nOut(10).build())
+                    .layer(new RnnOutputLayer.Builder().activation(Activation.TANH).lossFunction(LossFunctions.LossFunction.MSE).nIn(10).nOut(10).build())
                     .build();
 
             MultiLayerConfiguration confD2 = new NeuralNetConfiguration.Builder()
                     .seed(12345)
                     .list()
                     .layer(layerD2)
-                    .layer(new RnnOutputLayer.Builder().activation(Activation.TANH).nIn(10).nOut(10).build())
+                    .layer(new RnnOutputLayer.Builder().activation(Activation.TANH).lossFunction(LossFunctions.LossFunction.MSE).nIn(10).nOut(10).build())
                     .build();
 
             MultiLayerNetwork net = new MultiLayerNetwork(conf);

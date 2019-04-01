@@ -1,18 +1,18 @@
-/*
- *  * Copyright 2017 Skymind, Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
- */
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.datavec.hadoop.records.writer;
 
@@ -53,14 +53,17 @@ public class TestMapFileRecordWriter {
 
             File tempDirSingle = Files.createTempDir();
             File tempDirMultiple = Files.createTempDir();
+            File tempDirBatch = Files.createTempDir();
 
             tempDirSingle.deleteOnExit();
             tempDirMultiple.deleteOnExit();
+            tempDirBatch.deleteOnExit();
 
             WritableType textWritablesTo = convertWritables ? WritableType.Float : null;
 
             RecordWriter singlePartWriter = new MapFileRecordWriter(tempDirSingle, -1, textWritablesTo);
             RecordWriter multiPartWriter = new MapFileRecordWriter(tempDirMultiple, 30, textWritablesTo);
+            RecordWriter multiPartBatch = new MapFileRecordWriter(tempDirBatch, 30, textWritablesTo);
 
             RecordReader rr = new CSVRecordReader();
             ClassPathResource cpr = new ClassPathResource("iris.dat");
@@ -70,17 +73,26 @@ public class TestMapFileRecordWriter {
             rr.reset();
             RecordReaderConverter.convert(rr, multiPartWriter);
 
+            rr.reset();
+            List<List<Writable>> allLines = new ArrayList<>();
+            while(rr.hasNext()){allLines.add(rr.next());}
+            multiPartBatch.writeBatch(allLines);
+
             singlePartWriter.close();
             multiPartWriter.close();
+            multiPartBatch.close();
 
             RecordReader rr1 = new MapFileRecordReader();
             RecordReader rr2 = new MapFileRecordReader();
+            RecordReader rr3 = new MapFileRecordReader();
             rr1.initialize(new FileSplit(tempDirSingle));
             rr2.initialize(new FileSplit(tempDirMultiple));
+            rr3.initialize(new FileSplit(tempDirBatch));
 
             List<List<Writable>> exp = new ArrayList<>();
             List<List<Writable>> s1 = new ArrayList<>();
             List<List<Writable>> s2 = new ArrayList<>();
+            List<List<Writable>> s3 = new ArrayList<>();
 
             rr.reset();
             while (rr.hasNext()) {
@@ -93,6 +105,10 @@ public class TestMapFileRecordWriter {
 
             while (rr2.hasNext()) {
                 s2.add(rr2.next());
+            }
+
+            while (rr3.hasNext()) {
+                s3.add(rr3.next());
             }
 
             assertEquals(150, exp.size());
@@ -112,6 +128,7 @@ public class TestMapFileRecordWriter {
 
             assertEquals(exp, s1);
             assertEquals(exp, s2);
+            assertEquals(exp, s3);
 
 
             //By default: we won't be doing any conversion of text types. CsvRecordReader outputs Text writables

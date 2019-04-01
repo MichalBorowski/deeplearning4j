@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.jita.allocator.impl;
 
 import lombok.Getter;
@@ -25,6 +41,7 @@ import org.nd4j.jita.handler.impl.CudaZeroHandler;
 import org.nd4j.jita.workspace.CudaWorkspace;
 import org.nd4j.linalg.api.buffer.BaseDataBuffer;
 import org.nd4j.linalg.api.buffer.DataBuffer;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.memory.enums.MemoryKind;
 import org.nd4j.linalg.api.memory.pointers.PagedPointer;
 import org.nd4j.linalg.api.ndarray.INDArray;
@@ -59,7 +76,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  * And the backward movement, if memory isn't used anymore (like if originating INDArray was trashed by JVM GC), or it's not popular enough to hold in device memory
  *
  * Mechanism is as lock-free, as possible. This achieved using three-state memory state signalling: Tick/Tack/Toe.
- * Tick: memory chunk (or its part) is accessed on on device
+ * Tick: memory chunk (or its part) is accessed on device
  * Tack: memory chink (or its part) device access session was finished
  * Toe: memory chunk is locked for some reason. Possible reasons:
  *              Memory synchronization is ongoing, host->gpu or gpu->host
@@ -82,7 +99,7 @@ public class AtomicAllocator implements Allocator {
 
     private AtomicLong objectsTracker = new AtomicLong(0);
 
-    // we have single tracking point for allocation points, since we're not going to cycle through it it any time soon
+    // we have single tracking point for allocation points, since we're not going to cycle through it any time soon
     private Map<Long, AllocationPoint> allocationsMap = new ConcurrentHashMap<>();
 
     private static Logger log = LoggerFactory.getLogger(AtomicAllocator.class);
@@ -265,7 +282,7 @@ public class AtomicAllocator implements Allocator {
      * @param buffer
      */
     @Override
-    public Pointer getPointer(DataBuffer buffer, CudaContext context) {
+    public Pointer getPointer(@NonNull DataBuffer buffer, CudaContext context) {
         return memoryHandler.getDevicePointer(buffer, context);
     }
 
@@ -294,6 +311,9 @@ public class AtomicAllocator implements Allocator {
     @Override
     public Pointer getPointer(INDArray array, CudaContext context) {
         //    DataBuffer buffer = array.data().originalDataBuffer() == null ? array.data() : array.data().originalDataBuffer();
+        if (array.isEmpty())
+            return null;
+
         return memoryHandler.getDevicePointer(array.data(), context);
     }
 
@@ -304,6 +324,9 @@ public class AtomicAllocator implements Allocator {
      */
     @Override
     public Pointer getHostPointer(INDArray array) {
+        if (array.isEmpty())
+            return null;
+
         synchronizeHostData(array);
         return memoryHandler.getHostPointer(array.data());
     }
@@ -326,6 +349,9 @@ public class AtomicAllocator implements Allocator {
      */
     @Override
     public void synchronizeHostData(INDArray array) {
+        if (array.isEmpty())
+            return;
+
         DataBuffer buffer =
                         array.data().originalDataBuffer() == null ? array.data() : array.data().originalDataBuffer();
         synchronizeHostData(buffer);
@@ -453,6 +479,8 @@ public class AtomicAllocator implements Allocator {
             val pair = new PointersPair();
 
             val ptrDev = workspace.alloc(reqMem, MemoryKind.DEVICE, requiredMemory.getDataType(), initialize);
+            //val addr = ptrDev.address();
+            //log.info("Allocated device pointer: {}; Divider: {}; ReqMem: {}; ReqMem divider: {};", addr, addr % 8, reqMem, reqMem % 8);
             val ptrHost = workspace.alloc(reqMem, MemoryKind.HOST, requiredMemory.getDataType(), initialize);
 
             pair.setHostPointer(ptrHost);
@@ -1033,17 +1061,17 @@ public class AtomicAllocator implements Allocator {
 
     @Override
     public DataBuffer getConstantBuffer(int[] array) {
-        return Nd4j.getConstantHandler().getConstantBuffer(array);
+        return Nd4j.getConstantHandler().getConstantBuffer(array, DataType.INT);
     }
 
     @Override
     public DataBuffer getConstantBuffer(float[] array) {
-        return Nd4j.getConstantHandler().getConstantBuffer(array);
+        return Nd4j.getConstantHandler().getConstantBuffer(array, DataType.FLOAT);
     }
 
     @Override
     public DataBuffer getConstantBuffer(double[] array) {
-        return Nd4j.getConstantHandler().getConstantBuffer(array);
+        return Nd4j.getConstantHandler().getConstantBuffer(array, DataType.DOUBLE);
     }
 
     @Override

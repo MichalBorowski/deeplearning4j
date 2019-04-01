@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.nn.updater;
 
 
@@ -8,9 +24,7 @@ import org.deeplearning4j.nn.api.Updater;
 import org.deeplearning4j.nn.conf.ComputationGraphConfiguration;
 import org.deeplearning4j.nn.conf.MultiLayerConfiguration;
 import org.deeplearning4j.nn.conf.NeuralNetConfiguration;
-import org.deeplearning4j.nn.conf.layers.AutoEncoder;
-import org.deeplearning4j.nn.conf.layers.DenseLayer;
-import org.deeplearning4j.nn.conf.layers.OutputLayer;
+import org.deeplearning4j.nn.conf.layers.*;
 import org.deeplearning4j.nn.conf.layers.variational.VariationalAutoencoder;
 import org.deeplearning4j.nn.gradient.DefaultGradient;
 import org.deeplearning4j.nn.gradient.Gradient;
@@ -32,9 +46,12 @@ import org.nd4j.linalg.lossfunctions.LossFunctions;
 import org.nd4j.linalg.ops.transforms.Transforms;
 import org.deeplearning4j.nn.workspace.LayerWorkspaceMgr;
 
+import java.lang.reflect.Method;
 import java.util.*;
 
 import static org.junit.Assert.*;
+import static org.nd4j.linalg.indexing.NDArrayIndex.interval;
+import static org.nd4j.linalg.indexing.NDArrayIndex.point;
 
 public class TestUpdaters extends BaseDL4JTest {
 
@@ -51,9 +68,9 @@ public class TestUpdaters extends BaseDL4JTest {
 
     @Before
     public void beforeDo() {
-        gradients = Nd4j.ones(nIn * nOut + nOut);
-        weightGradient = gradients.get(NDArrayIndex.point(0), NDArrayIndex.interval(0, nIn * nOut));
-        biasGradient = gradients.get(NDArrayIndex.point(0), NDArrayIndex.interval(nIn * nOut, nIn * nOut + nOut));
+        gradients = Nd4j.ones(1, nIn * nOut + nOut);
+        weightGradient = gradients.get(point(0), interval(0, nIn * nOut));
+        biasGradient = gradients.get(point(0), interval(nIn * nOut, nIn * nOut + nOut));
         gradient.setGradientFor(DefaultParamInitializer.WEIGHT_KEY, weightGradient);
         gradient.setGradientFor(DefaultParamInitializer.BIAS_KEY, biasGradient);
         gradient.setFlattenedGradient(gradients);
@@ -85,8 +102,8 @@ public class TestUpdaters extends BaseDL4JTest {
 
         Gradient gradientCopyPreUpdate = new DefaultGradient();
         INDArray g = gradients.dup();
-        INDArray wg = g.get(NDArrayIndex.point(0), NDArrayIndex.interval(0, nIn * nOut));
-        INDArray bg = g.get(NDArrayIndex.point(0), NDArrayIndex.interval(nIn * nOut, nIn * nOut + nOut));
+        INDArray wg = g.get(point(0), interval(0, nIn * nOut));
+        INDArray bg = g.get(point(0), interval(nIn * nOut, nIn * nOut + nOut));
         gradientCopyPreUpdate.setGradientFor(DefaultParamInitializer.WEIGHT_KEY, wg);
         gradientCopyPreUpdate.setGradientFor(DefaultParamInitializer.BIAS_KEY, bg);
 
@@ -151,8 +168,8 @@ public class TestUpdaters extends BaseDL4JTest {
 
         Gradient gradientCopyPreUpdate = new DefaultGradient();
         INDArray g = gradients.dup();
-        INDArray wg = g.get(NDArrayIndex.point(0), NDArrayIndex.interval(0, nIn * nOut));
-        INDArray bg = g.get(NDArrayIndex.point(0), NDArrayIndex.interval(nIn * nOut, nIn * nOut + nOut));
+        INDArray wg = g.get(point(0), interval(0, nIn * nOut));
+        INDArray bg = g.get(point(0), interval(nIn * nOut, nIn * nOut + nOut));
         gradientCopyPreUpdate.setGradientFor(DefaultParamInitializer.WEIGHT_KEY, wg);
         gradientCopyPreUpdate.setGradientFor(DefaultParamInitializer.BIAS_KEY, bg);
 
@@ -203,8 +220,8 @@ public class TestUpdaters extends BaseDL4JTest {
 
         Gradient gradientCopyPreUpdate = new DefaultGradient();
         INDArray g = gradients.dup();
-        INDArray wg = g.get(NDArrayIndex.point(0), NDArrayIndex.interval(0, nIn * nOut));
-        INDArray bg = g.get(NDArrayIndex.point(0), NDArrayIndex.interval(nIn * nOut, nIn * nOut + nOut));
+        INDArray wg = g.get(point(0), interval(0, nIn * nOut));
+        INDArray bg = g.get(point(0), interval(nIn * nOut, nIn * nOut + nOut));
         gradientCopyPreUpdate.setGradientFor(DefaultParamInitializer.WEIGHT_KEY, wg);
         gradientCopyPreUpdate.setGradientFor(DefaultParamInitializer.BIAS_KEY, bg);
 
@@ -266,8 +283,8 @@ public class TestUpdaters extends BaseDL4JTest {
 
         Gradient gradientCopyPreUpdate = new DefaultGradient();
         INDArray g = gradients.dup();
-        INDArray wg = g.get(NDArrayIndex.point(0), NDArrayIndex.interval(0, nIn * nOut));
-        INDArray bg = g.get(NDArrayIndex.point(0), NDArrayIndex.interval(nIn * nOut, nIn * nOut + nOut));
+        INDArray wg = g.get(point(0), interval(0, nIn * nOut));
+        INDArray bg = g.get(point(0), interval(nIn * nOut, nIn * nOut + nOut));
         gradientCopyPreUpdate.setGradientFor(DefaultParamInitializer.WEIGHT_KEY, wg);
         gradientCopyPreUpdate.setGradientFor(DefaultParamInitializer.BIAS_KEY, bg);
 
@@ -357,8 +374,8 @@ public class TestUpdaters extends BaseDL4JTest {
 
         Gradient gradientCopyPreUpdate = new DefaultGradient();
         INDArray g = gradients.dup();
-        INDArray wg = g.get(NDArrayIndex.point(0), NDArrayIndex.interval(0, nIn * nOut));
-        INDArray bg = g.get(NDArrayIndex.point(0), NDArrayIndex.interval(nIn * nOut, nIn * nOut + nOut));
+        INDArray wg = g.get(point(0), interval(0, nIn * nOut));
+        INDArray bg = g.get(point(0), interval(nIn * nOut, nIn * nOut + nOut));
         gradientCopyPreUpdate.setGradientFor(DefaultParamInitializer.WEIGHT_KEY, wg);
         gradientCopyPreUpdate.setGradientFor(DefaultParamInitializer.BIAS_KEY, bg);
 
@@ -405,8 +422,8 @@ public class TestUpdaters extends BaseDL4JTest {
 
         Gradient gradientCopyPreUpdate = new DefaultGradient();
         INDArray g = gradients.dup();
-        INDArray wg = g.get(NDArrayIndex.point(0), NDArrayIndex.interval(0, nIn * nOut));
-        INDArray bg = g.get(NDArrayIndex.point(0), NDArrayIndex.interval(nIn * nOut, nIn * nOut + nOut));
+        INDArray wg = g.get(point(0), interval(0, nIn * nOut));
+        INDArray bg = g.get(point(0), interval(nIn * nOut, nIn * nOut + nOut));
         gradientCopyPreUpdate.setGradientFor(DefaultParamInitializer.WEIGHT_KEY, wg);
         gradientCopyPreUpdate.setGradientFor(DefaultParamInitializer.BIAS_KEY, bg);
 
@@ -453,8 +470,8 @@ public class TestUpdaters extends BaseDL4JTest {
 
         Gradient gradientCopyPreUpdate = new DefaultGradient();
         INDArray g = gradients.dup();
-        INDArray wg = g.get(NDArrayIndex.point(0), NDArrayIndex.interval(0, nIn * nOut));
-        INDArray bg = g.get(NDArrayIndex.point(0), NDArrayIndex.interval(nIn * nOut, nIn * nOut + nOut));
+        INDArray wg = g.get(point(0), interval(0, nIn * nOut));
+        INDArray bg = g.get(point(0), interval(nIn * nOut, nIn * nOut + nOut));
         gradientCopyPreUpdate.setGradientFor(DefaultParamInitializer.WEIGHT_KEY, wg);
         gradientCopyPreUpdate.setGradientFor(DefaultParamInitializer.BIAS_KEY, bg);
 
@@ -496,8 +513,8 @@ public class TestUpdaters extends BaseDL4JTest {
 
         Gradient gradientCopyPreUpdate = new DefaultGradient();
         INDArray g = gradients.dup();
-        INDArray wg = g.get(NDArrayIndex.point(0), NDArrayIndex.interval(0, nIn * nOut));
-        INDArray bg = g.get(NDArrayIndex.point(0), NDArrayIndex.interval(nIn * nOut, nIn * nOut + nOut));
+        INDArray wg = g.get(point(0), interval(0, nIn * nOut));
+        INDArray bg = g.get(point(0), interval(nIn * nOut, nIn * nOut + nOut));
         gradientCopyPreUpdate.setGradientFor(DefaultParamInitializer.WEIGHT_KEY, wg);
         gradientCopyPreUpdate.setGradientFor(DefaultParamInitializer.BIAS_KEY, bg);
 
@@ -534,8 +551,8 @@ public class TestUpdaters extends BaseDL4JTest {
             biasGradient.putScalar(i, r.nextDouble());
 
         INDArray g = gradients.dup();
-        INDArray wg = g.get(NDArrayIndex.point(0), NDArrayIndex.interval(0, nIn * nOut));
-        INDArray bg = g.get(NDArrayIndex.point(0), NDArrayIndex.interval(nIn * nOut, nIn * nOut + nOut));
+        INDArray wg = g.get(point(0), interval(0, nIn * nOut));
+        INDArray bg = g.get(point(0), interval(nIn * nOut, nIn * nOut + nOut));
         gradient.gradientForVariable().put(DefaultParamInitializer.WEIGHT_KEY, wg);
         gradient.gradientForVariable().put(DefaultParamInitializer.BIAS_KEY, bg);
 
@@ -662,9 +679,9 @@ public class TestUpdaters extends BaseDL4JTest {
                                         .updater(new NoOp()).build())
                         .layer(2, new DenseLayer.Builder().nIn(6).nOut(7)
                                         .updater(org.deeplearning4j.nn.conf.Updater.ADAGRAD).build())
-                        .layer(3, new OutputLayer.Builder().nIn(7).nOut(nOut)
+                        .layer(3, new OutputLayer.Builder().nIn(7).nOut(nOut).activation(Activation.SOFTMAX)
                                         .updater(org.deeplearning4j.nn.conf.Updater.NESTEROVS).build())
-                        .backprop(true).pretrain(false).build();
+                        .build();
 
         MultiLayerNetwork net = new MultiLayerNetwork(conf);
         net.init();
@@ -693,9 +710,9 @@ public class TestUpdaters extends BaseDL4JTest {
                                         .updater(new NoOp()).build())
                         .layer(2, new DenseLayer.Builder().nIn(6).nOut(7)
                                         .updater(org.deeplearning4j.nn.conf.Updater.ADAGRAD).build())
-                        .layer(3, new OutputLayer.Builder().nIn(7).nOut(nOut)
+                        .layer(3, new OutputLayer.Builder().nIn(7).nOut(nOut).activation(Activation.SOFTMAX)
                                         .updater(org.deeplearning4j.nn.conf.Updater.NESTEROVS).build())
-                        .backprop(true).pretrain(false).build();
+                        .build();
 
         MultiLayerNetwork net = new MultiLayerNetwork(conf);
         net.init();
@@ -708,11 +725,11 @@ public class TestUpdaters extends BaseDL4JTest {
     @Test
     public void testPretrain() {
 
-        gradients = Nd4j.ones(nIn * nOut + nOut + nIn);
-        weightGradient = gradients.get(NDArrayIndex.point(0), NDArrayIndex.interval(0, nIn * nOut));
-        biasGradient = gradients.get(NDArrayIndex.point(0), NDArrayIndex.interval(nIn * nOut, nIn * nOut + nOut));
-        INDArray vbiasGradient = gradients.get(NDArrayIndex.point(0),
-                        NDArrayIndex.interval(nIn * nOut + nOut, nIn * nOut + nOut + nIn));
+        gradients = Nd4j.ones(1, nIn * nOut + nOut + nIn);
+        weightGradient = gradients.get(point(0), interval(0, nIn * nOut));
+        biasGradient = gradients.get(point(0), interval(nIn * nOut, nIn * nOut + nOut));
+        INDArray vbiasGradient = gradients.get(point(0),
+                        interval(nIn * nOut + nOut, nIn * nOut + nOut + nIn));
         gradient.setFlattenedGradient(gradients);
 
 
@@ -729,7 +746,6 @@ public class TestUpdaters extends BaseDL4JTest {
                                         .activation(Activation.IDENTITY).nIn(nIn).nOut(nOut).build())
                         .build();
         long numParams = conf.getLayer().initializer().numParams(conf);
-        conf.setPretrain(true);
         INDArray params = Nd4j.create(1, numParams);
         BaseLayer layer = (BaseLayer) conf.getLayer().instantiate(conf, null, 0, params, true);
         layer.setBackpropGradientsViewArray(gradients);
@@ -737,9 +753,9 @@ public class TestUpdaters extends BaseDL4JTest {
 
         DefaultGradient gradientCopyPreUpdate = new DefaultGradient();
         INDArray g = gradients.dup();
-        INDArray wg = g.get(NDArrayIndex.point(0), NDArrayIndex.interval(0, nIn * nOut));
-        INDArray bg = g.get(NDArrayIndex.point(0), NDArrayIndex.interval(nIn * nOut, nIn * nOut + nOut));
-        INDArray vbg = g.get(NDArrayIndex.point(0), NDArrayIndex.interval(nIn * nOut + nOut, nIn * nOut + nOut + nIn));
+        INDArray wg = g.get(point(0), interval(0, nIn * nOut));
+        INDArray bg = g.get(point(0), interval(nIn * nOut, nIn * nOut + nOut));
+        INDArray vbg = g.get(point(0), interval(nIn * nOut + nOut, nIn * nOut + nOut + nIn));
         gradientCopyPreUpdate.setGradientFor(DefaultParamInitializer.WEIGHT_KEY, wg);
         gradientCopyPreUpdate.setGradientFor(DefaultParamInitializer.BIAS_KEY, bg);
         gradientCopyPreUpdate.setGradientFor(PretrainParamInitializer.VISIBLE_BIAS_KEY, vbg);
@@ -755,11 +771,11 @@ public class TestUpdaters extends BaseDL4JTest {
 
 
         //Test with pretrain == false
-        gradients = Nd4j.ones(nIn * nOut + nOut + nIn);
-        weightGradient = gradients.get(NDArrayIndex.point(0), NDArrayIndex.interval(0, nIn * nOut));
-        biasGradient = gradients.get(NDArrayIndex.point(0), NDArrayIndex.interval(nIn * nOut, nIn * nOut + nOut));
-        vbiasGradient = gradients.get(NDArrayIndex.point(0),
-                        NDArrayIndex.interval(nIn * nOut + nOut, nIn * nOut + nOut + nIn));
+        gradients = Nd4j.ones(1, nIn * nOut + nOut + nIn);
+        weightGradient = gradients.get(point(0), interval(0, nIn * nOut));
+        biasGradient = gradients.get(point(0), interval(nIn * nOut, nIn * nOut + nOut));
+        vbiasGradient = gradients.get(point(0),
+                        interval(nIn * nOut + nOut, nIn * nOut + nOut + nIn));
         gradient.setGradientFor(DefaultParamInitializer.WEIGHT_KEY, weightGradient);
         gradient.setGradientFor(DefaultParamInitializer.BIAS_KEY, biasGradient);
         gradient.setGradientFor(PretrainParamInitializer.VISIBLE_BIAS_KEY, vbiasGradient);
@@ -767,34 +783,18 @@ public class TestUpdaters extends BaseDL4JTest {
 
         gradientCopyPreUpdate = new DefaultGradient();
         g = gradients.dup();
-        wg = g.get(NDArrayIndex.point(0), NDArrayIndex.interval(0, nIn * nOut));
-        bg = g.get(NDArrayIndex.point(0), NDArrayIndex.interval(nIn * nOut, nIn * nOut + nOut));
-        vbg = g.get(NDArrayIndex.point(0), NDArrayIndex.interval(nIn * nOut + nOut, nIn * nOut + nOut + nIn));
+        wg = g.get(point(0), interval(0, nIn * nOut));
+        bg = g.get(point(0), interval(nIn * nOut, nIn * nOut + nOut));
+        vbg = g.get(point(0), interval(nIn * nOut + nOut, nIn * nOut + nOut + nIn));
         gradientCopyPreUpdate.setGradientFor(DefaultParamInitializer.WEIGHT_KEY, wg);
         gradientCopyPreUpdate.setGradientFor(DefaultParamInitializer.BIAS_KEY, bg);
         gradientCopyPreUpdate.setGradientFor(PretrainParamInitializer.VISIBLE_BIAS_KEY, vbg);
         gradientCopyPreUpdate.setFlattenedGradient(g);
 
-        conf.setPretrain(false);
         params = Nd4j.create(1, numParams);
         layer = (BaseLayer) conf.getLayer().instantiate(conf, null, 0, params, true);
         layer.setBackpropGradientsViewArray(gradients);
         updater = UpdaterCreator.getUpdater(layer);
-
-        updater.update(layer, gradient, -1, 0, 1, LayerWorkspaceMgr.noWorkspaces());
-
-        for (Map.Entry<String, INDArray> entry : gradientCopyPreUpdate.gradientForVariable().entrySet()) {
-            //            System.out.println(entry.getKey());
-            val = entry.getValue();
-            if (!entry.getKey().equals("vb")) {
-                gradExpected = val.mul(lr);
-            } else {
-                //With pretrain == false, we shouldn't be updating the pretrain params (vb)
-                gradExpected = val;
-            }
-            //            System.out.println(gradExpected + "\t" + gradient.getGradientFor(entry.getKey()));
-            assertEquals(gradExpected, gradient.getGradientFor(entry.getKey()));
-        }
         assertEquals(lr, ((Sgd)layer.layerConf().getIUpdater()).getLearningRate(), 1e-4);
     }
 
@@ -814,7 +814,7 @@ public class TestUpdaters extends BaseDL4JTest {
                                                 .updater(new AdaDelta()).build())
                                 .layer(3, new DenseLayer.Builder().nIn(10).nOut(10).name("l3")
                                                 .updater(new AdaGrad(0.5)).build())
-                                .layer(4, new OutputLayer.Builder().nIn(10).nOut(10).name("l4")
+                                .layer(4, new OutputLayer.Builder().nIn(10).nOut(10).name("l4").activation(Activation.SOFTMAX)
                                                 .updater(new AdaMax(0.5)).build())
                                 .build();
 
@@ -836,6 +836,7 @@ public class TestUpdaters extends BaseDL4JTest {
                                 .addLayer("l3", new DenseLayer.Builder().nIn(10).nOut(10)
                                                 .updater(new AdaGrad(0.5)).build(), "l2")
                                 .addLayer("l4", new OutputLayer.Builder().nIn(10).nOut(10)
+                                                .activation(Activation.SOFTMAX)
                                                 .updater(new AdaMax(0.5)).build(), "l3")
                                 .setOutputs("l4").build();
 
@@ -855,11 +856,11 @@ public class TestUpdaters extends BaseDL4JTest {
             //Check first updater block:
             UpdaterBlock ub0 = blocks.get(0);
             assertEquals(3, ub0.getLayersAndVariablesInBlock().size());
-            assertEquals("l0", ub0.getLayersAndVariablesInBlock().get(0).getLayer().conf().getLayer().getLayerName());
+            assertEquals("l0", ub0.getLayersAndVariablesInBlock().get(0).getLayer().getConfig().getLayerName());
             assertEquals(DefaultParamInitializer.WEIGHT_KEY, ub0.getLayersAndVariablesInBlock().get(0).getParamName());
-            assertEquals("l0", ub0.getLayersAndVariablesInBlock().get(1).getLayer().conf().getLayer().getLayerName());
+            assertEquals("l0", ub0.getLayersAndVariablesInBlock().get(1).getLayer().getConfig().getLayerName());
             assertEquals(DefaultParamInitializer.BIAS_KEY, ub0.getLayersAndVariablesInBlock().get(1).getParamName());
-            assertEquals("l1", ub0.getLayersAndVariablesInBlock().get(2).getLayer().conf().getLayer().getLayerName());
+            assertEquals("l1", ub0.getLayersAndVariablesInBlock().get(2).getLayer().getConfig().getLayerName());
             assertEquals(DefaultParamInitializer.WEIGHT_KEY, ub0.getLayersAndVariablesInBlock().get(2).getParamName());
 
             int nParams0 = 10 * 10 + 10 + 10 * 10;
@@ -872,7 +873,7 @@ public class TestUpdaters extends BaseDL4JTest {
             //Check second updater block:
             UpdaterBlock ub1 = blocks.get(1);
             assertEquals(1, ub1.getLayersAndVariablesInBlock().size());
-            assertEquals("l1", ub1.getLayersAndVariablesInBlock().get(0).getLayer().conf().getLayer().getLayerName());
+            assertEquals("l1", ub1.getLayersAndVariablesInBlock().get(0).getLayer().getConfig().getLayerName());
             assertEquals(DefaultParamInitializer.BIAS_KEY, ub1.getLayersAndVariablesInBlock().get(0).getParamName());
 
             int nParams1 = 10;
@@ -885,9 +886,9 @@ public class TestUpdaters extends BaseDL4JTest {
             //Check third updater block:
             UpdaterBlock ub2 = blocks.get(2);
             assertEquals(2, ub2.getLayersAndVariablesInBlock().size());
-            assertEquals("l2", ub2.getLayersAndVariablesInBlock().get(0).getLayer().conf().getLayer().getLayerName());
+            assertEquals("l2", ub2.getLayersAndVariablesInBlock().get(0).getLayer().getConfig().getLayerName());
             assertEquals(DefaultParamInitializer.WEIGHT_KEY, ub2.getLayersAndVariablesInBlock().get(0).getParamName());
-            assertEquals("l2", ub2.getLayersAndVariablesInBlock().get(1).getLayer().conf().getLayer().getLayerName());
+            assertEquals("l2", ub2.getLayersAndVariablesInBlock().get(1).getLayer().getConfig().getLayerName());
             assertEquals(DefaultParamInitializer.BIAS_KEY, ub2.getLayersAndVariablesInBlock().get(1).getParamName());
 
             int nParams2 = 10 * 10 + 10;
@@ -900,9 +901,9 @@ public class TestUpdaters extends BaseDL4JTest {
             //Check fourth updater block:
             UpdaterBlock ub3 = blocks.get(3);
             assertEquals(2, ub3.getLayersAndVariablesInBlock().size());
-            assertEquals("l3", ub3.getLayersAndVariablesInBlock().get(0).getLayer().conf().getLayer().getLayerName());
+            assertEquals("l3", ub3.getLayersAndVariablesInBlock().get(0).getLayer().getConfig().getLayerName());
             assertEquals(DefaultParamInitializer.WEIGHT_KEY, ub3.getLayersAndVariablesInBlock().get(0).getParamName());
-            assertEquals("l3", ub3.getLayersAndVariablesInBlock().get(1).getLayer().conf().getLayer().getLayerName());
+            assertEquals("l3", ub3.getLayersAndVariablesInBlock().get(1).getLayer().getConfig().getLayerName());
             assertEquals(DefaultParamInitializer.BIAS_KEY, ub3.getLayersAndVariablesInBlock().get(1).getParamName());
 
             int nParams3 = 10 * 10 + 10;
@@ -915,9 +916,9 @@ public class TestUpdaters extends BaseDL4JTest {
             //Check fifth updater black
             UpdaterBlock ub4 = blocks.get(4);
             assertEquals(2, ub4.getLayersAndVariablesInBlock().size());
-            assertEquals("l4", ub4.getLayersAndVariablesInBlock().get(0).getLayer().conf().getLayer().getLayerName());
+            assertEquals("l4", ub4.getLayersAndVariablesInBlock().get(0).getLayer().getConfig().getLayerName());
             assertEquals(DefaultParamInitializer.WEIGHT_KEY, ub4.getLayersAndVariablesInBlock().get(0).getParamName());
-            assertEquals("l4", ub4.getLayersAndVariablesInBlock().get(1).getLayer().conf().getLayer().getLayerName());
+            assertEquals("l4", ub4.getLayersAndVariablesInBlock().get(1).getLayer().getConfig().getLayerName());
             assertEquals(DefaultParamInitializer.BIAS_KEY, ub4.getLayersAndVariablesInBlock().get(1).getParamName());
 
             int nParams4 = 10 * 10 + 10;
@@ -970,5 +971,139 @@ public class TestUpdaters extends BaseDL4JTest {
             actParams.add(vs.getParamName());
         }
         assertEquals(expParams, actParams);
+    }
+
+
+    @Test
+    public void testDivisionByMinibatch1(){
+        //No batch norm - should be single INDArray equal to flattened gradient view
+
+        MultiLayerConfiguration conf = new NeuralNetConfiguration.Builder()
+                .list()
+                .layer(new DenseLayer.Builder().nIn(10).nOut(10).build())
+                .layer(new DenseLayer.Builder().nIn(10).nOut(10).build())
+                .layer(new OutputLayer.Builder().nIn(10).nOut(10).activation(Activation.SOFTMAX).build())
+                .build();
+
+        MultiLayerNetwork net = new MultiLayerNetwork(conf);
+        net.init();
+
+        net.fit(Nd4j.create(1,10), Nd4j.create(1,10));
+
+        BaseMultiLayerUpdater u = (BaseMultiLayerUpdater) net.getUpdater();
+        List<INDArray> l = u.getGradientsForMinibatchDivision();
+        assertNotNull(l);
+        assertEquals(1, l.size());
+
+        INDArray arr = l.get(0);
+        assertEquals(3 * (10 * 10 + 10), arr.length());
+        assertEquals(net.getFlattenedGradients(), arr);
+    }
+
+    @Test
+    public void testDivisionByMinibatch2(){
+        //With batch norm - should be multiple 'division by minibatch' array segments
+        //i.e., exclude batch norm mean/variance
+
+        MultiLayerConfiguration conf = new NeuralNetConfiguration.Builder()
+                .list()
+                .layer(new DenseLayer.Builder().nIn(10).nOut(9).build())
+                .layer(new BatchNormalization.Builder().nOut(9).build())
+                .layer(new DenseLayer.Builder().nIn(9).nOut(8).build())
+                .layer(new BatchNormalization.Builder().nOut(8).build())
+                .layer(new OutputLayer.Builder().nIn(8).nOut(7).activation(Activation.SOFTMAX).build())
+                .build();
+
+        MultiLayerNetwork net = new MultiLayerNetwork(conf);
+        net.init();
+
+        net.fit(Nd4j.create(1,10), Nd4j.create(1,7));
+
+        BaseMultiLayerUpdater u = (BaseMultiLayerUpdater) net.getUpdater();
+        List<INDArray> l = u.getGradientsForMinibatchDivision();
+        assertNotNull(l);
+        assertEquals(3, l.size());  //3 segments
+
+        //First subset: 0_W, 0_b, 1_gamma, 1_beta           Size    10x9 + 9 + 2x9
+        //Then excluding 1_mean, 1_var
+        //Second subset: 2_W, 2_b, 3_gamma, 3_beta          Size    9x8 + 8 + 2x8
+        //Then excluding 3_mean, 3_var
+        //Third subset: 4_W, 4_b                            Size    8x7 + 7
+
+        assertEquals(10*9 + 9 + 2*9, l.get(0).length());
+        assertEquals(9*8 + 8 + 2*8, l.get(1).length());
+        assertEquals(8*7 + 7, l.get(2).length());
+
+        INDArray view = ((BaseMultiLayerUpdater) net.getUpdater()).getFlattenedGradientsView();
+        view.assign(Nd4j.linspace(1, view.length(), view.length(), Nd4j.dataType()));
+
+        INDArray expView1 = view.get(point(0), interval(0, 10*9 + 9 + 2*9));
+        assertEquals(expView1, l.get(0));
+
+        long start2 = (10*9 + 9 + 2*9) + 2*9;
+        long length2 = 9*8 + 8 + 2*8;
+        INDArray expView2 = view.get(point(0), interval(start2, start2 + length2));
+        assertEquals(expView2, l.get(1));
+
+        long start3 = start2 + length2 + 2*8;
+        long length3 = 8*7 + 7;
+        INDArray expView3 = view.get(point(0), interval(start3, start3 + length3));
+        assertEquals(expView3, l.get(2));
+    }
+
+    @Test
+    public void testDivisionByMinibatch3() throws Exception{
+        //With batch norm - should be multiple 'division by minibatch' array segments
+        //i.e., exclude batch norm mean/variance
+
+        MultiLayerConfiguration conf = new NeuralNetConfiguration.Builder()
+                .list()
+                .layer(new BatchNormalization.Builder().nOut(6).build())
+                .layer(new ConvolutionLayer.Builder().nIn(6).nOut(5).kernelSize(2,2).build())
+                .layer(new BatchNormalization.Builder().nOut(5).build())
+                .layer(new ConvolutionLayer.Builder().nIn(5).nOut(4).kernelSize(2,2).build())
+                .layer(new BatchNormalization.Builder().nOut(4).build())
+                .build();
+
+        MultiLayerNetwork net = new MultiLayerNetwork(conf);
+        net.init();
+
+
+        BaseMultiLayerUpdater u = (BaseMultiLayerUpdater) net.getUpdater();
+
+        Method m = BaseMultiLayerUpdater.class.getDeclaredMethod("divideByMinibatch", boolean.class, Gradient.class, int.class);
+        m.setAccessible(true);
+        m.invoke(u, false, null, 32);
+
+        List<INDArray> l = u.getGradientsForMinibatchDivision();
+        assertNotNull(l);
+        assertEquals(3, l.size());  //3 segments
+
+        //First subset: 0_gamma, 0_beta,                    2x6
+        //Then excluding 0_mean, 0_var
+        //Second subset: 1_b, 1_W, 2_gamma, 2_beta          (6x5x2x2) + 5 + 2x5
+        //Then excluding 2_mean, 2_var
+        //Third subset: 3_b, 3_W, 4_gamma, 4_beta           (5*4*2*2) + 4 + 2*4
+        //Then excluding 4_mean, 4_beta
+
+        assertEquals(2*6, l.get(0).length());
+        assertEquals(6*5*2*2 + 5 + 2*5, l.get(1).length());
+        assertEquals(5*4*2*2 + 4 + 2*4, l.get(2).length());
+
+        INDArray view = ((BaseMultiLayerUpdater) net.getUpdater()).getFlattenedGradientsView();
+        view.assign(Nd4j.linspace(1, view.length(), view.length(), Nd4j.dataType()));
+
+        INDArray expView1 = view.get(point(0), interval(0, 2*6));
+        assertEquals(expView1, l.get(0));
+
+        long start2 = 2*6 + 2*6;
+        long length2 = 6*5*2*2 + 5 + 2*5;
+        INDArray expView2 = view.get(point(0), interval(start2, start2 + length2));
+        assertEquals(expView2, l.get(1));
+
+        long start3 = start2 + length2 + 2*5;
+        long length3 = 5*4*2*2 + 4 + 2*4;
+        INDArray expView3 = view.get(point(0), interval(start3, start3 + length3));
+        assertEquals(expView3, l.get(2));
     }
 }

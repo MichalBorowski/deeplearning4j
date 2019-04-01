@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.gradientcheck;
 
 import org.deeplearning4j.BaseDL4JTest;
@@ -24,7 +40,7 @@ import org.deeplearning4j.nn.multilayer.MultiLayerNetwork;
 import org.deeplearning4j.nn.weights.WeightInit;
 import org.junit.Test;
 import org.nd4j.linalg.activations.Activation;
-import org.nd4j.linalg.api.buffer.DataBuffer;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.dataset.DataSet;
 import org.nd4j.linalg.factory.Nd4j;
@@ -45,10 +61,10 @@ public class GradientCheckTestsComputationGraph extends BaseDL4JTest {
     private static final boolean RETURN_ON_FIRST_FAILURE = false;
     private static final double DEFAULT_EPS = 1e-6;
     private static final double DEFAULT_MAX_REL_ERROR = 1e-3;
-    private static final double DEFAULT_MIN_ABS_ERROR = 1e-10;
+    private static final double DEFAULT_MIN_ABS_ERROR = 1e-9;
 
     static {
-        Nd4j.setDataType(DataBuffer.Type.DOUBLE);
+        Nd4j.setDataType(DataType.DOUBLE);
     }
 
     @Test
@@ -56,7 +72,7 @@ public class GradientCheckTestsComputationGraph extends BaseDL4JTest {
         Nd4j.getRandom().setSeed(12345);
         ComputationGraphConfiguration conf = new NeuralNetConfiguration.Builder().seed(12345)
                         .optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT)
-                        .weightInit(WeightInit.DISTRIBUTION).dist(new NormalDistribution(0, 1)).updater(new NoOp())
+                        .dist(new NormalDistribution(0, 1)).updater(new NoOp())
                         .graphBuilder().addInputs("input")
                         .addLayer("firstLayer",
                                         new DenseLayer.Builder().nIn(4).nOut(5).activation(Activation.TANH).build(),
@@ -65,21 +81,21 @@ public class GradientCheckTestsComputationGraph extends BaseDL4JTest {
                                         new OutputLayer.Builder().lossFunction(LossFunctions.LossFunction.MCXENT)
                                                         .activation(Activation.SOFTMAX).nIn(5).nOut(3).build(),
                                         "firstLayer")
-                        .setOutputs("outputLayer").pretrain(false).backprop(true).build();
+                        .setOutputs("outputLayer").build();
 
         ComputationGraph graph = new ComputationGraph(conf);
         graph.init();
 
         Nd4j.getRandom().setSeed(12345);
-        int nParams = graph.numParams();
-        INDArray newParams = Nd4j.rand(1, nParams);
+        long nParams = graph.numParams();
+        INDArray newParams = Nd4j.rand(new long[]{1, nParams});
         graph.setParams(newParams);
 
         DataSet ds = new IrisDataSetIterator(150, 150).next();
-        INDArray min = ds.getFeatureMatrix().min(0);
-        INDArray max = ds.getFeatureMatrix().max(0);
-        ds.getFeatureMatrix().subiRowVector(min).diviRowVector(max.sub(min));
-        INDArray input = ds.getFeatureMatrix();
+        INDArray min = ds.getFeatures().min(0);
+        INDArray max = ds.getFeatures().max(0);
+        ds.getFeatures().subiRowVector(min).diviRowVector(max.sub(min));
+        INDArray input = ds.getFeatures();
         INDArray labels = ds.getLabels();
 
         if (PRINT_RESULTS) {
@@ -102,7 +118,7 @@ public class GradientCheckTestsComputationGraph extends BaseDL4JTest {
         Nd4j.getRandom().setSeed(12345);
         ComputationGraphConfiguration conf = new NeuralNetConfiguration.Builder().seed(12345)
                         .optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT)
-                        .weightInit(WeightInit.DISTRIBUTION).dist(new NormalDistribution(0, 1)).updater(new NoOp())
+                        .dist(new NormalDistribution(0, 1)).updater(new NoOp())
                         .graphBuilder().addInputs("input")
                         .addLayer("l1", new DenseLayer.Builder().nIn(4).nOut(5).activation(Activation.TANH).build(),
                                         "input")
@@ -113,7 +129,7 @@ public class GradientCheckTestsComputationGraph extends BaseDL4JTest {
                                         new OutputLayer.Builder().lossFunction(LossFunctions.LossFunction.MCXENT)
                                                         .activation(Activation.SOFTMAX).nIn(5 + 5).nOut(3).build(),
                                         "merge")
-                        .setOutputs("outputLayer").pretrain(false).backprop(true).build();
+                        .setOutputs("outputLayer").build();
 
         ComputationGraph graph = new ComputationGraph(conf);
         graph.init();
@@ -122,15 +138,15 @@ public class GradientCheckTestsComputationGraph extends BaseDL4JTest {
         assertEquals(numParams, graph.numParams());
 
         Nd4j.getRandom().setSeed(12345);
-        int nParams = graph.numParams();
-        INDArray newParams = Nd4j.rand(1, nParams);
+        long nParams = graph.numParams();
+        INDArray newParams = Nd4j.rand(new long[]{1, nParams});
         graph.setParams(newParams);
 
         DataSet ds = new IrisDataSetIterator(150, 150).next();
-        INDArray min = ds.getFeatureMatrix().min(0);
-        INDArray max = ds.getFeatureMatrix().max(0);
-        ds.getFeatureMatrix().subiRowVector(min).diviRowVector(max.sub(min));
-        INDArray input = ds.getFeatureMatrix();
+        INDArray min = ds.getFeatures().min(0);
+        INDArray max = ds.getFeatures().max(0);
+        ds.getFeatures().subiRowVector(min).diviRowVector(max.sub(min));
+        INDArray input = ds.getFeatures();
         INDArray labels = ds.getLabels();
 
         if (PRINT_RESULTS) {
@@ -159,7 +175,7 @@ public class GradientCheckTestsComputationGraph extends BaseDL4JTest {
             Nd4j.getRandom().setSeed(12345);
             ComputationGraphConfiguration conf = new NeuralNetConfiguration.Builder().seed(12345)
                             .optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT)
-                            .weightInit(WeightInit.DISTRIBUTION).dist(new NormalDistribution(0, 1))
+                            .dist(new NormalDistribution(0, 1))
                             .updater(new NoOp()).graphBuilder().addInputs("input")
                             .addLayer("l1", new DenseLayer.Builder().nIn(4).nOut(5).activation(Activation.TANH).build(),
                                             "input")
@@ -170,7 +186,7 @@ public class GradientCheckTestsComputationGraph extends BaseDL4JTest {
                                             new OutputLayer.Builder().lossFunction(LossFunctions.LossFunction.MCXENT)
                                                             .activation(Activation.SOFTMAX).nIn(5).nOut(3).build(),
                                             "elementwise")
-                            .setOutputs("outputLayer").pretrain(false).backprop(true).build();
+                            .setOutputs("outputLayer").build();
 
             ComputationGraph graph = new ComputationGraph(conf);
             graph.init();
@@ -179,15 +195,15 @@ public class GradientCheckTestsComputationGraph extends BaseDL4JTest {
             assertEquals(numParams, graph.numParams());
 
             Nd4j.getRandom().setSeed(12345);
-            int nParams = graph.numParams();
-            INDArray newParams = Nd4j.rand(1, nParams);
+            long nParams = graph.numParams();
+            INDArray newParams = Nd4j.rand(new long[]{1, nParams});
             graph.setParams(newParams);
 
             DataSet ds = new IrisDataSetIterator(150, 150).next();
-            INDArray min = ds.getFeatureMatrix().min(0);
-            INDArray max = ds.getFeatureMatrix().max(0);
-            ds.getFeatureMatrix().subiRowVector(min).diviRowVector(max.sub(min));
-            INDArray input = ds.getFeatureMatrix();
+            INDArray min = ds.getFeatures().min(0);
+            INDArray max = ds.getFeatures().max(0);
+            ds.getFeatures().subiRowVector(min).diviRowVector(max.sub(min));
+            INDArray input = ds.getFeatures();
             INDArray labels = ds.getLabels();
 
             if (PRINT_RESULTS) {
@@ -217,7 +233,7 @@ public class GradientCheckTestsComputationGraph extends BaseDL4JTest {
             Nd4j.getRandom().setSeed(12345);
             ComputationGraphConfiguration conf = new NeuralNetConfiguration.Builder().seed(12345)
                             .optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT)
-                            .weightInit(WeightInit.DISTRIBUTION).dist(new NormalDistribution(0, 1))
+                            .dist(new NormalDistribution(0, 1))
                             .updater(new NoOp()).graphBuilder().addInputs("input")
                             .addLayer("l1", new DenseLayer.Builder().nIn(4).nOut(5).activation(Activation.TANH).build(),
                                             "input")
@@ -230,7 +246,7 @@ public class GradientCheckTestsComputationGraph extends BaseDL4JTest {
                                             new OutputLayer.Builder().lossFunction(LossFunctions.LossFunction.MCXENT)
                                                             .activation(Activation.SOFTMAX).nIn(5).nOut(3).build(),
                                             "elementwise")
-                            .setOutputs("outputLayer").pretrain(false).backprop(true).build();
+                            .setOutputs("outputLayer").build();
 
             ComputationGraph graph = new ComputationGraph(conf);
             graph.init();
@@ -239,15 +255,15 @@ public class GradientCheckTestsComputationGraph extends BaseDL4JTest {
             assertEquals(numParams, graph.numParams());
 
             Nd4j.getRandom().setSeed(12345);
-            int nParams = graph.numParams();
-            INDArray newParams = Nd4j.rand(1, nParams);
+            long nParams = graph.numParams();
+            INDArray newParams = Nd4j.rand(new long[]{1, nParams});
             graph.setParams(newParams);
 
             DataSet ds = new IrisDataSetIterator(150, 150).next();
-            INDArray min = ds.getFeatureMatrix().min(0);
-            INDArray max = ds.getFeatureMatrix().max(0);
-            ds.getFeatureMatrix().subiRowVector(min).diviRowVector(max.sub(min));
-            INDArray input = ds.getFeatureMatrix();
+            INDArray min = ds.getFeatures().min(0);
+            INDArray max = ds.getFeatures().max(0);
+            ds.getFeatures().subiRowVector(min).diviRowVector(max.sub(min));
+            INDArray input = ds.getFeatures();
             INDArray labels = ds.getLabels();
 
             if (PRINT_RESULTS) {
@@ -272,7 +288,7 @@ public class GradientCheckTestsComputationGraph extends BaseDL4JTest {
         Nd4j.getRandom().setSeed(12345);
         ComputationGraphConfiguration conf = new NeuralNetConfiguration.Builder().seed(12345)
                         .optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT)
-                        .weightInit(WeightInit.DISTRIBUTION).dist(new NormalDistribution(0, 0.1))
+                        .dist(new NormalDistribution(0, 0.1))
                         .updater(new NoOp()).graphBuilder().addInputs("input")
                         .addLayer("l1", new ConvolutionLayer.Builder().kernelSize(2, 2).stride(1, 1).padding(0, 0)
                                         .nIn(2).nOut(2).activation(Activation.TANH).build(), "input")
@@ -285,8 +301,8 @@ public class GradientCheckTestsComputationGraph extends BaseDL4JTest {
                                                         .build(),
                                         "merge")
                         .setOutputs("outputLayer")
-                        .inputPreProcessor("outputLayer", new CnnToFeedForwardPreProcessor(5, 5, 4)).pretrain(false)
-                        .backprop(true).build();
+                        .inputPreProcessor("outputLayer", new CnnToFeedForwardPreProcessor(5, 5, 4))
+                        .build();
 
         ComputationGraph graph = new ComputationGraph(conf);
         graph.init();
@@ -319,7 +335,7 @@ public class GradientCheckTestsComputationGraph extends BaseDL4JTest {
         ComputationGraphConfiguration conf =
                         new NeuralNetConfiguration.Builder().seed(12345)
                                         .optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT)
-                                        .weightInit(WeightInit.DISTRIBUTION).dist(new UniformDistribution(0.2, 0.6))
+                                        .dist(new UniformDistribution(0.2, 0.6))
                                         .updater(new NoOp()).graphBuilder().addInputs("input")
                                         .setOutputs("out")
                                         .addLayer("lstm1",
@@ -344,8 +360,8 @@ public class GradientCheckTestsComputationGraph extends BaseDL4JTest {
                                                         .lossFunction(LossFunctions.LossFunction.MCXENT).build(),
                                                         "merge")
                                         .inputPreProcessor("dense1", new RnnToFeedForwardPreProcessor())
-                                        .inputPreProcessor("lstm3", new FeedForwardToRnnPreProcessor()).pretrain(false)
-                                        .backprop(true).build();
+                                        .inputPreProcessor("lstm3", new FeedForwardToRnnPreProcessor())
+                                        .build();
 
         ComputationGraph graph = new ComputationGraph(conf);
         graph.init();
@@ -379,14 +395,14 @@ public class GradientCheckTestsComputationGraph extends BaseDL4JTest {
         Nd4j.getRandom().setSeed(1234);
         ComputationGraphConfiguration conf = new NeuralNetConfiguration.Builder().seed(1234)
                         .optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT)
-                        .weightInit(WeightInit.DISTRIBUTION).dist(new NormalDistribution(0, 1))
+                        .dist(new NormalDistribution(0, 1))
                         .updater(new NoOp()).graphBuilder().addInputs("input").setOutputs("out")
                         .addLayer("lstm1", new GravesLSTM.Builder().nIn(3).nOut(8).activation(Activation.TANH).build(),
                                         "input")
                         .addVertex("subset", new SubsetVertex(0, 3), "lstm1")
                         .addLayer("out", new RnnOutputLayer.Builder().nIn(4).nOut(3).activation(Activation.SOFTMAX)
                                         .lossFunction(LossFunctions.LossFunction.MCXENT).build(), "subset")
-                        .pretrain(false).backprop(true).build();
+                        .build();
 
         ComputationGraph graph = new ComputationGraph(conf);
         graph.init();
@@ -421,14 +437,14 @@ public class GradientCheckTestsComputationGraph extends BaseDL4JTest {
         Nd4j.getRandom().setSeed(12345);
         ComputationGraphConfiguration conf = new NeuralNetConfiguration.Builder().seed(12345)
                         .optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT)
-                        .weightInit(WeightInit.DISTRIBUTION).dist(new NormalDistribution(0, 1))
+                        .dist(new NormalDistribution(0, 1))
                         .updater(new NoOp()).graphBuilder().addInputs("input").setOutputs("out")
                         .addLayer("lstm1", new GravesLSTM.Builder().nIn(3).nOut(4).activation(Activation.TANH).build(),
                                         "input")
                         .addVertex("lastTS", new LastTimeStepVertex("input"), "lstm1")
                         .addLayer("out", new OutputLayer.Builder().nIn(4).nOut(3).activation(Activation.SOFTMAX)
                                         .lossFunction(LossFunctions.LossFunction.MCXENT).build(), "lastTS")
-                        .pretrain(false).backprop(true).build();
+                        .build();
 
         ComputationGraph graph = new ComputationGraph(conf);
         graph.init();
@@ -474,7 +490,7 @@ public class GradientCheckTestsComputationGraph extends BaseDL4JTest {
         ComputationGraphConfiguration conf =
                         new NeuralNetConfiguration.Builder().seed(12345)
                                         .optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT)
-                                        .weightInit(WeightInit.DISTRIBUTION).dist(new NormalDistribution(0, 1))
+                                        .dist(new NormalDistribution(0, 1))
                                         .updater(new NoOp()).graphBuilder()
                                         .addInputs("input1", "input2").setOutputs("out")
                                         .addLayer("lstm1",
@@ -491,7 +507,7 @@ public class GradientCheckTestsComputationGraph extends BaseDL4JTest {
                                                         .activation(Activation.SOFTMAX)
                                                         .lossFunction(LossFunctions.LossFunction.MCXENT).build(),
                                                         "lstm1", "duplicate")
-                                        .pretrain(false).backprop(true).build();
+                                        .build();
 
         ComputationGraph graph = new ComputationGraph(conf);
         graph.init();
@@ -528,7 +544,7 @@ public class GradientCheckTestsComputationGraph extends BaseDL4JTest {
         ComputationGraphConfiguration conf =
                 new NeuralNetConfiguration.Builder().seed(12345)
                         .optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT)
-                        .weightInit(WeightInit.DISTRIBUTION).dist(new NormalDistribution(0, 1))
+                        .dist(new NormalDistribution(0, 1))
                         .updater(new NoOp()).graphBuilder()
                         .addInputs("input").setOutputs("out")
                         .addLayer("lstm_a",
@@ -545,7 +561,7 @@ public class GradientCheckTestsComputationGraph extends BaseDL4JTest {
                                         .activation(Activation.SOFTMAX)
                                         .lossFunction(LossFunctions.LossFunction.MCXENT).build(),
                                 "lstm_a", "lstm_b_rev")
-                        .pretrain(false).backprop(true).build();
+                        .build();
 
         ComputationGraph graph = new ComputationGraph(conf);
         graph.init();
@@ -591,7 +607,7 @@ public class GradientCheckTestsComputationGraph extends BaseDL4JTest {
         Nd4j.getRandom().setSeed(12345);
         ComputationGraphConfiguration conf = new NeuralNetConfiguration.Builder().seed(12345)
                         .optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT)
-                        .weightInit(WeightInit.DISTRIBUTION).dist(new NormalDistribution(0, 1))
+                        .dist(new NormalDistribution(0, 1))
                         .updater(new NoOp()).activation(Activation.TANH).graphBuilder().addInputs("i0", "i1", "i2")
                         .addLayer("d0", new DenseLayer.Builder().nIn(2).nOut(2).build(), "i0")
                         .addLayer("d1", new DenseLayer.Builder().nIn(2).nOut(2).build(), "i1")
@@ -599,7 +615,7 @@ public class GradientCheckTestsComputationGraph extends BaseDL4JTest {
                         .addLayer("d3", new DenseLayer.Builder().nIn(6).nOut(2).build(), "d0", "d1", "d2")
                         .addLayer("out", new OutputLayer.Builder().lossFunction(LossFunctions.LossFunction.MSE).nIn(2)
                                         .nOut(2).build(), "d3")
-                        .setOutputs("out").pretrain(false).backprop(true).build();
+                        .setOutputs("out").build();
 
         ComputationGraph graph = new ComputationGraph(conf);
         graph.init();
@@ -634,7 +650,7 @@ public class GradientCheckTestsComputationGraph extends BaseDL4JTest {
         Nd4j.getRandom().setSeed(12345);
         ComputationGraphConfiguration conf = new NeuralNetConfiguration.Builder().seed(12345)
                         .optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT)
-                        .weightInit(WeightInit.DISTRIBUTION).dist(new NormalDistribution(0, 1))
+                        .dist(new NormalDistribution(0, 1))
                         .updater(new NoOp()).activation(Activation.TANH).graphBuilder().addInputs("i0")
                         .addLayer("d0", new DenseLayer.Builder().nIn(2).nOut(2).build(), "i0")
                         .addLayer("d1", new DenseLayer.Builder().nIn(2).nOut(2).build(), "d0")
@@ -642,7 +658,7 @@ public class GradientCheckTestsComputationGraph extends BaseDL4JTest {
                         .addLayer("d3", new DenseLayer.Builder().nIn(2).nOut(2).build(), "d0")
                         .addLayer("out", new OutputLayer.Builder().lossFunction(LossFunctions.LossFunction.MSE).nIn(6)
                                         .nOut(2).build(), "d1", "d2", "d3")
-                        .setOutputs("out").pretrain(false).backprop(true).build();
+                        .setOutputs("out").build();
 
         ComputationGraph graph = new ComputationGraph(conf);
         graph.init();
@@ -674,7 +690,7 @@ public class GradientCheckTestsComputationGraph extends BaseDL4JTest {
         Nd4j.getRandom().setSeed(12345);
         ComputationGraphConfiguration conf = new NeuralNetConfiguration.Builder().seed(12345)
                         .optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT)
-                        .weightInit(WeightInit.DISTRIBUTION).dist(new NormalDistribution(0, 1))
+                        .dist(new NormalDistribution(0, 1))
                         .updater(new NoOp()).activation(Activation.TANH).graphBuilder().addInputs("i0", "i1", "i2")
                         .addLayer("d0", new DenseLayer.Builder().nIn(2).nOut(2).build(), "i0")
                         .addLayer("d1", new DenseLayer.Builder().nIn(2).nOut(2).build(), "i1")
@@ -685,7 +701,7 @@ public class GradientCheckTestsComputationGraph extends BaseDL4JTest {
                         .addLayer("D2", new DenseLayer.Builder().nIn(6).nOut(2).build(), "m")
                         .addLayer("out", new OutputLayer.Builder().lossFunction(LossFunctions.LossFunction.MSE).nIn(6)
                                         .nOut(2).build(), "D0", "D1", "D2")
-                        .setOutputs("out").pretrain(false).backprop(true).build();
+                        .setOutputs("out").build();
 
         ComputationGraph graph = new ComputationGraph(conf);
         graph.init();
@@ -722,7 +738,7 @@ public class GradientCheckTestsComputationGraph extends BaseDL4JTest {
         Nd4j.getRandom().setSeed(12345);
         ComputationGraphConfiguration conf = new NeuralNetConfiguration.Builder().seed(12345)
                         .optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT)
-                        .weightInit(WeightInit.DISTRIBUTION).dist(new NormalDistribution(0, 1))
+                        .dist(new NormalDistribution(0, 1))
                         .updater(new NoOp()).activation(Activation.TANH).graphBuilder().addInputs("input")
                         .addLayer("l0", new ConvolutionLayer.Builder().kernelSize(2, 2).stride(1, 1).padding(0, 0)
                                         .nIn(2).nOut(2).activation(Activation.TANH).build(), "input")
@@ -738,8 +754,8 @@ public class GradientCheckTestsComputationGraph extends BaseDL4JTest {
                         .addLayer("out", new OutputLayer.Builder().lossFunction(LossFunctions.LossFunction.MSE)
                                 .activation(Activation.IDENTITY).nOut(2)
                                         .build(), "l3", "l4")
-                        .setOutputs("out").setInputTypes(InputType.convolutional(inH, inW, 2)).pretrain(false)
-                        .backprop(true).build();
+                        .setOutputs("out").setInputTypes(InputType.convolutional(inH, inW, 2))
+                        .build();
 
         ComputationGraph graph = new ComputationGraph(conf);
         graph.init();
@@ -772,7 +788,7 @@ public class GradientCheckTestsComputationGraph extends BaseDL4JTest {
         ComputationGraphConfiguration conf =
                         new NeuralNetConfiguration.Builder().seed(12345)
                                         .optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT)
-                                        .weightInit(WeightInit.DISTRIBUTION).dist(new NormalDistribution(0, 1))
+                                        .dist(new NormalDistribution(0, 1))
                                         .updater(new NoOp()).graphBuilder()
                                         .addInputs("input1", "input2", "input3")
                                         .addVertex("stack1", new StackVertex(), "input1", "input2", "input3")
@@ -788,7 +804,7 @@ public class GradientCheckTestsComputationGraph extends BaseDL4JTest {
                                                                         .lossFunction(LossFunctions.LossFunction.MCXENT)
                                                                         .activation(Activation.SOFTMAX).build(),
                                                         "l2-1", "l2-2")
-                                        .setOutputs("lossLayer").pretrain(false).backprop(true).build();
+                                        .setOutputs("lossLayer").build();
 
         ComputationGraph graph = new ComputationGraph(conf);
         graph.init();
@@ -797,8 +813,8 @@ public class GradientCheckTestsComputationGraph extends BaseDL4JTest {
         assertEquals(numParams, graph.numParams());
 
         Nd4j.getRandom().setSeed(12345);
-        int nParams = graph.numParams();
-        INDArray newParams = Nd4j.rand(1, nParams);
+        long nParams = graph.numParams();
+        INDArray newParams = Nd4j.rand(new long[]{1, nParams});
         graph.setParams(newParams);
 
         INDArray pos = Nd4j.rand(150, 4);
@@ -846,7 +862,7 @@ public class GradientCheckTestsComputationGraph extends BaseDL4JTest {
 
                 ComputationGraphConfiguration conf = new NeuralNetConfiguration.Builder().seed(12345)
                                 .optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT)
-                                .weightInit(WeightInit.DISTRIBUTION).dist(new GaussianDistribution(0, 1))
+                                .dist(new GaussianDistribution(0, 1))
                                 .updater(new NoOp()).graphBuilder().addInputs("input1")
                                 .addLayer("l1", new DenseLayer.Builder().nIn(4).nOut(5).activation(Activation.TANH)
                                                 .build(), "input1")
@@ -854,7 +870,7 @@ public class GradientCheckTestsComputationGraph extends BaseDL4JTest {
                                                 .lossFunction(LossFunctions.LossFunction.MCXENT).nIn(5).nOut(numLabels)
                                                 .alpha(1.0).lambda(lambda).gradientCheck(true)
                                                 .activation(Activation.SOFTMAX).build(), "l1")
-                                .setOutputs("cl").pretrain(false).backprop(true).build();
+                                .setOutputs("cl").build();
 
                 ComputationGraph graph = new ComputationGraph(conf);
                 graph.init();
@@ -910,7 +926,7 @@ public class GradientCheckTestsComputationGraph extends BaseDL4JTest {
             for (double lambda : new double[] {0.0, 0.5, 2.0}) {
 
                 MultiLayerConfiguration conf = new NeuralNetConfiguration.Builder()
-                                .updater(new NoOp()).weightInit(WeightInit.DISTRIBUTION)
+                                .updater(new NoOp())
                                 .dist(new NormalDistribution(0, 1.0)).seed(12345L).list()
                                 .layer(0, new ConvolutionLayer.Builder().kernelSize(2, 2).stride(1, 1).nOut(3).build())
                                 .layer(1, new GlobalPoolingLayer.Builder().poolingType(PoolingType.AVG).build())
@@ -918,7 +934,7 @@ public class GradientCheckTestsComputationGraph extends BaseDL4JTest {
                                                 .lossFunction(LossFunctions.LossFunction.MCXENT).nOut(numLabels)
                                                 .alpha(1.0).lambda(lambda).gradientCheck(true)
                                                 .activation(Activation.SOFTMAX).build())
-                                .pretrain(false).backprop(true)
+
                                 .setInputType(InputType.convolutional(inputH, inputW, inputDepth)).build();
 
                 MultiLayerNetwork net = new MultiLayerNetwork(conf);
@@ -964,22 +980,22 @@ public class GradientCheckTestsComputationGraph extends BaseDL4JTest {
         Nd4j.getRandom().setSeed(12345);
         ComputationGraphConfiguration conf = new NeuralNetConfiguration.Builder().seed(12345)
                         .optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT)
-                        .weightInit(WeightInit.DISTRIBUTION).dist(new NormalDistribution(0, 1))
+                        .dist(new NormalDistribution(0, 1))
                         .activation(Activation.TANH).updater(new NoOp()).graphBuilder()
                         .addInputs("in1", "in2").addLayer("d0", new DenseLayer.Builder().nIn(2).nOut(2).build(), "in1")
                         .addLayer("d1", new DenseLayer.Builder().nIn(2).nOut(2).build(), "in2")
                         .addVertex("l2", new L2Vertex(), "d0", "d1")
                         .addLayer("out", new OutputLayer.Builder().lossFunction(LossFunctions.LossFunction.L2).nIn(1)
                                         .nOut(1).activation(Activation.IDENTITY).build(), "l2")
-                        .setOutputs("out").pretrain(false).backprop(true).build();
+                        .setOutputs("out").build();
 
         ComputationGraph graph = new ComputationGraph(conf);
         graph.init();
 
 
         Nd4j.getRandom().setSeed(12345);
-        int nParams = graph.numParams();
-        INDArray newParams = Nd4j.rand(1, nParams);
+        long nParams = graph.numParams();
+        INDArray newParams = Nd4j.rand(new long[]{1, nParams});
         graph.setParams(newParams);
 
         int[] mbSizes = new int[] {1, 3, 10};
@@ -1016,7 +1032,7 @@ public class GradientCheckTestsComputationGraph extends BaseDL4JTest {
         Nd4j.getRandom().setSeed(12345);
         ComputationGraphConfiguration conf = new NeuralNetConfiguration.Builder().seed(12345)
                         .optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT)
-                        .weightInit(WeightInit.DISTRIBUTION).dist(new NormalDistribution(0, 1))
+                        .dist(new NormalDistribution(0, 1))
                         .activation(Activation.TANH).updater(new NoOp()).graphBuilder()
                         .addInputs("in1", "in2")
                         .addLayer("d0", new DenseLayer.Builder().nIn(layerSizes).nOut(layerSizes).build(), "in1")
@@ -1028,15 +1044,15 @@ public class GradientCheckTestsComputationGraph extends BaseDL4JTest {
                                         .nIn(layerSizes).nOut(layerSizes).activation(Activation.IDENTITY).build(), "u1")
                         .addLayer("out2", new OutputLayer.Builder().lossFunction(LossFunctions.LossFunction.L2)
                                         .nIn(layerSizes).nOut(2).activation(Activation.IDENTITY).build(), "u2")
-                        .setOutputs("out1", "out2").pretrain(false).backprop(true).build();
+                        .setOutputs("out1", "out2").build();
 
         ComputationGraph graph = new ComputationGraph(conf);
         graph.init();
 
 
         Nd4j.getRandom().setSeed(12345);
-        int nParams = graph.numParams();
-        INDArray newParams = Nd4j.rand(1, nParams);
+        long nParams = graph.numParams();
+        INDArray newParams = Nd4j.rand(new long[]{1, nParams});
         graph.setParams(newParams);
 
         int[] mbSizes = new int[] {1, 3, 10};
@@ -1071,7 +1087,7 @@ public class GradientCheckTestsComputationGraph extends BaseDL4JTest {
 
         ComputationGraphConfiguration conf = new NeuralNetConfiguration.Builder().seed(12345)
                         .optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT)
-                        .weightInit(WeightInit.DISTRIBUTION).dist(new NormalDistribution(0, 1))
+                        .dist(new NormalDistribution(0, 1))
                         .activation(Activation.TANH).updater(new NoOp()).graphBuilder()
                         .addInputs("in1", "in2").addLayer("d0", new DenseLayer.Builder().nIn(2).nOut(2).build(), "in1")
                         .addLayer("d1", new DenseLayer.Builder().nIn(2).nOut(2).build(), "in2")
@@ -1086,15 +1102,15 @@ public class GradientCheckTestsComputationGraph extends BaseDL4JTest {
                                         new OutputLayer.Builder().lossFunction(LossFunctions.LossFunction.L2).nIn(2)
                                                         .nOut(2).activation(Activation.IDENTITY).build(),
                                         "u1")
-                        .setOutputs("out1", "out2").pretrain(false).backprop(true).build();
+                        .setOutputs("out1", "out2").build();
 
         ComputationGraph graph = new ComputationGraph(conf);
         graph.init();
 
 
         Nd4j.getRandom().setSeed(12345);
-        int nParams = graph.numParams();
-        INDArray newParams = Nd4j.rand(1, nParams);
+        long nParams = graph.numParams();
+        INDArray newParams = Nd4j.rand(new long[]{1, nParams});
         graph.setParams(newParams);
 
         int[] mbSizes = new int[] {1, 3, 10};
@@ -1131,7 +1147,7 @@ public class GradientCheckTestsComputationGraph extends BaseDL4JTest {
         Nd4j.getRandom().setSeed(12345);
         ComputationGraphConfiguration conf = new NeuralNetConfiguration.Builder().seed(12345)
                         .optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT)
-                        .weightInit(WeightInit.DISTRIBUTION).dist(new NormalDistribution(0, 1))
+                        .dist(new NormalDistribution(0, 1))
                         .activation(Activation.TANH).updater(new NoOp()).graphBuilder()
                         .addInputs("in1", "in2")
                         .addLayer("d0", new GravesLSTM.Builder().nIn(layerSizes).nOut(layerSizes).build(), "in1")
@@ -1145,15 +1161,15 @@ public class GradientCheckTestsComputationGraph extends BaseDL4JTest {
                                         .nIn(layerSizes).nOut(layerSizes).activation(Activation.IDENTITY).build(), "p1")
                         .addLayer("out2", new OutputLayer.Builder().lossFunction(LossFunctions.LossFunction.L2)
                                         .nIn(layerSizes).nOut(2).activation(Activation.IDENTITY).build(), "p2")
-                        .setOutputs("out1", "out2").pretrain(false).backprop(true).build();
+                        .setOutputs("out1", "out2").build();
 
         ComputationGraph graph = new ComputationGraph(conf);
         graph.init();
 
 
         Nd4j.getRandom().setSeed(12345);
-        int nParams = graph.numParams();
-        INDArray newParams = Nd4j.rand(1, nParams);
+        long nParams = graph.numParams();
+        INDArray newParams = Nd4j.rand(new long[]{1, nParams});
         graph.setParams(newParams);
 
         int[] mbSizes = new int[] {1, 3, 10};
@@ -1194,7 +1210,7 @@ public class GradientCheckTestsComputationGraph extends BaseDL4JTest {
 
         ComputationGraphConfiguration conf = new NeuralNetConfiguration.Builder().seed(12345)
                         .optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT)
-                        .weightInit(WeightInit.DISTRIBUTION).dist(new NormalDistribution(0, 1))
+                        .dist(new NormalDistribution(0, 1))
                         .activation(Activation.TANH).updater(new NoOp()).graphBuilder()
                         .addInputs("in1", "in2").addLayer("d0", new DenseLayer.Builder().nIn(2).nOut(2).build(), "in1")
                         .addLayer("d1", new DenseLayer.Builder().nIn(2).nOut(2).build(), "in2")
@@ -1206,7 +1222,7 @@ public class GradientCheckTestsComputationGraph extends BaseDL4JTest {
                                         new OutputLayer.Builder().lossFunction(LossFunctions.LossFunction.L2).nIn(2)
                                                         .nOut(2).activation(Activation.IDENTITY).build(),
                                         "d1")
-                        .setOutputs("out1", "out2").pretrain(false).backprop(true).build();
+                        .setOutputs("out1", "out2").build();
 
         ComputationGraph graph = new ComputationGraph(conf);
         graph.init();
@@ -1216,8 +1232,8 @@ public class GradientCheckTestsComputationGraph extends BaseDL4JTest {
 
 
         Nd4j.getRandom().setSeed(12345);
-        int nParams = graph.numParams();
-        INDArray newParams = Nd4j.rand(1, nParams);
+        long nParams = graph.numParams();
+        INDArray newParams = Nd4j.rand(new long[]{1, nParams});
         graph.setParams(newParams);
 
         int[] mbSizes = new int[] {1, 3, 10};
@@ -1250,7 +1266,7 @@ public class GradientCheckTestsComputationGraph extends BaseDL4JTest {
 
         ComputationGraphConfiguration conf = new NeuralNetConfiguration.Builder().seed(12345)
                         .optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT)
-                        .weightInit(WeightInit.DISTRIBUTION).dist(new NormalDistribution(0, 1))
+                        .dist(new NormalDistribution(0, 1))
                         .activation(Activation.TANH).updater(new NoOp()).graphBuilder()
                         .addInputs("in1").addLayer("d1", new DenseLayer.Builder().nIn(2).nOut(3).build(), "in1")
                         .addVertex("norm", new L2NormalizeVertex(), "d1")
@@ -1297,7 +1313,7 @@ public class GradientCheckTestsComputationGraph extends BaseDL4JTest {
 
         ComputationGraphConfiguration conf = new NeuralNetConfiguration.Builder().seed(12345)
                         .optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT)
-                        .weightInit(WeightInit.DISTRIBUTION).dist(new NormalDistribution(0, 1))
+                        .dist(new NormalDistribution(0, 1))
                         .activation(Activation.TANH).updater(new NoOp()).graphBuilder()
                         .addInputs("in1")
                         .addLayer("d1", new ConvolutionLayer.Builder().kernelSize(2, 2).stride(1, 1).nOut(2).build(),

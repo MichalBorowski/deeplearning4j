@@ -1,20 +1,18 @@
-/*-
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
  *
- *  * Copyright 2015 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
  *
- */
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.deeplearning4j.nn.api;
 
@@ -37,7 +35,7 @@ import java.util.Collection;
  *
  * @author Adam Gibson
  */
-public interface Layer extends Serializable, Cloneable, Model {
+public interface Layer extends Serializable, Cloneable, Model, Trainable {
 
     enum Type {
         FEED_FORWARD, RECURRENT, CONVOLUTIONAL, CONVOLUTIONAL3D,
@@ -48,7 +46,6 @@ public interface Layer extends Serializable, Cloneable, Model {
         TRAIN, TEST
     }
 
-
     /**
      * This method sets given CacheMode for current layer
      *
@@ -57,26 +54,14 @@ public interface Layer extends Serializable, Cloneable, Model {
     void setCacheMode(CacheMode mode);
 
     /**
-     * Calculate the l2 regularization term<br>
-     * 0.0 if regularization is not used. Or 0.5 * l2Coeff * l2Magnitude otherwise.<br>
-     * Note that this does not divide by mini-batch size
+     * Calculate the regularization component of the score, for the parameters in this layer<br>
+     * For example, the L1, L2 and/or weight decay components of the loss function<br>
      *
-     * @param backpropOnlyParams If true: calculate L2 based on backprop params only. If false: calculate
+     * @param backpropOnlyParams If true: calculate regularization score based on backprop params only. If false: calculate
      *                           based on all params (including pretrain params, if any)
-     * @return the l2 regularization term for this layer.
+     * @return the regularization score of
      */
-    double calcL2(boolean backpropOnlyParams);
-
-    /**
-     * Calculate the l1 regularization term<br>
-     * 0.0 if regularization is not used. Or l1Coeff * l1Magnitude otherwise.<br>
-     * Note that this does not divide by mini-batch size
-     *
-     * @param backpropOnlyParams If true: calculate L1 based on backprop params only. If false: calculate
-     *                           based on all params (including pretrain params, if any)
-     * @return the l1 regularization term for this layer.
-     */
-    double calcL1(boolean backpropOnlyParams);
+    double calcRegularizationScore(boolean backpropOnlyParams);
 
     /**
      * Returns the layer type
@@ -122,35 +107,19 @@ public interface Layer extends Serializable, Cloneable, Model {
     INDArray activate(INDArray input, boolean training, LayerWorkspaceMgr mgr);
 
     /**
-     * Return a transposed copy of the weights/bias
-     * (this means reverse the number of inputs and outputs on the weights)
-     *
-     * @return the transposed layer
-     */
-    @Deprecated
-    Layer transpose();
-
-    /**
-     * Clone the layer
-     *
-     * @return
-     */
-    @Deprecated
-    Layer clone();
-
-
-    /**
      * Get the iteration listeners for this layer.
      */
     Collection<TrainingListener> getListeners();
 
     /**
-     * Set the iteration listeners for this layer.
+     * Set the {@link TrainingListener}s for this model. If any listeners have previously been set, they will be
+     * replaced by this method
      */
     void setListeners(TrainingListener... listeners);
 
     /**
-     * Set the iteration listeners for this layer.
+     * Set the {@link TrainingListener}s for this model. If any listeners have previously been set, they will be
+     * replaced by this method
      */
     void setListeners(Collection<TrainingListener> listeners);
 
@@ -237,7 +206,7 @@ public interface Layer extends Serializable, Cloneable, Model {
 
 
     /**
-     * Feed forward the input mask array, setting in in the layer as appropriate. This allows different layers to
+     * Feed forward the input mask array, setting in the layer as appropriate. This allows different layers to
      * handle masks differently - for example, bidirectional RNNs and normal RNNs operate differently with masks (the
      * former sets activations to 0 outside of the data present region (and keeps the mask active for future layers like
      * dense layers), whereas normal RNNs don't zero out the activations/errors )instead relying on backpropagated error

@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.zoo.model.helper;
 
 import org.deeplearning4j.nn.conf.ComputationGraphConfiguration;
@@ -8,13 +24,13 @@ import org.nd4j.linalg.activations.Activation;
 /**
  * Inception is based on GoogleLeNet configuration of convolutional layers for optimization of
  * resources and learning. You can use this module to add Inception to your own custom models.
- *
- * The GoogleLeNet paper: https://arxiv.org/abs/1409.4842
- *
+ * <br>
+ * The GoogleLeNet paper: <a href="https://arxiv.org/abs/1409.4842">https://arxiv.org/abs/1409.4842</a><br>
+ * <br>
  * This module is based on the Inception GraphBuilderModule built for Torch and
- * a Scala implementation of GoogleLeNet.
- * https://github.com/Element-Research/dpnn/blob/master/Inception.lua
- * https://gist.github.com/antikantian/f77e91f924614348ea8f64731437930d
+ * a Scala implementation of GoogleLeNet.<br>
+ * <a href="https://github.com/Element-Research/dpnn/blob/master/Inception.lua">https://github.com/Element-Research/dpnn/blob/master/Inception.lua</a><br>
+ * <a href="https://gist.github.com/antikantian/f77e91f924614348ea8f64731437930d">https://gist.github.com/antikantian/f77e91f924614348ea8f64731437930d</a>
  *
  * @author Justin Long (crockpotveggies)
  */

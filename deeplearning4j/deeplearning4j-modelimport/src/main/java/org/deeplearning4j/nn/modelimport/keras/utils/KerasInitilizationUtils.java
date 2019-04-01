@@ -1,20 +1,19 @@
-/*-
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
  *
- *  * Copyright 2017 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
  *
- */
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.nn.modelimport.keras.utils;
 
 import lombok.extern.slf4j.Slf4j;
@@ -49,21 +48,28 @@ public class KerasInitilizationUtils {
                                                                          int kerasMajorVersion)
             throws UnsupportedKerasConfigurationException, InvalidKerasConfigurationException {
 
+
         // TODO: Identity and VarianceScaling need "scale" factor
         WeightInit init = null;
         Distribution dist = null;
         if (kerasInit != null) {
-            if (kerasInit.equals(conf.getINIT_GLOROT_NORMAL())) {
+            if (kerasInit.equals(conf.getINIT_GLOROT_NORMAL()) ||
+                    kerasInit.equals(conf.getINIT_GLOROT_NORMAL_ALIAS())) {
                 init = WeightInit.XAVIER;
-            } else if (kerasInit.equals(conf.getINIT_GLOROT_UNIFORM())) {
+            } else if (kerasInit.equals(conf.getINIT_GLOROT_UNIFORM()) ||
+                    kerasInit.equals(conf.getINIT_GLOROT_UNIFORM_ALIAS())) {
                 init = WeightInit.XAVIER_UNIFORM;
-            } else if (kerasInit.equals(conf.getINIT_LECUN_NORMAL())) {
+            } else if (kerasInit.equals(conf.getINIT_LECUN_NORMAL()) ||
+                    kerasInit.equals(conf.getINIT_LECUN_NORMAL_ALIAS())) {
                 init = WeightInit.LECUN_NORMAL;
-            } else if (kerasInit.equals(conf.getINIT_LECUN_UNIFORM())) {
+            } else if (kerasInit.equals(conf.getINIT_LECUN_UNIFORM()) ||
+                    kerasInit.equals(conf.getINIT_LECUN_UNIFORM_ALIAS())) {
                 init = WeightInit.LECUN_UNIFORM;
-            } else if (kerasInit.equals(conf.getINIT_HE_NORMAL())) {
+            } else if (kerasInit.equals(conf.getINIT_HE_NORMAL()) ||
+                    kerasInit.equals(conf.getINIT_HE_NORMAL_ALIAS())) {
                 init = WeightInit.RELU;
-            } else if (kerasInit.equals(conf.getINIT_HE_UNIFORM())) {
+            } else if (kerasInit.equals(conf.getINIT_HE_UNIFORM()) ||
+                    kerasInit.equals(conf.getINIT_HE_UNIFORM_ALIAS())) {
                 init = WeightInit.RELU_UNIFORM;
             } else if (kerasInit.equals(conf.getINIT_ONE()) ||
                     kerasInit.equals(conf.getINIT_ONES()) ||

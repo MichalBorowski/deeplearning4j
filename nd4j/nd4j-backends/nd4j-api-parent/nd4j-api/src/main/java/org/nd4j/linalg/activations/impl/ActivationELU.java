@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.linalg.activations.impl;
 
 import lombok.EqualsAndHashCode;
@@ -5,13 +21,11 @@ import lombok.Getter;
 import org.nd4j.linalg.primitives.Pair;
 import org.nd4j.linalg.activations.BaseActivationFunction;
 import org.nd4j.linalg.api.ndarray.INDArray;
-import org.nd4j.linalg.api.ops.impl.transforms.ELU;
+import org.nd4j.linalg.api.ops.impl.transforms.strict.ELU;
 import org.nd4j.linalg.api.ops.impl.transforms.gradient.ELUDerivative;
 import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.indexing.BooleanIndexing;
 import org.nd4j.linalg.indexing.conditions.Conditions;
-
-import java.util.Arrays;
 
 /**
  *  f(x) = alpha * (exp(x) - 1.0); x < 0
@@ -43,7 +57,7 @@ public class ActivationELU extends BaseActivationFunction {
     public INDArray getActivation(INDArray in, boolean training) {
         // no support in ELU native to override alpha
         if (this.alpha != 1.00) {
-            INDArray alphaMultiple = Nd4j.getExecutioner().execAndReturn(new ELU(in.dup()));
+            INDArray alphaMultiple = Nd4j.getExecutioner().exec(new ELU(in.dup()));
             alphaMultiple.muli(alpha);
             BooleanIndexing.replaceWhere(in, alphaMultiple, Conditions.lessThan(0));
         } else {
@@ -62,7 +76,7 @@ public class ActivationELU extends BaseActivationFunction {
         assertShape(in, epsilon);
         // no support in ELU native to override alpha
         if (alpha != 1.00) {
-            INDArray dLdz = Nd4j.getExecutioner().execAndReturn(new ELUDerivative(in.dup()));
+            INDArray dLdz = Nd4j.getExecutioner().exec(new ELUDerivative(in.dup()));
             dLdz.muli(alpha);
             BooleanIndexing.replaceWhere(dLdz, 1, Conditions.equals(alpha));
 
@@ -71,7 +85,7 @@ public class ActivationELU extends BaseActivationFunction {
         }
 
         else {
-            INDArray dLdz = Nd4j.getExecutioner().execAndReturn(new ELUDerivative(in));
+            INDArray dLdz = Nd4j.getExecutioner().exec(new ELUDerivative(in));
             dLdz.muli(epsilon);
             return new Pair<>(dLdz, null);
         }

@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.linalg.api.ops.impl.layers.convolution;
 
 import lombok.Builder;
@@ -8,8 +24,10 @@ import lombok.val;
 import onnx.OnnxProto3;
 import org.nd4j.autodiff.samediff.SDVariable;
 import org.nd4j.autodiff.samediff.SameDiff;
+import org.nd4j.base.Preconditions;
 import org.nd4j.imports.descriptors.properties.PropertyMapping;
 import org.nd4j.imports.graphmapper.tf.TFGraphMapper;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.api.ops.DynamicCustomOp;
 import org.nd4j.linalg.api.ops.impl.layers.convolution.config.Conv2DConfig;
@@ -64,6 +82,20 @@ public class DeConv2D extends DynamicCustomOp {
 
     @Override
     public Map<String, Object> propertiesForFunction() {
+        if(config == null && !iArguments.isEmpty()){
+            config = DeConv2DConfig.builder()
+                    .kH(iArguments.get(0))
+                    .kW(iArguments.get(1))
+                    .sH(iArguments.get(2))
+                    .sW(iArguments.get(3))
+                    .pH(iArguments.get(4))
+                    .pW(iArguments.get(5))
+                    .dH(iArguments.get(6))
+                    .dW(iArguments.get(7))
+                    .isSameMode(iArguments.get(8) == 1)
+                    .dataFormat(iArguments.get(9) == 1 ? DeConv2DConfig.NHWC : Conv2DConfig.NCHW)
+                    .build();
+        }
         return config.toProperties();
     }
 
@@ -77,7 +109,7 @@ public class DeConv2D extends DynamicCustomOp {
         addIArgument(config.getDH());
         addIArgument(config.getDW());
         addIArgument(ArrayUtil.fromBoolean(config.isSameMode()));
-
+        addIArgument(config.getDataFormat().equalsIgnoreCase(DeConv2DConfig.NCHW) ? 0 : 1);
     }
 
     @Override
@@ -98,11 +130,6 @@ public class DeConv2D extends DynamicCustomOp {
         }
 
         return config.getValue(property);
-    }
-
-    @Override
-    public void setValueFor(Field target, Object value) {
-        config.setValueFor(target, value);
     }
 
 
@@ -188,7 +215,7 @@ public class DeConv2D extends DynamicCustomOp {
         // FIXME: int cast
 
 
-        if (dataFormat.equalsIgnoreCase("nchw")) {
+        if (dataFormat.equalsIgnoreCase(DeConv2DConfig.NCHW)) {
             sH = tfStrides.get(2).intValue();
             sW = tfStrides.get(3).intValue();
 
@@ -210,8 +237,7 @@ public class DeConv2D extends DynamicCustomOp {
                 .sH(sW)
                 .sW(sH)
                 .isSameMode(isSameMode)
-                //c++ check checks for nchw
-                .isNHWC(dataFormat.equalsIgnoreCase("nhwc"))
+                .dataFormat(dataFormat.equalsIgnoreCase(DeConv2DConfig.NHWC) ? DeConv2DConfig.NHWC : DeConv2DConfig.NCHW)
                 .build();
         this.config = conv2DConfig;
 
@@ -253,8 +279,7 @@ public class DeConv2D extends DynamicCustomOp {
                 .sH(sH.intValue())
                 .sW(sW.intValue())
                 .isSameMode(isSameMode)
-                //c++ check checks for nchw
-                .isNHWC(dataFormat.equalsIgnoreCase("nhwc"))
+                .dataFormat(dataFormat.equalsIgnoreCase("nhwc") ? DeConv2DConfig.NHWC : DeConv2DConfig.NCHW)
                 .build();
         this.config = conv2DConfig;
 
@@ -295,4 +320,10 @@ public class DeConv2D extends DynamicCustomOp {
         return ret;
     }
 
+    @Override
+    public List<DataType> calculateOutputDataTypes(List<DataType> inputDataTypes){
+        int n = args().length;
+        Preconditions.checkState(inputDataTypes != null && inputDataTypes.size() == n, "Expected %s input data types for %s, got %s", n, getClass(), inputDataTypes);
+        return Collections.singletonList(inputDataTypes.get(0));
+    }
 }

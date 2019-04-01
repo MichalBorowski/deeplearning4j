@@ -1,10 +1,26 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.eval;
 
 import org.deeplearning4j.BaseDL4JTest;
-import org.deeplearning4j.eval.curves.Histogram;
-import org.deeplearning4j.eval.curves.PrecisionRecallCurve;
-import org.deeplearning4j.eval.curves.RocCurve;
 import org.junit.Test;
+import org.nd4j.evaluation.curves.Histogram;
+import org.nd4j.evaluation.curves.PrecisionRecallCurve;
+import org.nd4j.evaluation.curves.RocCurve;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.api.ops.random.impl.BernoulliDistribution;
 import org.nd4j.linalg.factory.Nd4j;
@@ -20,18 +36,18 @@ public class EvalJsonTest extends BaseDL4JTest {
     public void testSerdeEmpty() {
         boolean print = false;
 
-        IEvaluation[] arr = new IEvaluation[] {new Evaluation(), new EvaluationBinary(), new ROCBinary(10),
+        org.nd4j.evaluation.IEvaluation[] arr = new org.nd4j.evaluation.IEvaluation[] {new Evaluation(), new EvaluationBinary(), new ROCBinary(10),
                         new ROCMultiClass(10), new RegressionEvaluation(3), new RegressionEvaluation(),
                         new EvaluationCalibration()};
 
-        for (IEvaluation e : arr) {
+        for (org.nd4j.evaluation.IEvaluation e : arr) {
             String json = e.toJson();
             String stats = e.stats();
             if (print) {
                 System.out.println(e.getClass() + "\n" + json + "\n\n");
             }
 
-            IEvaluation fromJson = BaseEvaluation.fromJson(json, BaseEvaluation.class);
+            IEvaluation fromJson = (IEvaluation) org.nd4j.evaluation.BaseEvaluation.fromJson(json, org.nd4j.evaluation.BaseEvaluation.class);
             assertEquals(e.toJson(), fromJson.toJson());
         }
     }
@@ -50,7 +66,7 @@ public class EvalJsonTest extends BaseDL4JTest {
         EvaluationCalibration ec = new EvaluationCalibration();
 
 
-        IEvaluation[] arr = new IEvaluation[] {evaluation, evaluationBinary, roc, roc2, roc3, regressionEvaluation, ec};
+        org.nd4j.evaluation.IEvaluation[] arr = new org.nd4j.evaluation.IEvaluation[] {evaluation, evaluationBinary, roc, roc2, roc3, regressionEvaluation, ec};
 
         INDArray evalLabel = Nd4j.create(10, 3);
         for (int i = 0; i < 10; i++) {
@@ -75,13 +91,13 @@ public class EvalJsonTest extends BaseDL4JTest {
 
 
 
-        for (IEvaluation e : arr) {
+        for (org.nd4j.evaluation.IEvaluation e : arr) {
             String json = e.toJson();
             if (print) {
                 System.out.println(e.getClass() + "\n" + json + "\n\n");
             }
 
-            IEvaluation fromJson = BaseEvaluation.fromJson(json, BaseEvaluation.class);
+            IEvaluation fromJson = (IEvaluation) BaseEvaluation.fromJson(json, org.nd4j.evaluation.BaseEvaluation.class);
             assertEquals(e.toJson(), fromJson.toJson());
         }
     }
@@ -96,7 +112,7 @@ public class EvalJsonTest extends BaseDL4JTest {
         ROCMultiClass roc3 = new ROCMultiClass(0);
 
 
-        IEvaluation[] arr = new IEvaluation[] {roc, roc2, roc3};
+        org.nd4j.evaluation.IEvaluation[] arr = new org.nd4j.evaluation.IEvaluation[] {roc, roc2, roc3};
 
         INDArray evalLabel = Nd4j.create(100, 3);
         for (int i = 0; i < 100; i++) {
@@ -114,14 +130,14 @@ public class EvalJsonTest extends BaseDL4JTest {
         evalProb = Nd4j.rand(100, 1);
         roc.eval(evalLabel, evalProb);
 
-        for (IEvaluation e : arr) {
+        for (org.nd4j.evaluation.IEvaluation e : arr) {
             System.out.println(e.getClass());
             String json = e.toJson();
             String stats = e.stats();
             if (print) {
                 System.out.println(json + "\n\n");
             }
-            IEvaluation fromJson = BaseEvaluation.fromJson(json, BaseEvaluation.class);
+            org.nd4j.evaluation.IEvaluation fromJson = BaseEvaluation.fromJson(json, org.nd4j.evaluation.BaseEvaluation.class);
             assertEquals(e, fromJson);
 
             if (fromJson instanceof ROC) {
@@ -133,12 +149,12 @@ public class EvalJsonTest extends BaseDL4JTest {
                 assertEquals(((ROC) e).getRocCurve(), ((ROC) fromJson).getRocCurve());
                 assertEquals(((ROC) e).getPrecisionRecallCurve(), ((ROC) fromJson).getPrecisionRecallCurve());
             } else if (e instanceof ROCBinary) {
-                ROC[] rocs = ((ROCBinary) fromJson).getUnderlying();
-                ROC[] origRocs = ((ROCBinary) e).getUnderlying();
+                org.nd4j.evaluation.classification.ROC[] rocs = ((ROCBinary) fromJson).getUnderlying();
+                org.nd4j.evaluation.classification.ROC[] origRocs = ((ROCBinary) e).getUnderlying();
                 //                for(ROC r : rocs ){
                 for (int i = 0; i < origRocs.length; i++) {
-                    ROC r = rocs[i];
-                    ROC origR = origRocs[i];
+                    org.nd4j.evaluation.classification.ROC r = rocs[i];
+                    org.nd4j.evaluation.classification.ROC origR = origRocs[i];
                     //Shouldn't have probAndLabel, but should have stored AUC and AUPRC, AND stored curves
                     assertNull(r.getProbAndLabel());
                     assertEquals(origR.calculateAUC(), origR.calculateAUC(), 1e-6);
@@ -148,11 +164,11 @@ public class EvalJsonTest extends BaseDL4JTest {
                 }
 
             } else if (e instanceof ROCMultiClass) {
-                ROC[] rocs = ((ROCMultiClass) fromJson).getUnderlying();
-                ROC[] origRocs = ((ROCMultiClass) e).getUnderlying();
+                org.nd4j.evaluation.classification.ROC[] rocs = ((ROCMultiClass) fromJson).getUnderlying();
+                org.nd4j.evaluation.classification.ROC[] origRocs = ((ROCMultiClass) e).getUnderlying();
                 for (int i = 0; i < origRocs.length; i++) {
-                    ROC r = rocs[i];
-                    ROC origR = origRocs[i];
+                    org.nd4j.evaluation.classification.ROC r = rocs[i];
+                    org.nd4j.evaluation.classification.ROC origR = origRocs[i];
                     //Shouldn't have probAndLabel, but should have stored AUC and AUPRC, AND stored curves
                     assertNull(r.getProbAndLabel());
                     assertEquals(origR.calculateAUC(), origR.calculateAUC(), 1e-6);

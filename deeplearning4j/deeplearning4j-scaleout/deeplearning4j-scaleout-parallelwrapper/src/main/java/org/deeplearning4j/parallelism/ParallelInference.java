@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.parallelism;
 
 import lombok.NonNull;
@@ -10,6 +26,7 @@ import org.deeplearning4j.nn.graph.ComputationGraph;
 import org.deeplearning4j.nn.multilayer.MultiLayerNetwork;
 import org.deeplearning4j.parallelism.inference.InferenceMode;
 import org.deeplearning4j.parallelism.inference.InferenceObservable;
+import org.deeplearning4j.parallelism.inference.LoadBalanceMode;
 import org.deeplearning4j.parallelism.inference.observers.BasicInferenceObservable;
 import org.deeplearning4j.parallelism.inference.observers.BasicInferenceObserver;
 import org.deeplearning4j.parallelism.inference.observers.BatchedInferenceObservable;
@@ -26,6 +43,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  * This class is simple wrapper for
@@ -35,14 +53,15 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 @Slf4j
 public class ParallelInference {
-    private Model model;
-    private long nanos;
-    private int workers;
-    private int batchLimit;
-    private InferenceMode inferenceMode;
-    private int queueLimit;
+    protected Model model;
+    protected long nanos;
+    protected int workers;
+    protected int batchLimit;
+    protected InferenceMode inferenceMode;
+    protected int queueLimit;
+    protected LoadBalanceMode loadBalanceMode = LoadBalanceMode.FIFO;
 
-    // this queue
+    // this queue holds data for inference
     private BlockingQueue<InferenceObservable> observables;
 
     private final Object locker = new Object();
@@ -61,6 +80,40 @@ public class ParallelInference {
 
     protected ParallelInference() {
         //
+    }
+
+    /**
+     * This method allows to update Model used for inference in runtime, without queue reset
+     *
+     * @param model
+     */
+    public void updateModel(@NonNull Model model) {
+        if (zoo != null) {
+            for (val w: zoo)
+                w.updateModel(model);
+        } else {
+            // if zoo wasn't initalized yet - just replace model
+            this.model = model;
+        }
+    }
+
+    /**
+     * This method returns Models used in workers at this moment
+     * PLEASE NOTE: This method is NOT thread safe, and should NOT be used anywhere but tests
+     *
+     * @return
+     */
+    protected Model[] getCurrentModelsFromWorkers() {
+        if (zoo == null)
+            return new Model[0];
+
+        val models = new Model[zoo.length];
+        int cnt = 0;
+        for (val w:zoo) {
+            models[cnt++] = w.replicatedModel;
+        }
+
+        return models;
     }
 
     protected void init() {
@@ -175,8 +228,9 @@ public class ParallelInference {
      * @return Output from the network
      */
     public INDArray[] output(INDArray[] input, INDArray[] inputMasks){
-        // basically, depending on model type we either throw stuff to specific model, or wait for batch
+        Nd4j.getExecutioner().commit(); //Commit before passing input to other thread
 
+        // basically, depending on model type we either throw stuff to specific model, or wait for batch
         BasicInferenceObserver observer = new BasicInferenceObserver();
         InferenceObservable observable;
 
@@ -213,6 +267,7 @@ public class ParallelInference {
         private int batchLimit = DEFAULT_BATCH_LIMIT;
         private InferenceMode inferenceMode = DEFAULT_INFERENCE_MODE;
         private int queueLimit = DEFAULT_QUEUE_LIMIT;
+        protected LoadBalanceMode loadBalanceMode = LoadBalanceMode.FIFO;
 
         public Builder(@NonNull Model model) {
             this.model = model;
@@ -235,11 +290,23 @@ public class ParallelInference {
         }
 
 
+        /**
+         * This method allows you to specify load balance mode
+         *
+         * @param loadBalanceMode
+         * @return
+         */
+        public Builder loadBalanceMode(@NonNull LoadBalanceMode loadBalanceMode) {
+            this.loadBalanceMode = loadBalanceMode;
+            return this;
+        }
+
 
         /**
          * This method defines, how many model copies will be used for inference.
          *
          * PLEASE NOTE: This method primarily suited for multi-GPU systems
+         * PLEASE NOTE: For INPLACE inference mode this value will mean number of models per DEVICE
          *
          * @param workers
          * @return
@@ -292,16 +359,29 @@ public class ParallelInference {
          * @return
          */
         public ParallelInference build() {
-            ParallelInference inference = new ParallelInference();
-            inference.batchLimit = this.batchLimit;
-            inference.queueLimit = this.queueLimit;
-            inference.inferenceMode = this.inferenceMode;
-            inference.model = this.model;
-            inference.workers = this.workers;
+            if (this.inferenceMode == InferenceMode.INPLACE) {
+                val inf = new InplaceParallelInference();
+                inf.inferenceMode = this.inferenceMode;
+                inf.model = this.model;
+                inf.workers = this.workers;
+                inf.loadBalanceMode = this.loadBalanceMode;
 
-            inference.init();
+                inf.init();
 
-            return inference;
+                return inf;
+            } else {
+                ParallelInference inference = new ParallelInference();
+                inference.batchLimit = this.batchLimit;
+                inference.queueLimit = this.queueLimit;
+                inference.inferenceMode = this.inferenceMode;
+                inference.model = this.model;
+                inference.workers = this.workers;
+                inference.loadBalanceMode = this.loadBalanceMode;
+
+                inference.init();
+
+                return inference;
+            }
         }
     }
 
@@ -319,6 +399,8 @@ public class ParallelInference {
         private AtomicLong counter = new AtomicLong(0);
         private boolean rootDevice;
 
+        private ReentrantReadWriteLock modelLock = new ReentrantReadWriteLock();
+
         private InferenceWorker(int id, @NonNull Model model, @NonNull BlockingQueue inputQueue, boolean rootDevice) {
             this.inputQueue = inputQueue;
             this.protoModel = model;
@@ -333,39 +415,61 @@ public class ParallelInference {
             return counter.get();
         }
 
+        protected void updateModel(@NonNull Model model) {
+            try {
+                modelLock.writeLock().lock();
+                this.protoModel = model;
+
+                // now re-init model
+                initializeReplicaModel();
+            } finally {
+                modelLock.writeLock().unlock();
+            }
+        }
+
+        /**
+         * This method duplicates model for future use during inference
+         */
+        protected void initializeReplicaModel() {
+            if (protoModel instanceof ComputationGraph) {
+                if (!rootDevice) {
+                    this.replicatedModel = new ComputationGraph(ComputationGraphConfiguration
+                            .fromJson(((ComputationGraph) protoModel).getConfiguration().toJson()));
+                    this.replicatedModel.init();
+
+                    synchronized (locker) {
+                        this.replicatedModel.setParams(protoModel.params().unsafeDuplication(true));
+
+                        Nd4j.getExecutioner().commit();
+                    }
+                } else {
+                    this.replicatedModel = protoModel;
+                }
+            } else if (protoModel instanceof MultiLayerNetwork) {
+                if (!rootDevice) {
+                    this.replicatedModel = new MultiLayerNetwork(MultiLayerConfiguration.fromJson(
+                            ((MultiLayerNetwork) protoModel).getLayerWiseConfigurations().toJson()));
+                    this.replicatedModel.init();
+
+                    synchronized (locker) {
+                        this.replicatedModel.setParams(protoModel.params().unsafeDuplication(true));
+
+                        Nd4j.getExecutioner().commit();
+                    }
+                } else {
+                    this.replicatedModel = protoModel;
+                }
+            }
+        }
+
         @Override
         public void run() {
             try {
                 // model should be replicated & initialized here
-                if (protoModel instanceof ComputationGraph) {
-                    if (!rootDevice) {
-                        this.replicatedModel = new ComputationGraph(ComputationGraphConfiguration
-                                        .fromJson(((ComputationGraph) protoModel).getConfiguration().toJson()));
-                        this.replicatedModel.init();
+                initializeReplicaModel();
 
-                        synchronized (locker) {
-                            this.replicatedModel.setParams(protoModel.params().unsafeDuplication(true));
-
-                            Nd4j.getExecutioner().commit();
-                        }
-                    } else {
-                        this.replicatedModel = protoModel;
-                    }
-                } else if (protoModel instanceof MultiLayerNetwork) {
-                    if (!rootDevice) {
-                        this.replicatedModel = new MultiLayerNetwork(MultiLayerConfiguration.fromJson(
-                                        ((MultiLayerNetwork) protoModel).getLayerWiseConfigurations().toJson()));
-                        this.replicatedModel.init();
-
-                        synchronized (locker) {
-                            this.replicatedModel.setParams(protoModel.params().unsafeDuplication(true));
-
-                            Nd4j.getExecutioner().commit();
-                        }
-                    } else {
-                        this.replicatedModel = protoModel;
-                    }
-                }
+                boolean isCG = replicatedModel instanceof  ComputationGraph;
+                boolean isMLN = replicatedModel instanceof  MultiLayerNetwork;
 
                 while (shouldWork.get()) {
                     InferenceObservable request = inputQueue.take();
@@ -374,27 +478,42 @@ public class ParallelInference {
                         counter.incrementAndGet();
 
                         // FIXME: get rid of instanceof here, model won't change during runtime anyway
-                        if (replicatedModel instanceof ComputationGraph) {
+                        if (isCG) {
                             List<Pair<INDArray[],INDArray[]>> batches = request.getInputBatches();
                             List<INDArray[]> out = new ArrayList<>(batches.size());
                             try {
                                 for (Pair<INDArray[],INDArray[]> inBatch : batches) {
-                                    INDArray[] output = ((ComputationGraph) replicatedModel).output(false, inBatch.getFirst(), inBatch.getSecond());
-                                    out.add(output);
+                                    try {
+                                        modelLock.readLock().lock();
+
+                                        INDArray[] output = ((ComputationGraph) replicatedModel).output(false, inBatch.getFirst(), inBatch.getSecond());
+                                        out.add(output);
+                                    } finally {
+                                        Nd4j.getExecutioner().commit();
+                                        modelLock.readLock().unlock();
+                                    }
+
                                 }
                                 request.setOutputBatches(out);
                             } catch (Exception e){
                                 request.setOutputException(e);
                             }
-                        } else if (replicatedModel instanceof MultiLayerNetwork) {
+                        } else if (isMLN) {
                             List<Pair<INDArray[],INDArray[]>> batches = request.getInputBatches();
                             List<INDArray[]> out = new ArrayList<>(batches.size());
                             try {
                                 for (Pair<INDArray[],INDArray[]> inBatch : batches) {
                                     INDArray f = inBatch.getFirst()[0];
                                     INDArray fm = (inBatch.getSecond() == null ? null : inBatch.getSecond()[0]);
-                                    INDArray output = ((MultiLayerNetwork) replicatedModel).output(f, false, fm, null);
-                                    out.add(new INDArray[]{output});
+                                    try {
+                                        modelLock.readLock().lock();
+
+                                        INDArray output = ((MultiLayerNetwork) replicatedModel).output(f, false, fm, null);
+                                        out.add(new INDArray[]{output});
+                                    } finally {
+                                        Nd4j.getExecutioner().commit();
+                                        modelLock.readLock().unlock();
+                                    }
                                 }
                                 request.setOutputBatches(out);
                             } catch (Exception e){

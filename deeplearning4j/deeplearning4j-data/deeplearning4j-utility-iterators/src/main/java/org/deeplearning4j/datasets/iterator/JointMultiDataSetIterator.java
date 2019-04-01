@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.datasets.iterator;
 
 import lombok.AllArgsConstructor;
@@ -11,10 +27,15 @@ import org.nd4j.linalg.dataset.api.iterator.DataSetIterator;
 import org.nd4j.linalg.dataset.api.iterator.MultiDataSetIterator;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 
 /**
- * This dataset iterator combines multiple DataSetIterators into 1 MultiDataSetIterator
+ * This dataset iterator combines multiple DataSetIterators into 1 MultiDataSetIterator.
+ * Values from each iterator are joined on a per-example basis - i.e., the values from each DataSet are combined
+ * as different feature arrays for a multi-input neural network.
+ * Labels can come from either one of the underlying DataSetIteartors only (if 'outcome' is >= 0) or from all
+ * iterators (if outcome is < 0)
  *
  * @author raver119@gmail.com
  */
@@ -26,17 +47,23 @@ public class JointMultiDataSetIterator implements MultiDataSetIterator {
     protected Collection<DataSetIterator> iterators;
     protected int outcome = -1;
 
-
+    /**
+     * @param iterators Underlying iterators to wrap
+     */
     public JointMultiDataSetIterator(DataSetIterator... iterators) {
         this.iterators = new ArrayList<DataSetIterator>();
-
-        for (val i: iterators)
-            ((ArrayList<DataSetIterator>) this.iterators).add(i);
+        this.iterators.addAll(Arrays.asList(iterators));
+        this.outcome = -1;
     }
 
+    /**
+     *
+     * @param outcome   Index to get the label from. If < 0, labels from all iterators will be used to create the
+     *                  final MultiDataSet
+     * @param iterators Underlying iterators to wrap
+     */
     public JointMultiDataSetIterator(int outcome, DataSetIterator... iterators){
         this(iterators);
-
         this.outcome = outcome;
     }
 

@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.linalg.inverse;
 
 import org.apache.commons.math3.linear.DecompositionSolver;
@@ -21,6 +37,14 @@ public class InvertMatrix {
      * @return the inverted matrix
      */
     public static INDArray invert(INDArray arr, boolean inPlace) {
+        if(arr.rank() == 2 && arr.length() == 1){
+            //[1,1] edge case. Matrix inversion: [x] * [1/x] = [1]
+            if(inPlace){
+                return arr.rdivi(1.0);
+            } else {
+                return arr.rdiv(1.0);
+            }
+        }
         if (!arr.isSquare()) {
             throw new IllegalArgumentException("invalid array: must be square matrix");
         }
@@ -37,7 +61,7 @@ public class InvertMatrix {
         RealMatrix rmInverse = new LUDecomposition(rm).getSolver().getInverse();
 
 
-        INDArray inverse = CheckUtil.convertFromApacheMatrix(rmInverse);
+        INDArray inverse = CheckUtil.convertFromApacheMatrix(rmInverse, arr.dataType());
         if (inPlace)
             arr.assign(inverse);
         return inverse;
@@ -63,7 +87,7 @@ public class InvertMatrix {
 
         RealMatrix pinvRM = solver.getInverse();
 
-        INDArray pseudoInverse = CheckUtil.convertFromApacheMatrix(pinvRM);
+        INDArray pseudoInverse = CheckUtil.convertFromApacheMatrix(pinvRM, arr.dataType());
 
         if (inPlace)
             arr.assign(pseudoInverse);

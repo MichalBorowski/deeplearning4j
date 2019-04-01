@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.linalg.lossfunctions.impl;
 
 import lombok.EqualsAndHashCode;
@@ -7,15 +23,18 @@ import onnx.OnnxProto3;
 import org.nd4j.autodiff.functions.DifferentialFunction;
 import org.nd4j.autodiff.samediff.SDVariable;
 import org.nd4j.autodiff.samediff.SameDiff;
+import org.nd4j.base.Preconditions;
 import org.nd4j.linalg.api.ops.CustomOp;
 import org.nd4j.linalg.api.ops.DynamicCustomOp;
 import org.nd4j.linalg.api.ops.Op;
+import org.nd4j.linalg.api.ops.impl.transforms.custom.SoftMax;
+import org.nd4j.linalg.api.ops.impl.transforms.strict.OldSoftMax;
 import org.nd4j.linalg.primitives.Pair;
 import org.nd4j.linalg.activations.IActivation;
 import org.nd4j.linalg.activations.impl.ActivationSoftmax;
 import org.nd4j.linalg.api.ndarray.INDArray;
-import org.nd4j.linalg.api.ops.impl.transforms.LogSoftMax;
-import org.nd4j.linalg.api.ops.impl.transforms.TimesOneMinus;
+import org.nd4j.linalg.api.ops.impl.transforms.custom.LogSoftMax;
+import org.nd4j.linalg.api.ops.impl.transforms.same.TimesOneMinus;
 import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.lossfunctions.ILossFunction;
 import org.nd4j.linalg.lossfunctions.LossUtil;
@@ -107,21 +126,18 @@ public class LossBinaryXENT extends DifferentialFunction implements ILossFunctio
     }
 
     private INDArray scoreArray(INDArray labels, INDArray preOutput, IActivation activationFn, INDArray mask) {
-
-        if (labels.size(1) != preOutput.size(1)) {
-            throw new IllegalArgumentException(
-                            "Labels array numColumns (size(1) = " + labels.size(1) + ") does not match output layer"
-                                            + " number of outputs (nOut = " + preOutput.size(1) + ") ");
+        if(!labels.equalShapes(preOutput)){
+            Preconditions.throwEx("Labels and preOutput must have equal shapes: got shapes %s vs %s", labels.shape(), preOutput.shape());
         }
 
         INDArray scoreArr;
         if (activationFn instanceof ActivationSoftmax) {
-            //Use LogSoftMax op to avoid numerical issues when calculating score
-            INDArray logsoftmax = Nd4j.getExecutioner().execAndReturn(new LogSoftMax(preOutput.dup()));
+            //TODO Post GPU support for custom ops: Use LogSoftMax op to avoid numerical issues when calculating score
+            INDArray logsoftmax = Nd4j.getExecutioner().exec(new OldSoftMax(preOutput.dup()));
+            Transforms.log(logsoftmax, false);
             scoreArr = logsoftmax.muli(labels);
 
         } else {
-            //INDArray output = Nd4j.getExecutioner().execAndReturn(Nd4j.getOpFactory().createTransform(activationFn, preOutput.dup()));
             INDArray output = activationFn.getActivation(preOutput.dup(), true);
             if (clipEps > 0.0) {
                 CustomOp op = DynamicCustomOp.builder("clipbyvalue")
@@ -129,7 +145,7 @@ public class LossBinaryXENT extends DifferentialFunction implements ILossFunctio
                         .callInplace(true)
                         .addFloatingPointArguments(clipEps, 1.0-clipEps)
                         .build();
-                Nd4j.getExecutioner().exec(op);
+                Nd4j.getExecutioner().execAndReturn(op);
             }
             scoreArr = Transforms.log(output, true).muli(labels);
             INDArray secondTerm = output.rsubi(1);
@@ -173,16 +189,13 @@ public class LossBinaryXENT extends DifferentialFunction implements ILossFunctio
     public INDArray computeScoreArray(INDArray labels, INDArray preOutput, IActivation activationFn, INDArray mask) {
 
         INDArray scoreArr = scoreArray(labels, preOutput, activationFn, mask);
-        return scoreArr.sum(1).muli(-1);
+        return scoreArr.sum(true,1).muli(-1);
     }
 
     @Override
     public INDArray computeGradient(INDArray labels, INDArray preOutput, IActivation activationFn, INDArray mask) {
-
-        if (labels.size(1) != preOutput.size(1)) {
-            throw new IllegalArgumentException(
-                            "Labels array numColumns (size(1) = " + labels.size(1) + ") does not match output layer"
-                                            + " number of outputs (nOut = " + preOutput.size(1) + ") ");
+        if(!labels.equalShapes(preOutput)){
+            Preconditions.throwEx("Labels and preOutput must have equal shapes: got shapes %s vs %s", labels.shape(), preOutput.shape());
         }
 
         INDArray output = activationFn.getActivation(preOutput.dup(), true);
@@ -192,11 +205,11 @@ public class LossBinaryXENT extends DifferentialFunction implements ILossFunctio
                     .callInplace(true)
                     .addFloatingPointArguments(clipEps, 1.0-clipEps)
                     .build();
-            Nd4j.getExecutioner().exec(op);
+            Nd4j.getExecutioner().execAndReturn(op);
         }
 
         INDArray numerator = output.sub(labels);
-        INDArray denominator = Nd4j.getExecutioner().execAndReturn(new TimesOneMinus(output)); // output * (1-output)
+        INDArray denominator = Nd4j.getExecutioner().exec(new TimesOneMinus(output)); // output * (1-output)
         INDArray dLda = numerator.divi(denominator);
 
         if (mask != null && LossUtil.isPerOutputMasking(dLda, mask)) {

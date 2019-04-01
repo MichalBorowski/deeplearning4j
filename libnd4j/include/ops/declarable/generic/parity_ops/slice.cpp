@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 //
 // Created by raver119 on 02.11.2017.
 //
@@ -28,14 +44,14 @@ namespace nd4j {
             } else {
                 REQUIRE_TRUE(block.numI() >= x_rank * 2, 0, "Number of IArgs should be equal to [%i] but got [%i] instead", x_rank * 2, block.numI());
 
-                ShapeUtils<T>::copyVectorPart(begin, *(block.getIArguments()), x_rank, 0);
-                ShapeUtils<T>::copyVectorPart(end, *(block.getIArguments()), x_rank, x_rank);
+                ShapeUtils::copyVectorPart(begin, *(block.getIArguments()), x_rank, 0);
+                ShapeUtils::copyVectorPart(end, *(block.getIArguments()), x_rank, x_rank);
             }
 
             REQUIRE_TRUE(begin.size() == x_rank, 0, "begin array should have length of [%i] but got [%i] instead", x_rank, begin.size());
             REQUIRE_TRUE(end.size() == x_rank, 0, "end array should have length of [%i] but got [%i] instead", x_rank, end.size());
 
-            IndicesList indices;
+            std::vector<Nd4jLong> indices(2 * x_rank);
             for (int e = 0; e < x_rank; e++) {
                 int size = end[e];
                 int start = begin[e];
@@ -48,17 +64,22 @@ namespace nd4j {
                 }
                 REQUIRE_TRUE(size > 0, 0, "Slice: interval for dimension %i is less then 1");
                 REQUIRE_TRUE(start + size <= input->sizeAt(e), 0, "Slice: interval [%i, %i] is out of bounds for dimension %i with size %i", start, start + size, e, input->sizeAt(e));
-
-                indices.push_back(NDIndex::interval(start, start + size, 1));
+                
+                indices[2*e]   = start;
+                indices[2*e+1] = start + size;
             }
-            auto sub = input->subarray(indices);
+            auto sub = (*input)(indices, true);
             output->assign(sub);
-
-            delete sub;
 
             STORE_RESULT(output);
 
             return Status::OK();
+        }
+
+        DECLARE_TYPES(slice) {
+            getOpDescriptor()
+                    ->setAllowedInputTypes(nd4j::DataType::ANY)
+                    ->setSameMode(true);
         }
 
         DECLARE_SHAPE_FN(slice) {
@@ -77,8 +98,8 @@ namespace nd4j {
             } else {
                 REQUIRE_TRUE(block.numI() >= x_rank * 2, 0, "Number of IArgs should be equal to [%i] but got [%i] instead", x_rank * 2, block.numI());
 
-                ShapeUtils<T>::copyVectorPart(begin, *(block.getIArguments()), x_rank, 0);
-                ShapeUtils<T>::copyVectorPart(end, *(block.getIArguments()), x_rank, x_rank);
+                ShapeUtils::copyVectorPart(begin, *(block.getIArguments()), x_rank, 0);
+                ShapeUtils::copyVectorPart(end, *(block.getIArguments()), x_rank, x_rank);
             }
 
             REQUIRE_TRUE(begin.size() == x_rank, 0, "begin array should have length of [%i] but got [%i] instead", x_rank, begin.size());
@@ -90,15 +111,24 @@ namespace nd4j {
                 auto stop = end[e];
                 auto start = begin[e];
 
+                if(stop == -1){
+                    stop = inShape[e+1] - start;
+                }
+
                 shape.emplace_back(stop);
             }
 
             ALLOCATE(newShape, block.getWorkspace(), shape::shapeInfoLength(x_rank), Nd4jLong);
-            shape::shapeBuffer(x_rank, shape.data(), newShape);
+            shape::shapeBuffer(x_rank, ArrayOptions::dataType(inShape), shape.data(), newShape);
 
             return SHAPELIST(newShape);
         }
 
+        DECLARE_TYPES(slice_bp) {
+            getOpDescriptor()
+                    ->setAllowedInputTypes(nd4j::DataType::ANY)
+                    ->setAllowedOutputTypes({ALL_FLOATS});
+        }
 
 
         CUSTOM_OP_IMPL(slice_bp, 2, 1, false, 0, -1) {
@@ -106,7 +136,7 @@ namespace nd4j {
             auto epsNext = block.width() == 4 ? INPUT_VARIABLE(3) : INPUT_VARIABLE(1);
 
             auto output = OUTPUT_VARIABLE(0);
-
+            output->assign(0.);
             int x_rank = input->rankOf();
 
             std::vector<int> begin;
@@ -121,25 +151,25 @@ namespace nd4j {
             } else {
                 REQUIRE_TRUE(block.numI() >= x_rank * 2, 0, "Number of IArgs should be equal to [%i] but got [%i] instead", x_rank * 2, block.numI());
 
-                ShapeUtils<T>::copyVectorPart(begin, *(block.getIArguments()), x_rank, 0);
-                ShapeUtils<T>::copyVectorPart(end, *(block.getIArguments()), x_rank, x_rank);
+                ShapeUtils::copyVectorPart(begin, *(block.getIArguments()), x_rank, 0);
+                ShapeUtils::copyVectorPart(end, *(block.getIArguments()), x_rank, x_rank);
             }
 
             REQUIRE_TRUE(begin.size() == x_rank, 0, "begin array should have length of [%i] but got [%i] instead", x_rank, begin.size());
             REQUIRE_TRUE(end.size() == x_rank, 0, "end array should have length of [%i] but got [%i] instead", x_rank, end.size());
 
-            IndicesList indices;
+            std::vector<Nd4jLong> indices(2 * x_rank);
             for (int e = 0; e < x_rank; e++) {
                 int stop = end[e];
                 int start = begin[e];
 
                 REQUIRE_TRUE(stop > 0, 0, "Slice: interval for dimension %i is less then 1", e);
-
-                indices.push_back(NDIndex::interval(start, start+stop, 1));
+                
+                indices[2*e]     = start;
+                indices[2*e + 1] = start + stop;
             }
-            auto sub = output->subarray(indices);
-            sub->assign(epsNext);
-            delete sub;
+            auto sub = (*output)(indices, true);
+            sub.assign(epsNext);            
 
             return Status::OK();
         }

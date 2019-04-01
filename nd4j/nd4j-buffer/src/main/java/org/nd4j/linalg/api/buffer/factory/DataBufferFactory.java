@@ -1,21 +1,18 @@
-/*-
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
  *
- *  * Copyright 2015 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
  *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
  *
- */
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.nd4j.linalg.api.buffer.factory;
 
@@ -25,6 +22,7 @@ import org.bytedeco.javacpp.IntPointer;
 import org.bytedeco.javacpp.Pointer;
 import org.bytedeco.javacpp.indexer.Indexer;
 import org.nd4j.linalg.api.buffer.DataBuffer;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.memory.MemoryWorkspace;
 
 import java.nio.ByteBuffer;
@@ -161,7 +159,7 @@ public interface DataBufferFactory {
 
 
     /**
-     * Create a double buffer buffer
+     * Create a double buffer
      * @param data
      * @param length
      * @return
@@ -353,6 +351,10 @@ public interface DataBufferFactory {
 
     DataBuffer createFloat(long length, boolean initialize, MemoryWorkspace workspace);
 
+    DataBuffer create(DataType dataType, long length, boolean initialize);
+
+    DataBuffer create(DataType dataType, long length, boolean initialize, MemoryWorkspace workspace);
+
     /**
      * Create an int data buffer
      *
@@ -430,7 +432,7 @@ public interface DataBufferFactory {
 
 
     /**
-     * Create a double buffer buffer
+     * Create a double buffer
      * @param data
      * @param length
      * @return
@@ -626,7 +628,7 @@ public interface DataBufferFactory {
      * backed by this pointer with the given
      * opType and length.
      */
-    DataBuffer create(Pointer pointer, DataBuffer.Type type, long length, Indexer indexer);
+    DataBuffer create(Pointer pointer, DataType type, long length, Indexer indexer);
 
     /**
      *

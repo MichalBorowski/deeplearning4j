@@ -1,25 +1,24 @@
-/*-
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
  *
- *  * Copyright 2015 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
  *
- */
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.deeplearning4j.clustering.kdtree;
 
 import org.nd4j.linalg.api.ndarray.INDArray;
-import org.nd4j.linalg.api.ops.impl.accum.distances.EuclideanDistance;
+import org.nd4j.linalg.api.ops.impl.reduce.bool.Any;
+import org.nd4j.linalg.api.ops.impl.reduce3.EuclideanDistance;
 import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.primitives.Pair;
 
@@ -30,7 +29,7 @@ import java.util.Comparator;
 import java.util.List;
 
 /**
- * KDTree based on: https://github.com/nicky-zs/kdtree-python/blob/master/kdtree.py
+ * KDTree based on: <a href="https://github.com/nicky-zs/kdtree-python/blob/master/kdtree.py">https://github.com/nicky-zs/kdtree-python/blob/master/kdtree.py</a>
  *
  * @author Adam Gibson
  */
@@ -65,7 +64,9 @@ public class KDTree implements Serializable {
             int successor;
             while (true) {
                 //exactly equal
-                if (node.getPoint().neq(point).sum(Integer.MAX_VALUE).getDouble(0) == 0) {
+                INDArray pt = node.getPoint();
+                INDArray countEq = Nd4j.getExecutioner().execAndReturn(new Any(pt.neq(point))).z();
+                if (countEq.getInt(0) == 0) {
                     return;
                 } else {
                     successor = successor(node, point, disc);
@@ -145,7 +146,7 @@ public class KDTree implements Serializable {
         if (node == null || rect.minDistance(point) > dist)
             return;
         int _discNext = (_disc + 1) % dims;
-        double distance = Nd4j.getExecutioner().execAndReturn(new EuclideanDistance(point)).getFinalResult()
+        double distance = Nd4j.getExecutioner().execAndReturn(new EuclideanDistance(point, Nd4j.scalar(0.0))).getFinalResult()
                         .doubleValue();
         if (distance <= dist) {
             best.add(Pair.of(distance, node.getPoint()));
@@ -173,7 +174,7 @@ public class KDTree implements Serializable {
             return Pair.of(Double.POSITIVE_INFINITY, null);
 
         int _discNext = (_disc + 1) % dims;
-        double dist2 = Nd4j.getExecutioner().execAndReturn(new EuclideanDistance(point)).getFinalResult().doubleValue();
+        double dist2 = Nd4j.getExecutioner().execAndReturn(new EuclideanDistance(point, Nd4j.zeros(point.shape()))).getFinalResult().doubleValue();
         if (dist2 < dist) {
             best = node.getPoint();
             dist = dist2;

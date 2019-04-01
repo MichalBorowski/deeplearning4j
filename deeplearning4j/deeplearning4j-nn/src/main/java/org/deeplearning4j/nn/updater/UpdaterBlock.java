@@ -1,9 +1,26 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.nn.updater;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.val;
 import org.deeplearning4j.nn.api.Layer;
+import org.deeplearning4j.nn.api.Trainable;
 import org.deeplearning4j.nn.conf.NeuralNetConfiguration;
 import org.deeplearning4j.nn.conf.layers.BaseLayer;
 import org.deeplearning4j.nn.layers.FrozenLayer;
@@ -11,6 +28,7 @@ import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.indexing.NDArrayIndex;
 import org.nd4j.linalg.learning.GradientUpdater;
+import org.nd4j.linalg.learning.regularization.Regularization;
 import org.nd4j.linalg.ops.transforms.Transforms;
 
 import java.util.ArrayList;
@@ -40,7 +58,7 @@ public class UpdaterBlock {
     @AllArgsConstructor
     @Data
     public static class ParamState {
-        private final Layer layer;
+        private final Trainable layer;
         private final String paramName;
         private final int paramOffsetStart;
         private final int paramOffsetEnd;
@@ -73,7 +91,7 @@ public class UpdaterBlock {
         if (gradientUpdater == null) {
             ParamState varState = layersAndVariablesInBlock.get(0);
             String varName = varState.getParamName();
-            gradientUpdater = varState.getLayer().conf().getLayer().getUpdaterByParam(varName).instantiate(updaterView,
+            gradientUpdater = varState.getLayer().getConfig().getUpdaterByParam(varName).instantiate(updaterView,
                             updaterViewRequiresInitialization); //UpdaterUtils.getGradientUpdater(varState.getLayer(), varState.getParamName());
         }
     }
@@ -81,14 +99,13 @@ public class UpdaterBlock {
     public boolean isPretrainUpdaterBlock() {
         //All in block should be the same layer, and all be pretrain params
         ParamState vs = layersAndVariablesInBlock.get(0);
-        return vs.getLayer().conf().getLayer().isPretrainParam(vs.getParamName());
+        return vs.getLayer().getConfig().isPretrainParam(vs.getParamName());
     }
 
-    public boolean skipDueToPretrainConfig() {
+    public boolean skipDueToPretrainConfig( boolean isLayerUpdater) {
         if (!isPretrainUpdaterBlock())
             return false;
-        ParamState vs = layersAndVariablesInBlock.get(0);
-        return !vs.getLayer().conf().isPretrain(); //Skip if not pretrain
+        return !isLayerUpdater;
     }
 
     public GradientUpdater getGradientUpdater() {
@@ -133,30 +150,41 @@ public class UpdaterBlock {
 
         //Second: apply learning rate policy. Note that by definition we have the same LR policy for every single
         // variable in the block
-        Layer l0 = layersAndVariablesInBlock.get(0).getLayer();
+        Trainable l0 = layersAndVariablesInBlock.get(0).getLayer();
         if (l0.numParams() == 0) {
             //No params for this layer
             return;
         }
 
+        //Pre-updater regularization: l1 and l2
+        applyRegularizationAllVariables(Regularization.ApplyStep.BEFORE_UPDATER, iteration, epoch, externalGradient, fullNetworkGradientView, fullNetworkParamsArray);
+
         //Apply the updater itself
         gradientUpdater.applyUpdater(blockGradViewArray, iteration, epoch);
 
-        //Post apply: l1 and l2 by params
+        //Post updater regularization: weight decay
+        applyRegularizationAllVariables(Regularization.ApplyStep.POST_UPDATER, iteration, epoch, externalGradient, fullNetworkGradientView, fullNetworkParamsArray);
+    }
+
+    protected void applyRegularizationAllVariables(Regularization.ApplyStep applyStep, int iteration, int epoch, boolean externalGradient, INDArray fullNetworkGradientView,
+                                                   INDArray fullNetworkParamsArray) {
         for (ParamState p : layersAndVariablesInBlock) {
             INDArray paramView;
             INDArray gradView;
             if (externalGradient) {
                 paramView = fullNetworkParamsArray.get(NDArrayIndex.point(0),
-                                NDArrayIndex.interval(p.getParamOffsetStart(), p.getParamOffsetEnd()));
+                        NDArrayIndex.interval(p.getParamOffsetStart(), p.getParamOffsetEnd()));
                 gradView = fullNetworkGradientView.get(NDArrayIndex.point(0),
-                                NDArrayIndex.interval(p.getParamOffsetStart(), p.getParamOffsetEnd()));
+                        NDArrayIndex.interval(p.getParamOffsetStart(), p.getParamOffsetEnd()));
             } else {
                 //Standard case
                 paramView = p.getParamView();
                 gradView = p.getGradView();
             }
-            postApply(p.getLayer(), p.getParamName(), gradView, paramView);
+
+            boolean hasLR = gradientUpdater.getConfig().hasLearningRate();
+            double lr = (hasLR ? gradientUpdater.getConfig().getLearningRate(iteration, epoch) : 1.0);
+            applyRegularization(applyStep, p.getLayer(), p.getParamName(), gradView, paramView, iteration, epoch, lr);
         }
     }
 
@@ -168,28 +196,16 @@ public class UpdaterBlock {
      * @param gradientView Gradient view array for the layer + param
      * @param paramsView   Parameter view array for the layer + param
      */
-    public void postApply(Layer layer, String paramName, INDArray gradientView, INDArray paramsView) {
-        if( layer instanceof FrozenLayer ){
-            //TODO this is a quick hack to fix https://github.com/deeplearning4j/deeplearning4j/issues/4250
-            //The underlying cause seems to be the whole NeuralNetConfiguration l1/l2ByParam maps and layer config separation
-            // which is being resolved in the upcoming PR here: https://github.com/deeplearning4j/deeplearning4j/pull/4050
-            return;
-        }
-
-        NeuralNetConfiguration conf = layer.conf();
-
+    protected void applyRegularization(Regularization.ApplyStep step, Trainable layer, String paramName, INDArray gradientView, INDArray paramsView, int iter, int epoch, double lr) {
         //TODO: do this for multiple contiguous params/layers (fewer, larger ops)
 
-        double l2 = conf.getL2ByParam(paramName);
-        if (l2 > 0) {
-            //This can be an axpy op, saving an allocation...
-            //gradientView += params * l2           i.e., dC/dW = dC0/dW + lambda/n * w where C0 is pre-l2 cost function
-            //Equivalent to gradientView.addi(paramsView.mul(conf.getL2ByParam(paramName)));
-            val length = gradientView.length();
-            Nd4j.getBlasWrapper().level1().axpy(length, l2, paramsView, gradientView);
-        }
-        if (conf.getL1ByParam(paramName) > 0) {
-            gradientView.addi(Transforms.sign(paramsView, true).muli(conf.getL1ByParam(paramName)));
+        List<Regularization> l = layer.getConfig().getRegularizationByParam(paramName);
+        if(l != null && !l.isEmpty()){
+            for(Regularization r : l){
+                if(r.applyStep() == step){
+                    r.apply(paramsView, gradientView, lr, iter, epoch);
+                }
+            }
         }
     }
 }

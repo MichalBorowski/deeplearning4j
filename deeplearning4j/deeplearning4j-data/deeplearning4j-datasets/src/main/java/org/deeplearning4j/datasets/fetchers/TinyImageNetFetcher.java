@@ -1,18 +1,18 @@
-/*-
- *  * Copyright 2016 Skymind, Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
- */
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.deeplearning4j.datasets.fetchers;
 
@@ -50,9 +50,8 @@ import java.util.Random;
  * @author Justin Long (crockpotveggies)
  */
 public class TinyImageNetFetcher extends CacheableExtractableDataSetFetcher {
-
-    private File fileDir;
-    private static Logger log = LoggerFactory.getLogger(TinyImageNetFetcher.class);
+    public static final String WORDS_FILENAME = "words.txt";
+    public static final String LOCAL_CACHE_NAME = "TINYIMAGENET_200";
 
     public static int INPUT_WIDTH = 64;
     public static int INPUT_HEIGHT = 64;
@@ -65,7 +64,7 @@ public class TinyImageNetFetcher extends CacheableExtractableDataSetFetcher {
         return DL4JResources.getURLString("datasets/tinyimagenet_200_dl4j.v1.zip");
     }
     @Override
-    public String localCacheName(){ return "TINYIMAGENET_200"; }
+    public String localCacheName(){ return LOCAL_CACHE_NAME; }
     @Override
     public long expectedChecksum(DataSetType set) { return 33822361L; }
     @Override

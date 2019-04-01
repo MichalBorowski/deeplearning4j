@@ -1,18 +1,18 @@
-/*-
- *  * Copyright 2016 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
- */
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.deeplearning4j.spark.datavec;
 
@@ -61,7 +61,7 @@ public class RecordReaderFunction implements Function<String, DataSet> {
         List<Writable> currList = recordReader.next();
 
         INDArray label = null;
-        INDArray featureVector = Nd4j.create(labelIndex >= 0 ? currList.size() - 1 : currList.size());
+        INDArray featureVector = Nd4j.create(1, labelIndex >= 0 ? currList.size() - 1 : currList.size());
         int count = 0;
         for (int j = 0; j < currList.size(); j++) {
             if (labelIndex >= 0 && j == labelIndex) {
@@ -84,7 +84,7 @@ public class RecordReaderFunction implements Function<String, DataSet> {
         List<INDArray> inputs = new ArrayList<>();
         List<INDArray> labels = new ArrayList<>();
         for (DataSet data : dataSets) {
-            inputs.add(data.getFeatureMatrix());
+            inputs.add(data.getFeatures());
             labels.add(data.getLabels());
         }
 

@@ -1,6 +1,23 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.linalg.memory.abstracts;
 
 import org.nd4j.linalg.api.buffer.DataBuffer;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.memory.MemoryWorkspace;
 import org.nd4j.linalg.api.memory.conf.WorkspaceConfiguration;
 import org.nd4j.linalg.api.memory.enums.MemoryKind;
@@ -62,7 +79,7 @@ public class DummyWorkspace implements MemoryWorkspace {
      * @return
      */
     @Override
-    public PagedPointer alloc(long requiredMemory, DataBuffer.Type dataType, boolean initialize) {
+    public PagedPointer alloc(long requiredMemory, DataType dataType, boolean initialize) {
         throw new UnsupportedOperationException("DummyWorkspace shouldn't be used for allocation");
     }
 
@@ -76,7 +93,7 @@ public class DummyWorkspace implements MemoryWorkspace {
      * @return
      */
     @Override
-    public PagedPointer alloc(long requiredMemory, MemoryKind kind, DataBuffer.Type dataType, boolean initialize) {
+    public PagedPointer alloc(long requiredMemory, MemoryKind kind, DataType dataType, boolean initialize) {
         throw new UnsupportedOperationException("DummyWorkspace shouldn't be used for allocation");
     }
 
@@ -237,5 +254,10 @@ public class DummyWorkspace implements MemoryWorkspace {
     @Override
     public void setPreviousWorkspace(MemoryWorkspace memoryWorkspace) {
         parentWorkspace = memoryWorkspace;
+    }
+
+    @Override
+    public long getCurrentOffset() {
+        return 0;
     }
 }

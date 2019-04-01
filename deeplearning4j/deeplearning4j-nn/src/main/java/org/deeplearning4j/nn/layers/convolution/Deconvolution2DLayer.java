@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.nn.layers.convolution;
 
 import lombok.val;
@@ -7,11 +23,9 @@ import org.deeplearning4j.nn.conf.ConvolutionMode;
 import org.deeplearning4j.nn.conf.NeuralNetConfiguration;
 import org.deeplearning4j.nn.gradient.DefaultGradient;
 import org.deeplearning4j.nn.gradient.Gradient;
-import org.deeplearning4j.nn.graph.ComputationGraph;
 import org.deeplearning4j.nn.params.DeconvolutionParamInitializer;
 import org.deeplearning4j.util.ConvolutionUtils;
 import org.nd4j.linalg.activations.IActivation;
-import org.nd4j.linalg.api.memory.MemoryWorkspace;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.api.ops.CustomOp;
 import org.nd4j.linalg.api.ops.DynamicCustomOp;
@@ -30,10 +44,10 @@ import java.util.Arrays;
  * In essence, deconvolutions swap forward and backward pass with regular 2D convolutions.
  *
  * See the paper by Matt Zeiler for details:
- * http://www.matthewzeiler.com/wp-content/uploads/2017/07/cvpr2010.pdf
+ * <a href="http://www.matthewzeiler.com/wp-content/uploads/2017/07/cvpr2010.pdf">http://www.matthewzeiler.com/wp-content/uploads/2017/07/cvpr2010.pdf</a>
  *
  * For an intuitive guide to convolution arithmetic and shapes, see:
- * https://arxiv.org/abs/1603.07285v1
+ * <a href="https://arxiv.org/abs/1603.07285v1">https://arxiv.org/abs/1603.07285v1</a>
  *
  *
  * @author Max Pumperla
@@ -106,15 +120,20 @@ public class Deconvolution2DLayer extends ConvolutionLayer {
         Pair<INDArray, INDArray> p = preOutput4d(true, true, workspaceMgr);
         delta = afn.backprop(p.getFirst(), epsilon).getFirst();
 
+        //DL4J Deconv weights: [inputDepth, outputDepth, kH, kW]
+        //libnd4j weights: [kH, kW, oC, iC]
+        weights = weights.permute(2, 3, 1, 0);
+        INDArray weightGradViewOp = weightGradView.permute(2, 3, 1, 0);
+
         INDArray[] opInputs;
         INDArray[] opOutputs;
         if(layerConf().hasBias()){
             INDArray bias = getParamWithNoise(DeconvolutionParamInitializer.BIAS_KEY, true, workspaceMgr);
             opInputs = new INDArray[]{input, weights, bias, delta};
-            opOutputs = new INDArray[]{outEps, weightGradView, biasGradView};
+            opOutputs = new INDArray[]{outEps, weightGradViewOp, biasGradView};
         } else {
             opInputs = new INDArray[]{input, weights, delta};
-            opOutputs = new INDArray[]{outEps, weightGradView};
+            opOutputs = new INDArray[]{outEps, weightGradViewOp};
         }
         CustomOp op = DynamicCustomOp.builder("deconv2d_bp")
                 .addInputs(opInputs)
@@ -137,9 +156,6 @@ public class Deconvolution2DLayer extends ConvolutionLayer {
 
     @Override
     protected Pair<INDArray, INDArray> preOutput(boolean training , boolean forBackprop, LayerWorkspaceMgr workspaceMgr) {
-        if (convolutionMode == ConvolutionMode.Same) {
-            throw new IllegalArgumentException("Border mode Same currently not supported.");
-        }
 
         INDArray bias = getParamWithNoise(DeconvolutionParamInitializer.BIAS_KEY, training, workspaceMgr);
         INDArray weights = getParamWithNoise(DeconvolutionParamInitializer.WEIGHT_KEY, training, workspaceMgr);
@@ -163,7 +179,9 @@ public class Deconvolution2DLayer extends ConvolutionLayer {
         int inDepth = (int) weights.size(0);
         int outDepth = (int) weights.size(1);
 
-        if (input.size(1) != inDepth) {
+        if (input.size(1) != inDepth && input.size(3) == inDepth) {
+            input = input.permute(0, 3, 1, 2);
+        } else if (input.size(1) != inDepth && input.size(3) != inDepth) {
             String layerName = conf.getLayer().getLayerName();
             if (layerName == null)
                 layerName = "(not named)";
@@ -206,6 +224,10 @@ public class Deconvolution2DLayer extends ConvolutionLayer {
                 pad[0], pad[1], dilation[0], dilation[1], sameMode, 0   //Last arg: 0 for nchw
         };
 
+        //DL4J Deconv weights: [inputDepth, outputDepth, kH, kW]
+        //libnd4j weights: [kH, kW, oC, iC]
+        weights = weights.permute(2, 3, 1, 0);
+
         INDArray[] opInputs;
         if (layerConf().hasBias()) {
             opInputs = new INDArray[]{input, weights, bias};
@@ -237,7 +259,7 @@ public class Deconvolution2DLayer extends ConvolutionLayer {
         IActivation afn = layerConf().getActivationFn();
 
         if (helper != null && Shape.strideDescendingCAscendingF(z)) {
-            INDArray ret = helper.activate(z, layerConf().getActivationFn());
+            INDArray ret = helper.activate(z, layerConf().getActivationFn(), training);
             if (ret != null) {
                 return ret;
             }

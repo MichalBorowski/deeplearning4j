@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.zoo.model;
 
 import lombok.AllArgsConstructor;
@@ -24,10 +40,11 @@ import org.nd4j.linalg.learning.config.Nesterovs;
 import org.nd4j.linalg.lossfunctions.LossFunctions;
 
 /**
- * VGG-19, from Very Deep Convolutional Networks for Large-Scale Image Recognition
- * https://arxiv.org/abs/1409.1556)
- *
- * <p>ImageNet weights for this model are available and have been converted from https://github.com/fchollet/keras/tree/1.1.2/keras/applications.</p>
+ * VGG-19, from Very Deep Convolutional Networks for Large-Scale Image Recognition<br>
+ * <a href="https://arxiv.org/abs/1409.1556">https://arxiv.org/abs/1409.1556</a>
+ * <br>
+ * <p>ImageNet weights for this model are available and have been converted from <a href="https://github.com/fchollet/keras/tree/1.1.2/keras/applications">
+ *     https://github.com/fchollet/keras/tree/1.1.2/keras/applications</a>.</p>
  *
  * @author Justin Long (crockpotveggies)
  */
@@ -136,7 +153,7 @@ public class VGG19 extends ZooModel {
                                         .nOut(numClasses).activation(Activation.SOFTMAX) // radial basis function required
                                         .build(), "21")
                                 .setOutputs("22")
-                                .backprop(true).pretrain(false)
+
                                 .setInputTypes(InputType.convolutionalFlat(inputShape[2], inputShape[1], inputShape[0]))
                                 .build();
 

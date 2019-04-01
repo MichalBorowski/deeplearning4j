@@ -1,9 +1,26 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.models.embeddings.learning.impl.sequence;
 
 import lombok.NonNull;
 import org.deeplearning4j.models.embeddings.WeightLookupTable;
 import org.deeplearning4j.models.embeddings.learning.ElementsLearningAlgorithm;
 import org.deeplearning4j.models.embeddings.learning.SequenceLearningAlgorithm;
+import org.deeplearning4j.models.embeddings.learning.impl.elements.BatchSequences;
 import org.deeplearning4j.models.embeddings.learning.impl.elements.SkipGram;
 import org.deeplearning4j.models.embeddings.loader.VectorsConfiguration;
 import org.deeplearning4j.models.sequencevectors.interfaces.SequenceIterator;
@@ -76,10 +93,12 @@ public class DBOW<T extends SequenceElement> implements SequenceLearningAlgorith
     }
 
     @Override
-    public double learnSequence(@NonNull Sequence<T> sequence, @NonNull AtomicLong nextRandom, double learningRate) {
+    public double learnSequence(@NonNull Sequence<T> sequence, @NonNull AtomicLong nextRandom, double learningRate,
+                                BatchSequences<T> batchSequences) {
 
         // we just pass data to dbow, and loop over sequence there
-        dbow(0, sequence, (int) nextRandom.get() % window, nextRandom, learningRate, false, null);
+        dbow(0, sequence, (int) nextRandom.get() % window, nextRandom, learningRate, false, null,
+                batchSequences);
 
 
         return 0;
@@ -95,7 +114,7 @@ public class DBOW<T extends SequenceElement> implements SequenceLearningAlgorith
     }
 
     protected void dbow(int i, Sequence<T> sequence, int b, AtomicLong nextRandom, double alpha, boolean isInference,
-                    INDArray inferenceVector) {
+                    INDArray inferenceVector, BatchSequences<T> batchSequences) {
 
         //final T word = sequence.getElements().get(i);
         List<T> sentence = skipGram.applySubsampling(sequence, nextRandom).getElements();
@@ -110,12 +129,17 @@ public class DBOW<T extends SequenceElement> implements SequenceLearningAlgorith
         if (sentence.isEmpty() || labels.isEmpty())
             return;
 
+        int batchSize = configuration.getBatchSize();
+
         for (T lastWord : labels) {
             for (T word : sentence) {
                 if (word == null)
                     continue;
 
-                skipGram.iterateSample(word, lastWord, nextRandom, alpha, isInference, inferenceVector);
+                if (batchSize == 1 || batchSequences == null || isInference)
+                    skipGram.iterateSample(word, lastWord, nextRandom, alpha, isInference, inferenceVector);
+                else
+                    batchSequences.put(word, lastWord, nextRandom.get(), alpha);
             }
         }
 
@@ -154,7 +178,7 @@ public class DBOW<T extends SequenceElement> implements SequenceLearningAlgorith
 
         for (int iter = 0; iter < iterations; iter++) {
             nr.set(Math.abs(nr.get() * 25214903917L + 11));
-            dbow(0, sequence, (int) nr.get() % window, nr, learningRate, true, ret);
+            dbow(0, sequence, (int) nr.get() % window, nr, learningRate, true, ret, null);
 
             learningRate = ((learningRate - minLearningRate) / (iterations - iter)) + minLearningRate;
         }

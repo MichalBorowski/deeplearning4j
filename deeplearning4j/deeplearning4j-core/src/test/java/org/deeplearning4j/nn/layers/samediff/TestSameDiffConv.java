@@ -1,6 +1,23 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.nn.layers.samediff;
 
 import lombok.extern.slf4j.Slf4j;
+import org.deeplearning4j.BaseDL4JTest;
 import org.deeplearning4j.TestUtils;
 import org.deeplearning4j.gradientcheck.GradientCheckUtil;
 import org.deeplearning4j.nn.conf.ConvolutionMode;
@@ -29,7 +46,7 @@ import static org.junit.Assert.*;
 import static org.junit.Assume.assumeTrue;
 
 @Slf4j
-public class TestSameDiffConv {
+public class TestSameDiffConv extends BaseDL4JTest {
 
     private static final boolean PRINT_RESULTS = true;
     private static final boolean RETURN_ON_FIRST_FAILURE = false;
@@ -39,9 +56,6 @@ public class TestSameDiffConv {
 
     @Test
     public void testSameDiffConvBasic() {
-        //Only run test for CPU backend for now:
-        assumeTrue("CPU".equalsIgnoreCase(Nd4j.getExecutioner().getEnvironmentInformation().getProperty("backend")));
-
         int nIn = 3;
         int nOut = 4;
         int kH = 2;
@@ -61,7 +75,7 @@ public class TestSameDiffConv {
         assertNotNull(pt1.get(ConvolutionParamInitializer.WEIGHT_KEY));
         assertNotNull(pt1.get(ConvolutionParamInitializer.BIAS_KEY));
 
-        assertArrayEquals(new long[]{nOut, nIn, kH, kW}, pt1.get(ConvolutionParamInitializer.WEIGHT_KEY).shape());
+        assertArrayEquals(new long[]{kH, kW, nIn, nOut}, pt1.get(ConvolutionParamInitializer.WEIGHT_KEY).shape());
         assertArrayEquals(new long[]{1, nOut}, pt1.get(ConvolutionParamInitializer.BIAS_KEY).shape());
 
         TestUtils.testModelSerialization(net);
@@ -69,9 +83,6 @@ public class TestSameDiffConv {
 
     @Test
     public void testSameDiffConvForward() {
-        //Only run test for CPU backend for now:
-        assumeTrue("CPU".equalsIgnoreCase(Nd4j.getExecutioner().getEnvironmentInformation().getProperty("backend")));
-
 
         int imgH = 16;
         int imgW = 20;
@@ -178,10 +189,20 @@ public class TestSameDiffConv {
                                             MultiLayerNetwork net2 = new MultiLayerNetwork(conf2);
                                             net2.init();
 
-                                            //Check params:
+                                            //Check params: note that samediff/libnd4j conv params are [kH, kW, iC, oC]
+                                            //DL4J are [nOut, nIn, kH, kW]
                                             Map<String, INDArray> params1 = net.paramTable();
                                             Map<String, INDArray> params2 = net2.paramTable();
-                                            assertEquals(msg, params2, params1);
+                                            for(Map.Entry<String,INDArray> e : params1.entrySet()){
+                                                if(e.getKey().endsWith("_W")){
+                                                    INDArray p1 = e.getValue();
+                                                    INDArray p2 = params2.get(e.getKey());
+                                                    p2 = p2.permute(2, 3, 1, 0);
+                                                    p1.assign(p2);
+                                                } else {
+                                                    assertEquals(params2.get(e.getKey()), e.getValue());
+                                                }
+                                            }
 
                                             INDArray in = Nd4j.rand(new int[]{minibatch, nIn, imgH, imgW});
                                             INDArray out = net.output(in);
@@ -208,10 +229,6 @@ public class TestSameDiffConv {
 
     @Test
     public void testSameDiffConvGradient() {
-        //Only run test for CPU backend for now:
-        assumeTrue("CPU".equalsIgnoreCase(Nd4j.getExecutioner().getEnvironmentInformation().getProperty("backend")));
-
-
         int imgH = 8;
         int imgW = 8;
         int nIn = 3;

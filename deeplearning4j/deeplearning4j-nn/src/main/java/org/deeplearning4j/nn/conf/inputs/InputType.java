@@ -1,24 +1,23 @@
-/*-
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
  *
- *  * Copyright 2016 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
  *
- */
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.deeplearning4j.nn.conf.inputs;
 
 import lombok.*;
+import org.deeplearning4j.nn.conf.layers.Convolution3D;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.shade.jackson.annotation.JsonIgnore;
 import org.nd4j.shade.jackson.annotation.JsonInclude;
@@ -118,7 +117,7 @@ public abstract class InputType implements Serializable {
 
     /**
      * Input type for convolutional (CNN) data, that is 4d with shape [miniBatchSize, channels, height, width].
-     * For CNN data that has been flattened, use {@link #convolutionalFlat(int, int, int)}
+     * For CNN data that has been flattened, use {@link #convolutionalFlat(long, long, long)}
      *
      * @param height height of the input
      * @param width  Width of the input
@@ -130,8 +129,25 @@ public abstract class InputType implements Serializable {
     }
 
     /**
-     * Input type for 3D convolutional (CNN3D) data, that is 5d with shape
-     * [miniBatchSize, channels, height, width, channels].
+     * Input type for 3D convolutional (CNN3D) data in NDHWC format, that is 5d with shape
+     * [miniBatchSize, depth, height, width, channels].
+     *
+     * @param height   height of the input
+     * @param width    Width of the input
+     * @param depth    Depth of the input
+     * @param channels Number of channels of the input
+     * @return InputTypeConvolutional3D
+     * @deprecated Use {@link #convolutional3D(Convolution3D.DataFormat, long, long, long, long)}
+     */
+    @Deprecated
+    public static InputType convolutional3D(long depth, long height, long width,  long channels) {
+        return convolutional3D(Convolution3D.DataFormat.NDHWC, depth, height, width, channels);
+    }
+
+    /**
+     * Input type for 3D convolutional (CNN3D) 5d data:<br>
+     * If NDHWC format [miniBatchSize, depth, height, width, channels]<br>
+     * If NDCWH
      *
      * @param height   height of the input
      * @param width    Width of the input
@@ -139,13 +155,14 @@ public abstract class InputType implements Serializable {
      * @param channels Number of channels of the input
      * @return InputTypeConvolutional3D
      */
-    public static InputType convolutional3D(long depth, long height, long width,  long channels) {
-        return new InputTypeConvolutional3D(depth, height, width, channels);
+    public static InputType convolutional3D(Convolution3D.DataFormat dataFormat, long depth, long height, long width, long channels) {
+        return new InputTypeConvolutional3D(dataFormat, depth, height, width, channels);
     }
 
     /**
      * Input type for convolutional (CNN) data, where the data is in flattened (row vector) format.
-     * Expect data with shape [miniBatchSize, height * width * channels]. For CNN data in 4d format, use {@link #convolutional(int, int, int)}
+     * Expect data with shape [miniBatchSize, height * width * channels]. For CNN data in 4d format,
+     * use {@link #convolutional(long, long, long)}
      *
      * @param height Height of the (unflattened) data represented by this input type
      * @param width  Width of the (unflattened) data represented by this input type
@@ -286,6 +303,7 @@ public abstract class InputType implements Serializable {
     @EqualsAndHashCode(callSuper = false)
     @NoArgsConstructor
     public static class InputTypeConvolutional3D extends InputType {
+        private Convolution3D.DataFormat dataFormat;
         private long depth;
         private long height;
         private long width;
@@ -298,7 +316,7 @@ public abstract class InputType implements Serializable {
 
         @Override
         public String toString() {
-            return "InputTypeConvolutional3D(d=" + depth + ",h=" + height + ",w=" + width + ",c=" + channels + ")";
+            return "InputTypeConvolutional3D(format=" + dataFormat + ",d=" + depth + ",h=" + height + ",w=" + width + ",c=" + channels + ")";
         }
 
         @Override
@@ -308,8 +326,13 @@ public abstract class InputType implements Serializable {
 
         @Override
         public long[] getShape(boolean includeBatchDim) {
-            if(includeBatchDim) return new long[]{-1, channels, depth, height, width};
-            else return new long[]{channels, depth, height, width};
+            if(dataFormat == Convolution3D.DataFormat.NDHWC){
+                if(includeBatchDim) return new long[]{-1, depth, height, width, channels};
+                else return new long[]{depth, height, width, channels};
+            } else {
+                if(includeBatchDim) return new long[]{-1, channels, depth, height, width};
+                else return new long[]{channels, depth, height, width};
+            }
         }
     }
 

@@ -1,18 +1,18 @@
-/*-
- *  * Copyright 2016 Skymind, Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
- */
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.datavec.api.records.reader.impl.csv;
 
@@ -25,9 +25,12 @@ import org.datavec.api.records.reader.impl.LineRecordReader;
 import org.datavec.api.split.InputSplit;
 import org.datavec.api.writable.Text;
 import org.datavec.api.writable.Writable;
+import org.nd4j.base.Preconditions;
 
+import java.io.BufferedReader;
 import java.io.DataInputStream;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -155,7 +158,7 @@ public class CSVRecordReader extends LineRecordReader {
 
     @Override
     public List<List<Writable>> next(int num) {
-        List<List<Writable>> ret = new ArrayList<>(num);
+        List<List<Writable>> ret = new ArrayList<>(Math.min(num, 10000));
         int recordsRead = 0;
         while(hasNext() && recordsRead++ < num) {
             ret.add(next());
@@ -168,8 +171,7 @@ public class CSVRecordReader extends LineRecordReader {
     public List<Writable> next() {
         if (!skipLines())
             throw new NoSuchElementException("No next element found!");
-        Text t = (Text) super.next().iterator().next();
-        String val = t.toString();
+        String val = readStringLine();
         return parseLine(val);
     }
 
@@ -185,6 +187,12 @@ public class CSVRecordReader extends LineRecordReader {
             ret.add(new Text(s));
         }
         return ret;
+    }
+
+    protected String readStringLine(){
+        Preconditions.checkState(initialized, "RecordReader has not been initialized before use");
+        Text t = (Text) super.next().iterator().next();
+        return t.toString();
     }
 
     @Override
@@ -214,8 +222,12 @@ public class CSVRecordReader extends LineRecordReader {
 
     @Override
     public List<Writable> record(URI uri, DataInputStream dataInputStream) throws IOException {
-        //Here: we are reading a single line from the DataInputStream. How to handle skipLines???
-        throw new UnsupportedOperationException("Reading CSV data from DataInputStream not yet implemented");
+        BufferedReader br = new BufferedReader(new InputStreamReader(dataInputStream));
+        for( int i=0; i<skipNumLines; i++ ){
+            br.readLine();
+        }
+        String line = br.readLine();
+        return parseLine(line);
     }
 
     @Override

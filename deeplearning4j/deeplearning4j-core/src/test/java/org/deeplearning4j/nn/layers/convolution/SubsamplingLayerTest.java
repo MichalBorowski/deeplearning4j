@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.nn.layers.convolution;
 
 import org.deeplearning4j.BaseDL4JTest;
@@ -16,6 +32,7 @@ import org.deeplearning4j.nn.params.DefaultParamInitializer;
 import org.deeplearning4j.nn.weights.WeightInit;
 import org.junit.Test;
 import org.nd4j.linalg.activations.Activation;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.dataset.DataSet;
 import org.nd4j.linalg.dataset.api.iterator.DataSetIterator;
@@ -44,11 +61,15 @@ public class SubsamplingLayerTest extends BaseDL4JTest {
     int featureMapHeight = (inputHeight - kernelSize[1]) / stride[0] + 1;
     private INDArray epsilon = Nd4j.ones(nExamples, depth, featureMapHeight, featureMapWidth);
 
+    @Override
+    public DataType getDataType(){
+        return DataType.FLOAT;
+    }
 
     @Test
     public void testSubSampleMaxActivate() throws Exception {
         INDArray containedExpectedOut =
-                        Nd4j.create(new double[] {5., 7., 6., 8., 4., 7., 5., 9.}, new int[] {1, 2, 2, 2});
+                        Nd4j.create(new double[] {5., 7., 6., 8., 4., 7., 5., 9.}, new long[] {1, 2, 2, 2}).castTo(Nd4j.defaultFloatingPointType());
         INDArray containedInput = getContainedData();
         INDArray input = getData();
         Layer layer = getSubsamplingLayer(SubsamplingLayer.PoolingType.MAX);
@@ -66,7 +87,7 @@ public class SubsamplingLayerTest extends BaseDL4JTest {
     @Test
     public void testSubSampleMeanActivate() throws Exception {
         INDArray containedExpectedOut =
-                        Nd4j.create(new double[] {2., 4., 3., 5., 3.5, 6.5, 4.5, 8.5}, new int[] {1, 2, 2, 2});
+                        Nd4j.create(new double[] {2., 4., 3., 5., 3.5, 6.5, 4.5, 8.5}, new int[] {1, 2, 2, 2}).castTo(Nd4j.defaultFloatingPointType());
         INDArray containedInput = getContainedData();
         INDArray input = getData();
         Layer layer = getSubsamplingLayer(SubsamplingLayer.PoolingType.AVG);
@@ -86,11 +107,11 @@ public class SubsamplingLayerTest extends BaseDL4JTest {
     @Test
     public void testSubSampleLayerMaxBackprop() throws Exception {
         INDArray expectedContainedEpsilonInput =
-                        Nd4j.create(new double[] {1., 1., 1., 1., 1., 1., 1., 1.}, new int[] {1, 2, 2, 2});
+                        Nd4j.create(new double[] {1., 1., 1., 1., 1., 1., 1., 1.}, new int[] {1, 2, 2, 2}).castTo(Nd4j.defaultFloatingPointType());
 
         INDArray expectedContainedEpsilonResult = Nd4j.create(new double[] {0., 0., 0., 1., 1., 0., 0., 0., 0., 0., 1.,
                         0., 0., 1., 0., 0., 0., 0., 0., 1., 1., 0., 0., 0., 1., 0., 1., 0., 0., 0., 0., 0.},
-                        new int[] {1, 2, 4, 4});
+                        new int[] {1, 2, 4, 4}).castTo(Nd4j.defaultFloatingPointType());
 
         INDArray input = getContainedData();
 
@@ -116,11 +137,11 @@ public class SubsamplingLayerTest extends BaseDL4JTest {
     @Test
     public void testSubSampleLayerAvgBackprop() throws Exception {
         INDArray expectedContainedEpsilonInput =
-                        Nd4j.create(new double[] {1., 2., 3., 4., 5., 6., 7., 8.}, new int[] {1, 2, 2, 2});
+                        Nd4j.create(new double[] {1., 2., 3., 4., 5., 6., 7., 8.}, new int[] {1, 2, 2, 2}).castTo(Nd4j.defaultFloatingPointType());
 
         INDArray expectedContainedEpsilonResult = Nd4j.create(new double[] {0.25, 0.25, 0.5, 0.5, 0.25, 0.25, 0.5, 0.5,
                         0.75, 0.75, 1., 1., 0.75, 0.75, 1., 1., 1.25, 1.25, 1.5, 1.5, 1.25, 1.25, 1.5, 1.5, 1.75, 1.75,
-                        2., 2., 1.75, 1.75, 2., 2.}, new int[] {1, 2, 4, 4});
+                        2., 2., 1.75, 1.75, 2., 2.}, new int[] {1, 2, 4, 4}).castTo(Nd4j.defaultFloatingPointType());
         INDArray input = getContainedData();
 
         Layer layer = getSubsamplingLayer(SubsamplingLayer.PoolingType.AVG);
@@ -156,12 +177,12 @@ public class SubsamplingLayerTest extends BaseDL4JTest {
         DataSetIterator data = new MnistDataSetIterator(5, 5);
         DataSet mnist = data.next();
         nExamples = mnist.numExamples();
-        return mnist.getFeatureMatrix().reshape(nExamples, nChannelsIn, inputWidth, inputHeight);
+        return mnist.getFeatures().reshape(nExamples, nChannelsIn, inputWidth, inputHeight);
     }
 
     public INDArray getContainedData() {
         INDArray ret = Nd4j.create(new double[] {1., 1., 3., 7., 5., 1., 3., 3., 2., 2., 8., 4., 2., 6., 4., 4., 3., 3.,
-                        6., 7., 4., 4., 6., 7., 5., 5., 9., 8., 4., 4., 9., 8.}, new int[] {1, 2, 4, 4});
+                        6., 7., 4., 4., 6., 7., 5., 5., 9., 8., 4., 4., 9., 8.}, new int[] {1, 2, 4, 4}).castTo(Nd4j.defaultFloatingPointType());
         return ret;
     }
 
@@ -201,7 +222,7 @@ public class SubsamplingLayerTest extends BaseDL4JTest {
                                                         .stride(1, 1).build())
                                         .layer(2, new OutputLayer.Builder().nOut(classes).weightInit(WeightInit.XAVIER)
                                                         .activation(Activation.SOFTMAX).build())
-                                        .backprop(true).pretrain(false)
+
                                         .setInputType(InputType.convolutional(imageHeight, imageWidth, nChannels));
 
         MultiLayerConfiguration conf = builder.build();

@@ -1,21 +1,18 @@
-/*-
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
  *
- *  * Copyright 2015 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
  *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
  *
- */
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.nd4j.linalg.util;
 
@@ -48,7 +45,7 @@ public class LinAlgExceptions {
     public static void assertSameLength(INDArray x, INDArray y, INDArray z) {
         val lengthX = x.length();
         val lengthY = y.length();
-        val lengthZ = z.length();
+        val lengthZ = z != null ? z.length() : x.length();
 
         if (lengthX != lengthY && lengthX != lengthZ && lengthX != 1 && lengthY != 1 && lengthZ != 1)
             throw new IllegalStateException("Mis matched lengths: [" + lengthX + "] != [" + lengthY + "] != [" + lengthZ + "] - " +
@@ -56,9 +53,9 @@ public class LinAlgExceptions {
     }
 
     public static void assertSameShape(INDArray n, INDArray n2) {
-        if (!Shape.shapeEquals(n.shape(), n2.shape()))
-            throw new IllegalStateException("Mis matched shapes: " + Arrays.toString(n.shape()) + ", "
-                    + Arrays.toString(n2.shape()));
+        if (!Shape.isVector(n.shape()) && ! Shape.isVector(n2.shape()))
+            if (!Shape.shapeEquals(n.shape(), n2.shape()))
+                throw new IllegalStateException("Mis matched shapes: " + Arrays.toString(n.shape()) + ", " + Arrays.toString(n2.shape()));
     }
 
     public static void assertRows(INDArray n, INDArray n2) {
@@ -118,7 +115,7 @@ public class LinAlgExceptions {
     }
 
     public static void assertValidNum(INDArray n) {
-        INDArray linear = n.linearView();
+        INDArray linear = n.reshape(-1);
         for (int i = 0; i < linear.length(); i++) {
             double d = linear.getDouble(i);
             if (Double.isNaN(d) || Double.isInfinite(d))

@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.linalg.api.rng;
 
 import org.junit.Test;
@@ -8,7 +24,8 @@ import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.factory.Nd4jBackend;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 /**
  * @author Adam Gibson
@@ -35,7 +52,7 @@ public class RngTests extends BaseNd4jTest {
 
         int rows = 20;
         int cols = 20;
-        int dim2 = 7;
+        int dim2 = 70;
 
         INDArray arr = Nd4j.rand('c', rows, cols);
         assertArrayEquals(new long[] {rows, cols}, arr.shape());
@@ -75,7 +92,7 @@ public class RngTests extends BaseNd4jTest {
         INDArray narr3 = Nd4j.randn('c', new int[] {rows, cols, dim2});
         assertArrayEquals(new long[] {rows, cols, dim2}, narr3.shape());
         assertEquals('c', narr3.ordering());
-        assertEquals(narr3.meanNumber().doubleValue(), 0.0, 0.05);
+        assertEquals(0.0, narr3.meanNumber().doubleValue(), 0.05);
 
         INDArray narr4 = Nd4j.randn('f', new int[] {rows, cols, dim2});
         assertArrayEquals(new long[] {rows, cols, dim2}, narr4.shape());

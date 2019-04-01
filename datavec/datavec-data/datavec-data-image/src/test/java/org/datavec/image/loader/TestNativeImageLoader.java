@@ -1,28 +1,33 @@
-/*-
- *  * Copyright 2016 Skymind, Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
- */
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.datavec.image.loader;
 
+import lombok.val;
 import org.apache.commons.io.IOUtils;
+import org.bytedeco.javacpp.Loader;
 import org.bytedeco.javacpp.indexer.UByteIndexer;
 import org.bytedeco.javacv.Frame;
 import org.bytedeco.javacv.Java2DFrameConverter;
 import org.bytedeco.javacv.OpenCVFrameConverter;
 import org.datavec.image.data.ImageWritable;
 import org.junit.Test;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.ndarray.INDArray;
+import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.io.ClassPathResource;
 
 import java.awt.image.BufferedImage;
@@ -33,8 +38,10 @@ import java.io.IOException;
 import java.lang.reflect.Field;
 import java.util.Random;
 
-import static org.bytedeco.javacpp.lept.*;
-import static org.bytedeco.javacpp.opencv_core.*;
+import org.bytedeco.leptonica.*;
+import org.bytedeco.opencv.opencv_core.*;
+import static org.bytedeco.leptonica.global.lept.*;
+import static org.bytedeco.opencv.global.opencv_core.*;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
@@ -109,7 +116,7 @@ public class TestNativeImageLoader {
         NativeImageLoader loader5 = new NativeImageLoader(h4, w4, ch4, NativeImageLoader.MultiPageMode.FIRST);
         INDArray array6 = null;
         try {
-            array6 = loader5.asMatrix(new ClassPathResource(path2MitosisFile).getFile());
+            array6 = loader5.asMatrix(new ClassPathResource(path2MitosisFile).getFile().getAbsolutePath());
         } catch (IOException e) {
             e.printStackTrace();
             fail();
@@ -140,7 +147,7 @@ public class TestNativeImageLoader {
         NativeImageLoader loader7 = new NativeImageLoader(h4, w4, ch6, NativeImageLoader.MultiPageMode.MINIBATCH);
         INDArray array8 = null;
         try {
-            array8 = loader7.asMatrix(new ClassPathResource(path2MitosisFile).getFile());
+            array8 = loader7.asMatrix(new ClassPathResource(path2MitosisFile).getFile().getAbsolutePath());
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -153,7 +160,7 @@ public class TestNativeImageLoader {
 
     @Test
     public void testAsRowVector() throws Exception {
-        BufferedImage img1 = makeRandomBufferedImage(0, 0, 1);
+        org.opencv.core.Mat img1 = makeRandomOrgOpenCvCoreMatImage(0, 0, 1);
         Mat img2 = makeRandomImage(0, 0, 3);
 
         int w1 = 35, h1 = 79, ch1 = 3;
@@ -186,6 +193,46 @@ public class TestNativeImageLoader {
         assertEquals(1, array4.rows());
         assertEquals(h2 * w2 * ch2, array4.columns());
         assertNotEquals(0.0, array4.sum().getDouble(0), 0.0);
+    }
+
+    @Test
+    public void testDataTypes_1() throws Exception {
+        val dtypes = new DataType[]{DataType.FLOAT, DataType.HALF, DataType.SHORT, DataType.INT};
+
+        val dt = Nd4j.dataType();
+
+        for (val dtype: dtypes) {
+            Nd4j.setDataType(dtype);
+            int w3 = 123, h3 = 77, ch3 = 3;
+            val loader = new NativeImageLoader(h3, w3, ch3);
+            File f3 = new ClassPathResource("datavec-data-image/testimages/class0/2.jpg").getFile();
+            ImageWritable iw3 = loader.asWritable(f3);
+
+            val array = loader.asMatrix(iw3);
+
+            assertEquals(dtype, array.dataType());
+        }
+
+        Nd4j.setDataType(dt);
+    }
+
+    @Test
+    public void testDataTypes_2() throws Exception {
+        val dtypes = new DataType[]{DataType.FLOAT, DataType.HALF, DataType.SHORT, DataType.INT};
+
+        val dt = Nd4j.dataType();
+
+        for (val dtype: dtypes) {
+            Nd4j.setDataType(dtype);
+            int w3 = 123, h3 = 77, ch3 = 3;
+            val loader = new NativeImageLoader(h3, w3, 1);
+            File f3 = new ClassPathResource("datavec-data-image/testimages/class0/2.jpg").getFile();
+            val array = loader.asMatrix(f3);
+
+            assertEquals(dtype, array.dataType());
+        }
+
+        Nd4j.setDataType(dt);
     }
 
     @Test
@@ -343,6 +390,15 @@ public class TestNativeImageLoader {
         return c2.convert(c.convert(img));
     }
 
+    org.opencv.core.Mat makeRandomOrgOpenCvCoreMatImage(int height, int width, int channels) {
+        Mat img = makeRandomImage(height, width, channels);
+
+        Loader.load(org.bytedeco.opencv.opencv_java.class);
+        OpenCVFrameConverter.ToOrgOpenCvCoreMat c = new OpenCVFrameConverter.ToOrgOpenCvCoreMat();
+
+        return c.convert(c.convert(img));
+    }
+
     Mat makeRandomImage(int height, int width, int channels) {
         if (height <= 0) {
             height = rng.nextInt() % 100 + 100;
@@ -365,7 +421,7 @@ public class TestNativeImageLoader {
 
     @Test
     public void testAsWritable() throws Exception {
-        File f0 = new ClassPathResource("datavec-data-image/testimages/class0/0.jpg").getFile();
+        String f0 = new ClassPathResource("datavec-data-image/testimages/class0/0.jpg").getFile().getAbsolutePath();
 
         NativeImageLoader imageLoader = new NativeImageLoader();
         ImageWritable img = imageLoader.asWritable(f0);
@@ -397,7 +453,7 @@ public class TestNativeImageLoader {
         m.setAccessible(true);
 
         File f1 = new ClassPathResource("datavec-data-image/voc/2007/JPEGImages/000005.jpg").getFile();
-        File f2 = new ClassPathResource("datavec-data-image/voc/2007/JPEGImages/000007.jpg").getFile();
+        String f2 = new ClassPathResource("datavec-data-image/voc/2007/JPEGImages/000007.jpg").getFile().getAbsolutePath();
 
         //Start with a large buffer
         byte[] buffer = new byte[20*1024*1024];

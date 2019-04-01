@@ -1,9 +1,26 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.linalg.api.ndarray;
 
 import com.google.common.primitives.Ints;
 import org.nd4j.linalg.api.buffer.DataBuffer;
 import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.indexing.*;
+import org.nd4j.linalg.util.ArrayUtil;
 import org.nd4j.linalg.util.LongUtils;
 
 import java.util.ArrayList;
@@ -40,7 +57,7 @@ public abstract class BaseSparseNDArrayCSR extends BaseSparseNDArray {
         checkArgument(data.length == columnsPointers.length);
         checkArgument(pointerB.length == pointerE.length);
         // TODO
-        setShapeInformation(Nd4j.getShapeInfoProvider().createShapeInformation(shape));
+        setShapeInformation(Nd4j.getShapeInfoProvider().createShapeInformation(shape, Nd4j.dataType()));
         init(shape);
         int valuesSpace = (int) (data.length * THRESHOLD_MEMORY_ALLOCATION);
         this.values = Nd4j.getDataBufferFactory().createDouble(valuesSpace);
@@ -63,7 +80,7 @@ public abstract class BaseSparseNDArrayCSR extends BaseSparseNDArray {
 
     public BaseSparseNDArrayCSR(DataBuffer data, int[] columnsPointers, int[] pointerB, int[] pointerE, long[] shape) {
         checkArgument(pointerB.length == pointerE.length);
-        setShapeInformation(Nd4j.getShapeInfoProvider().createShapeInformation(shape));
+        setShapeInformation(Nd4j.getShapeInfoProvider().createShapeInformation(shape, Nd4j.dataType()));
         init(shape);
         this.values = data;
         this.columnsPointers = Nd4j.getDataBufferFactory().createInt(data.length());
@@ -257,7 +274,7 @@ public abstract class BaseSparseNDArrayCSR extends BaseSparseNDArray {
 
                     int colIdx = columnsPointers.getInt(count);
 
-                    // add the element in the subarray it it belongs to the view
+                    // add the element in the subarray if it belongs to the view
                     if (colIdx >= firstElement && colIdx < lastElement && rowIdx >= firstRow && rowIdx < lastRow) {
 
                         // add the new column pointer for this element

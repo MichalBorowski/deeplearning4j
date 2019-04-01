@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.nn.layers.convolution;
 
 import lombok.val;
@@ -65,9 +81,9 @@ public class DepthwiseConvolution2DLayer extends ConvolutionLayer {
         int inH = (int) input.size(2);
         int inW = (int) input.size(3);
 
-        int inDepth = (int) depthWiseWeights.size(1);
-        int kH = (int) depthWiseWeights.size(2);
-        int kW = (int) depthWiseWeights.size(3);
+        int inDepth = (int) depthWiseWeights.size(2);
+        int kH = (int) depthWiseWeights.size(0);
+        int kW = (int) depthWiseWeights.size(1);
 
         int[] dilation = layerConf().getDilation();
         int[] kernel = layerConf().getKernelSize();
@@ -153,8 +169,8 @@ public class DepthwiseConvolution2DLayer extends ConvolutionLayer {
         }
 
         // FIXME: int cast
-        int inDepth = (int) depthWiseWeights.size(1);
-        int depthMultiplier = (int) depthWiseWeights.size(0);
+        int inDepth = (int) depthWiseWeights.size(2);
+        int depthMultiplier = (int) depthWiseWeights.size(3);
         int outDepth = depthMultiplier * inDepth;
 
         if (input.size(1) != inDepth) {
@@ -168,8 +184,8 @@ public class DepthwiseConvolution2DLayer extends ConvolutionLayer {
                     + Arrays.toString(input.shape()) + "; expected" + " input channels = " + inDepth + ") "
                     + layerId());
         }
-        int kH = (int) depthWiseWeights.size(2);
-        int kW = (int) depthWiseWeights.size(3);
+        int kH = (int) depthWiseWeights.size(0);
+        int kW = (int) depthWiseWeights.size(1);
 
         int[] dilation = layerConf().getDilation();
         int[] kernel = layerConf().getKernelSize();

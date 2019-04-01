@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.linalg.api.ndarray;
 
 import com.google.common.primitives.Ints;
@@ -8,13 +24,12 @@ import net.ericaro.neoitertools.Generator;
 import org.apache.commons.math3.util.FastMath;
 import org.nd4j.linalg.api.blas.BlasBufferUtil;
 import org.nd4j.linalg.api.buffer.DataBuffer;
-import org.nd4j.linalg.api.complex.IComplexNDArray;
-import org.nd4j.linalg.api.complex.IComplexNumber;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.iter.NdIndexIterator;
-import org.nd4j.linalg.api.ops.impl.accum.Entropy;
-import org.nd4j.linalg.api.ops.impl.accum.LogEntropy;
-import org.nd4j.linalg.api.ops.impl.accum.ShannonEntropy;
-import org.nd4j.linalg.api.ops.impl.transforms.Assign;
+import org.nd4j.linalg.api.ops.impl.reduce.floating.Entropy;
+import org.nd4j.linalg.api.ops.impl.reduce.floating.LogEntropy;
+import org.nd4j.linalg.api.ops.impl.reduce.floating.ShannonEntropy;
+import org.nd4j.linalg.api.ops.impl.transforms.custom.Assign;
 import org.nd4j.linalg.api.shape.Shape;
 import org.nd4j.linalg.exception.ND4JIllegalArgumentException;
 import org.nd4j.linalg.exception.ND4JIllegalStateException;
@@ -279,7 +294,7 @@ public abstract class BaseSparseNDArray implements ISparseNDArray {
                     List<Integer> row = indices.get(i);
                     for(int j = 0; j < row.size(); j++) {
                         INDArray slice = slice(row.get(j));
-                        Nd4j.getExecutioner().exec(new Assign(new INDArray[]{slice,element},new INDArray[]{slice}));
+                        Nd4j.getExecutioner().execAndReturn(new Assign(new INDArray[]{slice,element},new INDArray[]{slice}));
                         arrList.add(slice(row.get(j)));
                     }
 
@@ -378,17 +393,6 @@ public abstract class BaseSparseNDArray implements ISparseNDArray {
     public void markAsCompressed(boolean reallyCompressed) {
 
     }
-
-    @Override
-    public void setWrapAround(boolean wrapAround) {
-
-    }
-
-    @Override
-    public boolean isWrapAround() {
-        return false;
-    }
-
     @Override
     public int rank() {
         return Shape.rank(shapeInformation);
@@ -425,32 +429,7 @@ public abstract class BaseSparseNDArray implements ISparseNDArray {
     }
 
     @Override
-    public int elementStride() {
-        return 0;
-    }
-
-    @Override
     public int elementWiseStride() {
-        return 0;
-    }
-
-    @Override
-    public boolean isCleanedUp() {
-        return false;
-    }
-
-    @Override
-    public void cleanup() {
-
-    }
-
-    @Override
-    public void resetLinearView() {
-
-    }
-
-    @Override
-    public int secondaryStride() {
         return 0;
     }
 
@@ -465,26 +444,6 @@ public abstract class BaseSparseNDArray implements ISparseNDArray {
     }
 
     @Override
-    public int majorStride() {
-        return 0;
-    }
-
-    @Override
-    public int innerMostStride() {
-        return 0;
-    }
-
-    @Override
-    public INDArray linearView() {
-        return null;
-    }
-
-    @Override
-    public INDArray linearViewColumnOrder() {
-        return null;
-    }
-
-    @Override
     public long vectorsAlongDimension(int dimension) {
         return 0;
     }
@@ -495,7 +454,7 @@ public abstract class BaseSparseNDArray implements ISparseNDArray {
     }
 
     @Override
-    public long tensorssAlongDimension(int... dimension) {
+    public long tensorsAlongDimension(int... dimension) {
         return 0;
     }
 
@@ -569,6 +528,17 @@ public abstract class BaseSparseNDArray implements ISparseNDArray {
         return null;
     }
 
+
+    @Override
+    public INDArray isInfinite() {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public INDArray isNaN() {
+        throw new UnsupportedOperationException();
+    }
+
     @Override
     public void setStride(long... stride) {
         throw new UnsupportedOperationException();
@@ -600,11 +570,6 @@ public abstract class BaseSparseNDArray implements ISparseNDArray {
     }
 
     @Override
-    public INDArray lti(Number other) {
-        return null;
-    }
-
-    @Override
     public INDArray putScalar(int[] indexes, float value) {
         return null;
     }
@@ -620,17 +585,7 @@ public abstract class BaseSparseNDArray implements ISparseNDArray {
     }
 
     @Override
-    public INDArray epsi(Number other) {
-        return null;
-    }
-
-    @Override
     public INDArray eq(Number other) {
-        return null;
-    }
-
-    @Override
-    public INDArray eqi(Number other) {
         return null;
     }
 
@@ -648,29 +603,8 @@ public abstract class BaseSparseNDArray implements ISparseNDArray {
     public INDArray lte(Number other) {
         return null;
     }
-
-    @Override
-    public INDArray gtei(Number other) {
-        return null;
-    }
-
-    @Override
-    public INDArray ltei(Number other) {
-        return null;
-    }
-
-    @Override
-    public INDArray gti(Number other) {
-        return null;
-    }
-
     @Override
     public INDArray lt(INDArray other) {
-        return null;
-    }
-
-    @Override
-    public INDArray lti(INDArray other) {
         return null;
     }
 
@@ -680,17 +614,7 @@ public abstract class BaseSparseNDArray implements ISparseNDArray {
     }
 
     @Override
-    public INDArray epsi(INDArray other) {
-        return null;
-    }
-
-    @Override
     public INDArray neq(Number other) {
-        return null;
-    }
-
-    @Override
-    public INDArray neqi(Number other) {
         return null;
     }
 
@@ -700,27 +624,12 @@ public abstract class BaseSparseNDArray implements ISparseNDArray {
     }
 
     @Override
-    public INDArray neqi(INDArray other) {
-        return null;
-    }
-
-    @Override
     public INDArray eq(INDArray other) {
         return null;
     }
 
     @Override
-    public INDArray eqi(INDArray other) {
-        return null;
-    }
-
-    @Override
     public INDArray gt(INDArray other) {
-        return null;
-    }
-
-    @Override
-    public INDArray gti(INDArray other) {
         return null;
     }
 
@@ -920,11 +829,6 @@ public abstract class BaseSparseNDArray implements ISparseNDArray {
     }
 
     @Override
-    public void checkDimensions(INDArray other) {
-
-    }
-
-    @Override
     public void sliceVectors(List<INDArray> list) {
 
     }
@@ -940,17 +844,7 @@ public abstract class BaseSparseNDArray implements ISparseNDArray {
     }
 
     @Override
-    public INDArray condi(Condition condition) {
-        return null;
-    }
-
-    @Override
     public INDArray repmat(int... shape) {
-        return null;
-    }
-
-    @Override
-    public INDArray repeat(int dimension, int... repeats) {
         return null;
     }
 
@@ -972,11 +866,6 @@ public abstract class BaseSparseNDArray implements ISparseNDArray {
     @Override
     public INDArray getScalar(long i) {
         return null;
-    }
-
-    @Override
-    public long index(long row, long column) {
-        return 0;
     }
 
     @Override
@@ -1250,10 +1139,6 @@ public abstract class BaseSparseNDArray implements ISparseNDArray {
             result.assign(gemmResultArr);
         }
 
-
-        if (Nd4j.ENFORCE_NUMERICAL_STABILITY)
-            Nd4j.clearNans(result);
-
         return result;
     }
 
@@ -1308,11 +1193,6 @@ public abstract class BaseSparseNDArray implements ISparseNDArray {
     }
 
     @Override
-    public IComplexNumber normmaxComplex() {
-        return null;
-    }
-
-    @Override
     public INDArray norm2(int... dimension) {
         return null;
     }
@@ -1323,22 +1203,12 @@ public abstract class BaseSparseNDArray implements ISparseNDArray {
     }
 
     @Override
-    public IComplexNumber norm2Complex() {
-        return null;
-    }
-
-    @Override
     public INDArray norm1(int... dimension) {
         return null;
     }
 
     @Override
     public Number norm1Number() {
-        return null;
-    }
-
-    @Override
-    public IComplexNumber norm1Complex() {
         return null;
     }
 
@@ -1363,11 +1233,6 @@ public abstract class BaseSparseNDArray implements ISparseNDArray {
     }
 
     @Override
-    public IComplexNumber stdComplex() {
-        return null;
-    }
-
-    @Override
     public INDArray prod(int... dimension) {
         return null;
     }
@@ -1378,22 +1243,12 @@ public abstract class BaseSparseNDArray implements ISparseNDArray {
     }
 
     @Override
-    public IComplexNumber prodComplex() {
-        return null;
-    }
-
-    @Override
     public INDArray mean(int... dimension) {
         return null;
     }
 
     @Override
     public Number meanNumber() {
-        return null;
-    }
-
-    @Override
-    public IComplexNumber meanComplex() {
         return null;
     }
 
@@ -1413,22 +1268,12 @@ public abstract class BaseSparseNDArray implements ISparseNDArray {
     }
 
     @Override
-    public IComplexNumber varComplex() {
-        return null;
-    }
-
-    @Override
     public INDArray max(int... dimension) {
         return null;
     }
 
     @Override
     public Number maxNumber() {
-        return null;
-    }
-
-    @Override
-    public IComplexNumber maxComplex() {
         return null;
     }
 
@@ -1443,12 +1288,12 @@ public abstract class BaseSparseNDArray implements ISparseNDArray {
     }
 
     @Override
-    public IComplexNumber minComplex() {
+    public INDArray sum(int... dimension) {
         return null;
     }
 
     @Override
-    public INDArray sum(int... dimension) {
+    public INDArray sum(boolean keepDims, int... dimension){
         return null;
     }
 
@@ -1457,21 +1302,6 @@ public abstract class BaseSparseNDArray implements ISparseNDArray {
         return null;
     }
 
-    @Override
-    public IComplexNumber sumComplex() {
-        return null;
-    }
-
-    @Override
-    public void setStride(int... stride) {
-
-    }
-
-    @Override
-    public void setShape(int... shape) {
-
-    }
-    
     @Override
     public void setShapeAndStride(int[] shape, int[] stride) {
 
@@ -1514,6 +1344,11 @@ public abstract class BaseSparseNDArray implements ISparseNDArray {
 
     @Override
     public int getInt(int... indices) {
+        return 0;
+    }
+
+    @Override
+    public long getLong(long... indices) {
         return 0;
     }
 
@@ -1806,127 +1641,6 @@ public abstract class BaseSparseNDArray implements ISparseNDArray {
         return null;
     }
 
-
-    @Override
-    public IComplexNDArray rdiv(IComplexNumber n) {
-        return null;
-    }
-
-    @Override
-    public IComplexNDArray rdivi(IComplexNumber n) {
-        return null;
-    }
-
-    @Override
-    public IComplexNDArray rsub(IComplexNumber n) {
-        return null;
-    }
-
-    @Override
-    public IComplexNDArray rsubi(IComplexNumber n) {
-        return null;
-    }
-
-    @Override
-    public IComplexNDArray div(IComplexNumber n) {
-        return null;
-    }
-
-    @Override
-    public IComplexNDArray divi(IComplexNumber n) {
-        return null;
-    }
-
-    @Override
-    public IComplexNDArray mul(IComplexNumber n) {
-        return null;
-    }
-
-    @Override
-    public IComplexNDArray muli(IComplexNumber n) {
-        return null;
-    }
-
-    @Override
-    public IComplexNDArray sub(IComplexNumber n) {
-        return null;
-    }
-
-    @Override
-    public IComplexNDArray subi(IComplexNumber n) {
-        return null;
-    }
-
-    @Override
-    public IComplexNDArray add(IComplexNumber n) {
-        return null;
-    }
-
-    @Override
-    public IComplexNDArray addi(IComplexNumber n) {
-        return null;
-    }
-
-    @Override
-    public IComplexNDArray rdiv(IComplexNumber n, IComplexNDArray result) {
-        return null;
-    }
-
-    @Override
-    public IComplexNDArray rdivi(IComplexNumber n, IComplexNDArray result) {
-        return null;
-    }
-
-    @Override
-    public IComplexNDArray rsub(IComplexNumber n, IComplexNDArray result) {
-        return null;
-    }
-
-    @Override
-    public IComplexNDArray rsubi(IComplexNumber n, IComplexNDArray result) {
-        return null;
-    }
-
-    @Override
-    public IComplexNDArray div(IComplexNumber n, IComplexNDArray result) {
-        return null;
-    }
-
-    @Override
-    public IComplexNDArray divi(IComplexNumber n, IComplexNDArray result) {
-        return null;
-    }
-
-    @Override
-    public IComplexNDArray mul(IComplexNumber n, IComplexNDArray result) {
-        return null;
-    }
-
-    @Override
-    public IComplexNDArray muli(IComplexNumber n, IComplexNDArray result) {
-        return null;
-    }
-
-    @Override
-    public IComplexNDArray sub(IComplexNumber n, IComplexNDArray result) {
-        return null;
-    }
-
-    @Override
-    public IComplexNDArray subi(IComplexNumber n, IComplexNDArray result) {
-        return null;
-    }
-
-    @Override
-    public IComplexNDArray add(IComplexNumber n, IComplexNDArray result) {
-        return null;
-    }
-
-    @Override
-    public IComplexNDArray addi(IComplexNumber n, IComplexNDArray result) {
-        return null;
-    }
-
     @Override
     public boolean equals(Object o) {
         return equalsWithEps(o, Nd4j.EPS_THRESHOLD);
@@ -1954,7 +1668,7 @@ public abstract class BaseSparseNDArray implements ISparseNDArray {
 
         INDArray n = (INDArray) o;
 
-        if (this.lengthLong() != n.lengthLong())
+        if (this.length() != n.length())
             return false;
 
         if (isScalar() && n.isScalar()) {
@@ -2168,7 +1882,7 @@ public abstract class BaseSparseNDArray implements ISparseNDArray {
      */
     @Override
     public INDArray entropy(int... dimension) {
-        return Nd4j.getExecutioner().exec(new Entropy(this), dimension);
+        return Nd4j.getExecutioner().exec(new Entropy(this, dimension));
     }
 
     /**
@@ -2178,7 +1892,7 @@ public abstract class BaseSparseNDArray implements ISparseNDArray {
      */
     @Override
     public INDArray shannonEntropy(int... dimension) {
-        return Nd4j.getExecutioner().exec(new ShannonEntropy(this), dimension);
+        return Nd4j.getExecutioner().exec(new ShannonEntropy(this, dimension));
     }
 
     /**
@@ -2188,7 +1902,7 @@ public abstract class BaseSparseNDArray implements ISparseNDArray {
      */
     @Override
     public INDArray logEntropy(int... dimension) {
-        return Nd4j.getExecutioner().exec(new LogEntropy(this), dimension);
+        return Nd4j.getExecutioner().exec(new LogEntropy(this, dimension));
     }
 
     @Override
@@ -2244,7 +1958,7 @@ public abstract class BaseSparseNDArray implements ISparseNDArray {
         INDArray sorted = Nd4j.getNDArrayFactory().sort(this.dup(this.ordering()), false, dimension);
 
         // there's no practical sense doing this on GPU, stride will be just size of TAD.
-        INDArray ret = Nd4j.createUninitialized(sorted.tensorssAlongDimension(dimension));
+        INDArray ret = Nd4j.createUninitialized(sorted.tensorsAlongDimension(dimension));
         for (int i = 0; i < ret.length(); i++) {
             ret.putScalar(i, getPercentile(quantile, sorted.tensorAlongDimension(i, dimension)));
         }
@@ -2253,5 +1967,38 @@ public abstract class BaseSparseNDArray implements ISparseNDArray {
 
     }
 
+    @Override
+    public long[] shapeInfoJava() {
+        return javaShapeInformation;
+    }
 
+    @Override
+    public DataType dataType() {
+        return data().dataType();
+    }
+
+    @Override
+    public boolean all() {
+        return false;
+    }
+
+    @Override
+    public boolean any() {
+        return false;
+    }
+
+    @Override
+    public boolean none() {
+        return false;
+    }
+
+    @Override
+    public INDArray like() {
+        throw new UnsupportedOperationException("Not yet implemented");
+    }
+
+    @Override
+    public INDArray ulike() {
+        throw new UnsupportedOperationException("Not yet implemented");
+    }
 }

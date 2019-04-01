@@ -26,6 +26,12 @@ namespace nd4j {
 namespace ops {
     const int kMaxSpaceToBatchBlockDims = 4;
 
+    DECLARE_TYPES(space_to_batch) {
+        getOpDescriptor()
+                ->setAllowedInputTypes(nd4j::DataType::ANY)
+                ->setSameMode(true);
+    }
+
     CUSTOM_OP_IMPL(space_to_batch, 1, 1, false, 0, -2) {
         auto input = INPUT_VARIABLE(0);
 
@@ -51,8 +57,8 @@ namespace ops {
 
             block_dims = (int) blocks->lengthOf();
 
-            REQUIRE_TRUE(blocks->isVector(), 0, "SpaceToBatch: blocks supposed to be vector, but got %iD instead", blocks->rankOf());
-            REQUIRE_TRUE(input->rankOf() >= 1 + blocks->lengthOf() + 1, 0, "SpaceToBatch: blocks length + 2 should match input rank at least");
+            REQUIRE_TRUE(blocks->isVector() || blocks->lengthOf() == 1, 0, "SpaceToBatch: blocks supposed to be vector or scalar, but got %iD instead", blocks->rankOf());
+            REQUIRE_TRUE(input->rankOf() >= 1 + blocks->lengthOf(), 0, "SpaceToBatch: blocks length + 1 should match input rank at least");
             REQUIRE_TRUE(padding->rankOf() == 2, 0, "SpaceToBatch: padding should have rank of 2, but got %i instead", padding->rankOf());
             REQUIRE_TRUE(padding->columns() == 2 && blocks->lengthOf() == padding->rows(), 0, "SpaceToBatch: padding should have M rows and 2 columns");
 
@@ -187,10 +193,10 @@ namespace ops {
             padding_shape.resize(padding->lengthOf());
 
             for (int e = 0; e < block_dims; e++)
-                block_shape[e] = (int) blocks->getScalar(e);
+                block_shape[e] = blocks->e<int>(e);
 
             for (int e = 0; e < padding->lengthOf(); e++)
-                padding_shape[e] = (int) padding->getScalar(e);
+                padding_shape[e] = padding->e<int>(e);
         } else if (block.numI() > 0) {
             int totalArgs = block.numI();
 
@@ -284,7 +290,8 @@ namespace ops {
         ALLOCATE(newShape, block.getWorkspace(), shape::shapeInfoLength((int) external_output_shape.size()), Nd4jLong);
 
         // we always give out C order here
-        shape::shapeBuffer((int) external_output_shape.size(), external_output_shape.data(), newShape);
+        shape::shapeBuffer((int) external_output_shape.size(), ArrayOptions::dataType(in), external_output_shape.data(), newShape);
+        ArrayOptions::setDataType(newShape, ArrayOptions::dataType(in)); // as in TF
 
         return SHAPELIST(newShape);
     }

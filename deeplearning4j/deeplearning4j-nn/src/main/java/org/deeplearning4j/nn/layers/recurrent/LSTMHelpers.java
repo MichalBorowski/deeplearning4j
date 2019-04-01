@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.nn.layers.recurrent;
 
 import lombok.extern.slf4j.Slf4j;
@@ -12,22 +28,20 @@ import org.deeplearning4j.nn.conf.memory.LayerMemoryReport;
 import org.deeplearning4j.nn.conf.memory.MemoryReport;
 import org.deeplearning4j.nn.gradient.DefaultGradient;
 import org.deeplearning4j.nn.gradient.Gradient;
-import org.deeplearning4j.nn.graph.ComputationGraph;
 import org.deeplearning4j.nn.layers.BaseLayer;
 import org.nd4j.linalg.activations.IActivation;
 import org.nd4j.linalg.activations.impl.ActivationSigmoid;
 import org.nd4j.linalg.api.blas.Level1;
 import org.nd4j.linalg.api.memory.MemoryWorkspace;
 import org.nd4j.linalg.api.ndarray.INDArray;
-import org.nd4j.linalg.api.ops.impl.transforms.TimesOneMinus;
-import org.nd4j.linalg.api.ops.impl.transforms.arithmetic.OldMulOp;
+import org.nd4j.linalg.api.ops.impl.transforms.pairwise.arithmetic.OldMulOp;
+import org.nd4j.linalg.api.ops.impl.transforms.same.TimesOneMinus;
 import org.nd4j.linalg.api.shape.Shape;
 import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.indexing.NDArrayIndex;
 import org.nd4j.linalg.primitives.Pair;
 import org.deeplearning4j.nn.workspace.ArrayType;
 import org.deeplearning4j.nn.workspace.LayerWorkspaceMgr;
-import sun.misc.Cache;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -38,7 +52,7 @@ import static org.nd4j.linalg.indexing.NDArrayIndex.point;
 
 /**
  *
- * RNN tutorial: http://deeplearning4j.org/usingrnns.html
+ * RNN tutorial: <a href="https://deeplearning4j.org/docs/latest/deeplearning4j-nn-recurrent">https://deeplearning4j.org/docs/latest/deeplearning4j-nn-recurrent</a>
  * READ THIS FIRST if you want to understand what the heck is happening here.
  *
  * Shared code for the standard "forwards" LSTM RNN and the bidirectional LSTM RNN
@@ -46,13 +60,13 @@ import static org.nd4j.linalg.indexing.NDArrayIndex.point;
  * so we only have math in one place, instead of two.
  *
  * Based on Graves: Supervised Sequence Labelling with Recurrent Neural Networks
- * http://www.cs.toronto.edu/~graves/phd.pdf
+ * <a href="http://www.cs.toronto.edu/~graves/phd.pdf">http://www.cs.toronto.edu/~graves/phd.pdf</a>
  * See also for full/vectorized equations (and a comparison to other LSTM variants):
  * Greff et al. 2015, "LSTM: A Search Space Odyssey", pg11.
  * <p>
  * When 'hasPeepholeConnections' is true, this is the "vanilla" variant in said paper<br>
  * When 'hasPeepholeConnections' is false, this is the "no peephole" variant<br>
- * http://arxiv.org/pdf/1503.04069.pdf
+ * <a href="http://arxiv.org/pdf/1503.04069.pdf">http://arxiv.org/pdf/1503.04069.pdf</a>
  *
  *
  * @author Alex Black (LSTM implementations)
@@ -544,7 +558,7 @@ public class LSTMHelpers {
                 INDArray deltao = deltaoNext;
                 Nd4j.getExecutioner().exec(new OldMulOp(nablaOut, sigmahOfS, deltao));
                 if (sigmoidGates) {
-                    INDArray sigmaoPrimeOfZo = Nd4j.getExecutioner().execAndReturn(new TimesOneMinus(ao.dup('f'))); //Equivalent to sigmoid deriv on zo
+                    INDArray sigmaoPrimeOfZo = Nd4j.getExecutioner().exec(new TimesOneMinus(ao.dup('f'))); //Equivalent to sigmoid deriv on zo
                     deltao.muli(sigmaoPrimeOfZo);
                 } else {
                     deltao.assign(gateActivationFn.backprop(fwdPass.oz[time], deltao).getFirst()); //Deltao needs to be modified in-place
@@ -596,8 +610,7 @@ public class LSTMHelpers {
                     deltag.muli(ai);
                     deltag.muli(nablaCellState);
                 } else {
-                    INDArray temp2 = Nd4j.getExecutioner().execAndReturn(
-                            new OldMulOp(ai, nablaCellState, Nd4j.createUninitialized(ai.shape(), 'f')));
+                    INDArray temp2 = Nd4j.getExecutioner().exec(new OldMulOp(ai, nablaCellState, Nd4j.createUninitialized(ai.shape(), 'f')));
                     deltag.assign(gateActivationFn.backprop(fwdPass.gz[time], temp2).getFirst());
                     //TODO activation functions with params; optimize (no assign)
                 }
@@ -606,8 +619,7 @@ public class LSTMHelpers {
                 //Network input delta:
                 INDArray zi = fwdPass.iz[time];
                 INDArray deltai = deltaiNext;
-                temp = Nd4j.getExecutioner().execAndReturn(
-                        new OldMulOp(ag, nablaCellState, Nd4j.createUninitialized(deltai.shape(), 'f')));
+                temp = Nd4j.getExecutioner().exec(new OldMulOp(ag, nablaCellState, Nd4j.createUninitialized(deltai.shape(), 'f')));
                 deltai.assign(afn.backprop(zi, temp).getFirst());
                 //TODO activation functions with params; also: optimize this (no assign)
                 //Shape: [m,n^L]

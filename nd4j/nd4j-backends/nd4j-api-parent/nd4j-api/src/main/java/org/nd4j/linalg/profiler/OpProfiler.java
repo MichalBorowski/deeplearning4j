@@ -1,10 +1,26 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.linalg.profiler;
 
-import lombok.Data;
-import lombok.Getter;
+import lombok.*;
 import lombok.extern.slf4j.Slf4j;
 import org.nd4j.linalg.api.buffer.DataBuffer;
 import org.nd4j.linalg.api.ndarray.INDArray;
+import org.nd4j.linalg.api.ndarray.INDArrayStatistics;
 import org.nd4j.linalg.api.ops.*;
 import org.nd4j.linalg.profiler.data.StackAggregator;
 import org.nd4j.linalg.profiler.data.StringAggregator;
@@ -42,6 +58,9 @@ public class OpProfiler {
     private AtomicLong invocationsCount = new AtomicLong(0);
     private static OpProfiler ourInstance = new OpProfiler();
 
+
+    @Getter
+    private INDArrayStatistics statistics = new INDArrayStatistics();
 
     @Getter
     private StringAggregator classAggergator = new StringAggregator();
@@ -142,6 +161,7 @@ public class OpProfiler {
 
         orderCounter.reset();
         listeners.clear();
+        statistics = INDArrayStatistics.builder().build();
     }
 
 
@@ -174,7 +194,7 @@ public class OpProfiler {
             return "BroadcastOp";
         } else if (op instanceof RandomOp) {
             return "RandomOp";
-        } else if (op instanceof Accumulation) {
+        } else if (op instanceof ReduceOp) {
             return "AccumulationOp";
         } else if (op instanceof TransformOp) {
             if (op.y() == null) {
@@ -217,7 +237,7 @@ public class OpProfiler {
         String opClass = getOpClass(op);
         classCounter.incrementCount(opClass);
 
-        if (op.x().data().address() == lastZ && op.z() == op.x() && op.y() == null) {
+        if(op.x() == null || (op.x() != null && op.x().data().address() == lastZ && op.z() == op.x() && op.y() == null)) {
             // we have possible shift here
             matchingCounter.incrementCount(prevOpMatching + " -> " + opClass);
             matchingCounterDetailed.incrementCount(prevOpMatchingDetailed + " -> " + opClass + " " + op.opName());
@@ -231,28 +251,30 @@ public class OpProfiler {
             }
 
         }
-        lastZ = op.z().data().address();
+        lastZ = op.z() != null ? op.z().data().address() : 0L;
         prevOpMatching = opClass;
         prevOpMatchingDetailed = opClass + " " + op.opName();
         prevOpMatchingInverted = opClass + " " + op.opName();
 
         updatePairs(op.opName(), opClass);
 
-        PenaltyCause[] causes = processOperands(op.x(), op.y(), op.z());
-        for (PenaltyCause cause : causes) {
-            switch (cause) {
-                case NON_EWS_ACCESS:
-                    nonEwsAggregator.incrementCount();
-                    break;
-                case STRIDED_ACCESS:
-                    stridedAggregator.incrementCount();
-                    break;
-                case MIXED_ORDER:
-                    mixedOrderAggregator.incrementCount();
-                    break;
-                case NONE:
-                default:
-                    break;
+        if (config.isNotOptimalArguments()) {
+            PenaltyCause[] causes = processOperands(op.x(), op.y(), op.z());
+            for (PenaltyCause cause : causes) {
+                switch (cause) {
+                    case NON_EWS_ACCESS:
+                        nonEwsAggregator.incrementCount();
+                        break;
+                    case STRIDED_ACCESS:
+                        stridedAggregator.incrementCount();
+                        break;
+                    case MIXED_ORDER:
+                        mixedOrderAggregator.incrementCount();
+                        break;
+                    case NONE:
+                    default:
+                        break;
+                }
             }
         }
 
@@ -302,15 +324,15 @@ public class OpProfiler {
         PenaltyCause[] causes = processTADOperands(tadBuffers);
         for (PenaltyCause cause : causes) {
             switch (cause) {
-                case TAD_NON_EWS_ACCESS:
-                    tadNonEwsAggregator.incrementCount();
-                    break;
-                case TAD_STRIDED_ACCESS:
-                    tadStridedAggregator.incrementCount();
-                    break;
-                case NONE:
-                default:
-                    break;
+               case TAD_NON_EWS_ACCESS:
+                  tadNonEwsAggregator.incrementCount();
+                   break;
+               case TAD_STRIDED_ACCESS:
+                  tadStridedAggregator.incrementCount();
+                  break;
+               case NONE:
+               default:
+                   break;
             }
         }
     }
@@ -320,7 +342,7 @@ public class OpProfiler {
      *
      * @return
      */
-    public StackAggregator getMixedOrderAggregator() {
+    protected StackAggregator getMixedOrderAggregator() {
         // FIXME: remove this method, or make it protected
         return mixedOrderAggregator;
     }
@@ -570,20 +592,20 @@ public class OpProfiler {
     public PenaltyCause[] processOperands(INDArray x, INDArray y) {
         List<PenaltyCause> penalties = new ArrayList<>();
 
-        if (x.ordering() != y.ordering()) {
+        if (x != null && x.ordering() != y.ordering()) {
             penalties.add(PenaltyCause.MIXED_ORDER);
         }
 
 
-        if (x.elementWiseStride() < 1) {
+        if (x != null && x.elementWiseStride() < 1) {
             penalties.add(PenaltyCause.NON_EWS_ACCESS);
-        } else if (y.elementWiseStride() < 1) {
+        } else if (y != null && y.elementWiseStride() < 1) {
             penalties.add(PenaltyCause.NON_EWS_ACCESS);
         }
 
-        if (x.elementWiseStride() > 1) {
+        if (x != null && x.elementWiseStride() > 1) {
             penalties.add(PenaltyCause.STRIDED_ACCESS);
-        } else if (y.elementWiseStride() > 1) {
+        } else if (y != null && y.elementWiseStride() > 1) {
             penalties.add(PenaltyCause.STRIDED_ACCESS);
         }
 
@@ -685,4 +707,7 @@ public class OpProfiler {
     public void processMemoryAccess() {
 
     }
+
+    @Setter
+    private ProfilerConfig config;
 }

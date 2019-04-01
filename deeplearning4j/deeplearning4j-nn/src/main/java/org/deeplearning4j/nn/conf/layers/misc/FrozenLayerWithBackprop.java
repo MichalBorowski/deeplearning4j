@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.nn.conf.layers.misc;
 
 import lombok.Data;
@@ -5,6 +21,7 @@ import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import org.deeplearning4j.nn.api.ParamInitializer;
 import org.deeplearning4j.nn.api.layers.LayerConstraint;
+import org.deeplearning4j.nn.conf.GradientNormalization;
 import org.deeplearning4j.nn.conf.InputPreProcessor;
 import org.deeplearning4j.nn.conf.NeuralNetConfiguration;
 import org.deeplearning4j.nn.conf.inputs.InputType;
@@ -16,6 +33,7 @@ import org.deeplearning4j.nn.params.FrozenLayerWithBackpropParamInitializer;
 import org.deeplearning4j.optimize.api.TrainingListener;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.learning.config.IUpdater;
+import org.nd4j.linalg.learning.regularization.Regularization;
 import org.nd4j.shade.jackson.annotation.JsonProperty;
 
 import java.util.Collection;
@@ -24,7 +42,8 @@ import java.util.List;
 /**
  * Frozen layer freezes parameters of the layer it wraps, but allows the backpropagation to continue.
  * 
- * Created by Ugljesa Jovanovic (jovanovic.ugljesa@gmail.com) on 06/05/2018.
+ * @author Ugljesa Jovanovic (jovanovic.ugljesa@gmail.com) on 06/05/2018.
+ * @see FrozenLayer
  */
 @Data
 public class FrozenLayerWithBackprop extends BaseWrapperLayer {
@@ -63,12 +82,7 @@ public class FrozenLayerWithBackprop extends BaseWrapperLayer {
             conf.clearVariables();
             for (String s : vars) {
                 conf.variables(false).add(s);
-                conf.getL1ByParam().put(s, 0.0);
-                conf.getL2ByParam().put(s, 0.0);
-
                 nncUnderlying.variables(false).add(s);
-                nncUnderlying.getL1ByParam().put(s, 0.0);
-                nncUnderlying.getL2ByParam().put(s, 0.0);
             }
         }
 
@@ -79,14 +93,11 @@ public class FrozenLayerWithBackprop extends BaseWrapperLayer {
     public ParamInitializer initializer() {
         return FrozenLayerWithBackpropParamInitializer.getInstance();
     }
-    @Override
-    public double getL1ByParam(String paramName) {
-        return 0;
-    }
 
     @Override
-    public double getL2ByParam(String paramName) {
-        return 0;
+    public List<Regularization> getRegularizationByParam(String paramName){
+        //No regularization for frozen layers
+        return null;
     }
 
     @Override
@@ -106,7 +117,7 @@ public class FrozenLayerWithBackprop extends BaseWrapperLayer {
     }
 
     @Override
-    public void setConstraints(List<LayerConstraint> constraints){
+    public void setConstraints(List<LayerConstraint> constraints) {
         this.constraints = constraints;
         this.underlying.setConstraints(constraints);
     }

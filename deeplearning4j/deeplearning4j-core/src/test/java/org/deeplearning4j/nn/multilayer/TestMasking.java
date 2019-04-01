@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.nn.multilayer;
 
 import lombok.val;
@@ -6,25 +22,27 @@ import org.deeplearning4j.datasets.iterator.ExistingDataSetIterator;
 import org.deeplearning4j.eval.EvaluationBinary;
 import org.deeplearning4j.gradientcheck.LossFunctionGradientCheck;
 import org.deeplearning4j.nn.api.Layer;
-import org.deeplearning4j.nn.conf.BackpropType;
-import org.deeplearning4j.nn.conf.ComputationGraphConfiguration;
-import org.deeplearning4j.nn.conf.MultiLayerConfiguration;
-import org.deeplearning4j.nn.conf.NeuralNetConfiguration;
+import org.deeplearning4j.nn.conf.*;
 import org.deeplearning4j.nn.conf.distribution.NormalDistribution;
-import org.deeplearning4j.nn.conf.layers.DenseLayer;
-import org.deeplearning4j.nn.conf.layers.OutputLayer;
-import org.deeplearning4j.nn.conf.layers.RnnOutputLayer;
+import org.deeplearning4j.nn.conf.graph.MergeVertex;
+import org.deeplearning4j.nn.conf.graph.StackVertex;
+import org.deeplearning4j.nn.conf.graph.UnstackVertex;
+import org.deeplearning4j.nn.conf.inputs.InputType;
+import org.deeplearning4j.nn.conf.layers.*;
+import org.deeplearning4j.nn.conf.layers.recurrent.LastTimeStep;
+import org.deeplearning4j.nn.conf.preprocessor.CnnToRnnPreProcessor;
+import org.deeplearning4j.nn.conf.preprocessor.RnnToCnnPreProcessor;
 import org.deeplearning4j.nn.graph.ComputationGraph;
 import org.deeplearning4j.nn.weights.WeightInit;
 import org.junit.Test;
 import org.nd4j.linalg.activations.Activation;
-import org.nd4j.linalg.api.buffer.DataBuffer;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.buffer.util.DataTypeUtil;
 import org.nd4j.linalg.api.ndarray.INDArray;
-import org.nd4j.linalg.api.ops.impl.transforms.Not;
 import org.nd4j.linalg.dataset.DataSet;
 import org.nd4j.linalg.dataset.api.iterator.DataSetIterator;
 import org.nd4j.linalg.factory.Nd4j;
+import org.nd4j.linalg.learning.config.Adam;
 import org.nd4j.linalg.learning.config.NoOp;
 import org.nd4j.linalg.lossfunctions.ILossFunction;
 import org.nd4j.linalg.lossfunctions.LossFunctions;
@@ -40,7 +58,7 @@ import static org.junit.Assert.*;
 public class TestMasking extends BaseDL4JTest {
 
     static {
-        DataTypeUtil.setDTypeForContext(DataBuffer.Type.DOUBLE);
+        DataTypeUtil.setDTypeForContext(DataType.DOUBLE);
     }
 
     @Test
@@ -57,7 +75,7 @@ public class TestMasking extends BaseDL4JTest {
             net.init();
 
             DataSet data = new DataSet(Nd4j.linspace(1, 10, 10).reshape(1, 1, 10),
-                            Nd4j.linspace(2, 20, 10).reshape(1, 1, 10), Nd4j.ones(10), Nd4j.ones(10));
+                            Nd4j.linspace(2, 20, 10).reshape(1, 1, 10), Nd4j.ones(1, 10), Nd4j.ones(1, 10));
 
             net.fit(data);
             for (Layer l : net.getLayers()) {
@@ -86,7 +104,7 @@ public class TestMasking extends BaseDL4JTest {
         int nIn = 6;
         int layerSize = 4;
 
-        INDArray mask1 = Nd4j.create(new double[] {1, 0, 0, 1, 0});
+        INDArray mask1 = Nd4j.create(new double[] {1, 0, 0, 1, 0}, new long[]{1,5});
         INDArray mask3 = Nd4j.create(new double[][] {{1, 1, 1, 1, 1}, {0, 1, 0, 1, 0}, {1, 0, 0, 1, 1}});
         INDArray[] labelMasks = new INDArray[] {mask1, mask3};
 
@@ -131,12 +149,13 @@ public class TestMasking extends BaseDL4JTest {
 
 
                 MultiLayerConfiguration conf = new NeuralNetConfiguration.Builder().updater(new NoOp())
-                                .weightInit(WeightInit.DISTRIBUTION).dist(new NormalDistribution(0, 1)).seed(12345)
+                                .dist(new NormalDistribution(0, 1)).seed(12345)
                                 .list()
                                 .layer(0, new DenseLayer.Builder().nIn(nIn).nOut(layerSize).activation(Activation.TANH)
                                                 .build())
                                 .layer(1, new OutputLayer.Builder().nIn(layerSize).nOut(nOut).lossFunction(lf)
                                                 .activation(a).build())
+                                .validateOutputLayerConfig(false)
                                 .build();
 
                 MultiLayerNetwork net = new MultiLayerNetwork(conf);
@@ -156,7 +175,7 @@ public class TestMasking extends BaseDL4JTest {
 
                 //Now: change the label values for the masked steps. The
 
-                INDArray maskZeroLocations = Nd4j.getExecutioner().execAndReturn(new Not(labelMask.dup()));
+                INDArray maskZeroLocations = labelMask.rsub(1.0);   //rsub(1): swap 0s and 1s
                 INDArray rand = Nd4j.rand(maskZeroLocations.shape()).muli(0.5);
 
                 INDArray newLabels = labels.add(rand.muli(maskZeroLocations)); //Only the masked values are changed
@@ -176,13 +195,13 @@ public class TestMasking extends BaseDL4JTest {
 
                 //Do the same for CompGraph
                 ComputationGraphConfiguration conf2 = new NeuralNetConfiguration.Builder().updater(new NoOp())
-                                .weightInit(WeightInit.DISTRIBUTION).dist(new NormalDistribution(0, 1)).seed(12345)
+                                .dist(new NormalDistribution(0, 1)).seed(12345)
                                 .graphBuilder().addInputs("in")
                                 .addLayer("0", new DenseLayer.Builder().nIn(nIn).nOut(layerSize)
                                                 .activation(Activation.TANH).build(), "in")
                                 .addLayer("1", new OutputLayer.Builder().nIn(layerSize).nOut(nOut).lossFunction(lf)
                                                 .activation(a).build(), "0")
-                                .setOutputs("1").build();
+                                .setOutputs("1").validateOutputLayerConfig(false).build();
 
                 ComputationGraph graph = new ComputationGraph(conf2);
                 graph.init();
@@ -218,7 +237,7 @@ public class TestMasking extends BaseDL4JTest {
         int nOut = 4;
 
         ComputationGraphConfiguration conf2 = new NeuralNetConfiguration.Builder().updater(new NoOp())
-                        .weightInit(WeightInit.DISTRIBUTION).dist(new NormalDistribution(0, 1)).seed(12345)
+                        .dist(new NormalDistribution(0, 1)).seed(12345)
                         .graphBuilder().addInputs("in")
                         .addLayer("0", new DenseLayer.Builder().nIn(nIn).nOut(layerSize).activation(Activation.TANH)
                                         .build(), "in")
@@ -239,5 +258,89 @@ public class TestMasking extends BaseDL4JTest {
 
         EvaluationBinary eb = new EvaluationBinary();
         graph.doEvaluation(iter, eb);
+    }
+
+
+    @Test
+    public void testRnnCnnMaskingSimple(){
+        int kernelSize1 = 2;
+        int padding = 0;
+        int cnnStride1 = 1;
+        int channels = 1;
+
+        ComputationGraphConfiguration conf = new NeuralNetConfiguration.Builder()
+                .seed(12345)
+                .weightInit(WeightInit.XAVIER)
+                .convolutionMode(ConvolutionMode.Same)
+                .graphBuilder()
+                .addInputs("inputs")
+                .addLayer("cnn1",
+                        new ConvolutionLayer.Builder(new int[] { kernelSize1, kernelSize1 },
+                                new int[] { cnnStride1, cnnStride1 },
+                                new int[] { padding, padding })
+                                .nIn(channels)
+                                .nOut(2).build(), "inputs")
+                .addLayer("lstm1", new LSTM.Builder().nIn(7 * 7 * 2).nOut(2).build(), "cnn1")
+                .addLayer("output", new RnnOutputLayer.Builder(LossFunctions.LossFunction.MSE)
+                        .activation(Activation.RELU).nIn(2).nOut(2).build(), "lstm1")
+                .setOutputs("output")
+                .setInputTypes(InputType.recurrent(7*7, 1))
+                .inputPreProcessor("cnn1", new RnnToCnnPreProcessor(7, 7, channels))
+                .inputPreProcessor("lstm1", new CnnToRnnPreProcessor(7, 7, 2))
+                .build();
+
+        ComputationGraph cg = new ComputationGraph(conf);
+        cg.init();
+
+        cg.fit(new DataSet(
+                Nd4j.create(1, 7*7, 5),
+                Nd4j.create(1, 2, 5),
+                Nd4j.ones(1, 5),
+                Nd4j.ones(1, 5)));
+    }
+
+
+    @Test
+    public void testMaskingStackUnstack(){
+
+        ComputationGraphConfiguration nnConfig = new NeuralNetConfiguration.Builder()
+                .updater(new Adam(2e-2))
+                .graphBuilder()
+                .setInputTypes(
+                        InputType.recurrent(3),
+                        InputType.recurrent(3)
+                )
+                .addInputs("m1", "m2")
+                .addVertex("stack", new StackVertex(), "m1", "m2")
+                .addLayer("lastUnStacked", new LastTimeStep(new LSTM.Builder().nIn(3).nOut(1).activation(Activation.TANH).build()), "stack")
+                .addVertex("unstacked1", new UnstackVertex(0, 2), "lastUnStacked")
+                .addVertex("unstacked2", new UnstackVertex(1, 2), "lastUnStacked")
+                .addVertex("restacked", new StackVertex(), "unstacked1", "unstacked2")
+                .addVertex("un1", new UnstackVertex(0, 2), "restacked")
+                .addVertex("un2", new UnstackVertex(1, 2), "restacked")
+                .addVertex("q", new MergeVertex(), "un1", "un2")
+                .addLayer("probability", new OutputLayer.Builder().nIn(2).nOut(6).lossFunction(LossFunctions.LossFunction.MEAN_ABSOLUTE_ERROR).build(), "q")
+                .setOutputs("probability")
+                .build();
+
+        ComputationGraph cg = new ComputationGraph(nnConfig);
+        cg.init();
+
+        INDArray i1 = Nd4j.create(1, 3, 5);
+        INDArray i2 = Nd4j.create(1, 3, 5);
+        INDArray fm1 = Nd4j.ones(1, 5);
+        INDArray fm2 = Nd4j.ones(1, 5);
+
+        //First: check no masks case
+        INDArray o1 = cg.output(false, new INDArray[]{i1, i2}, null)[0];
+
+        //Second: check null mask arrays case
+        INDArray o2 = cg.output(false, new INDArray[]{i1, i2}, new INDArray[]{null, null})[0];
+
+        //Third: masks present case
+        INDArray o3 = cg.output(false, new INDArray[]{i1, i2}, new INDArray[]{fm1, fm2})[0];
+
+        assertEquals(o1, o2);
+        assertEquals(o1, o3);
     }
 }

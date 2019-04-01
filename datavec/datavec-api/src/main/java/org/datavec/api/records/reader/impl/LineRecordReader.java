@@ -1,22 +1,18 @@
-/*-
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
  *
- *  *
- *  *  * Copyright 2015 Skymind,Inc.
- *  *  *
- *  *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *  *    you may not use this file except in compliance with the License.
- *  *  *    You may obtain a copy of the License at
- *  *  *
- *  *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *  *
- *  *  *    Unless required by applicable law or agreed to in writing, software
- *  *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *  *    See the License for the specific language governing permissions and
- *  *  *    limitations under the License.
- *  *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
  *
- */
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.datavec.api.records.reader.impl;
 
@@ -32,6 +28,7 @@ import org.datavec.api.split.InputStreamInputSplit;
 import org.datavec.api.split.StringSplit;
 import org.datavec.api.writable.Text;
 import org.datavec.api.writable.Writable;
+import org.nd4j.base.Preconditions;
 import org.nd4j.linalg.primitives.Triple;
 
 import java.io.*;
@@ -51,22 +48,25 @@ public class LineRecordReader extends BaseRecordReader {
     protected int splitIndex = 0;
     protected int lineIndex = 0; //Line index within the current split
     protected Configuration conf;
-    protected InputSplit inputSplit;
+    protected boolean initialized;
 
     @Override
     public void initialize(InputSplit split) throws IOException, InterruptedException {
-        this.inputSplit = split;
+        super.initialize(split);
         this.iter = getIterator(0);
+        this.initialized = true;
     }
 
     @Override
     public void initialize(Configuration conf, InputSplit split) throws IOException, InterruptedException {
         this.conf = conf;
         initialize(split);
+        this.initialized = true;
     }
 
     @Override
     public List<Writable> next() {
+        Preconditions.checkState(initialized, "Record reader has not been initialized");
         List<Writable> ret = new ArrayList<>();
 
         if (iter.hasNext()) {
@@ -81,7 +81,8 @@ public class LineRecordReader extends BaseRecordReader {
                 lineIndex = 0; //New split opened -> reset line index
                 try {
                     close();
-                    iter = IOUtils.lineIterator(new InputStreamReader(locations[splitIndex].toURL().openStream()));
+//                    iter = IOUtils.lineIterator(new InputStreamReader(locations[splitIndex].toURL().openStream()));
+                    iter = getIterator(splitIndex);
                     onLocationOpen(locations[splitIndex]);
                 } catch (IOException e) {
                     e.printStackTrace();
@@ -102,6 +103,8 @@ public class LineRecordReader extends BaseRecordReader {
 
     @Override
     public boolean hasNext() {
+        Preconditions.checkState(initialized, "Record reader has not been initialized");
+
         if (iter != null && iter.hasNext()) {
             return true;
         } else {
@@ -110,7 +113,7 @@ public class LineRecordReader extends BaseRecordReader {
                 lineIndex = 0; //New split -> reset line count
                 try {
                     close();
-                    iter = IOUtils.lineIterator(new InputStreamReader(locations[splitIndex].toURL().openStream()));
+                    iter = getIterator(splitIndex);
                     onLocationOpen(locations[splitIndex]);
                 } catch (IOException e) {
                     e.printStackTrace();
@@ -194,14 +197,13 @@ public class LineRecordReader extends BaseRecordReader {
                 iterator = IOUtils.lineIterator(new InputStreamReader(is));
             }
         } else {
-            this.locations = inputSplit.locations();
-            if (locations != null && locations.length > 0) {
-                InputStream inputStream;
-                try {
-                    inputStream = locations[location].toURL().openStream();
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
+            final ArrayList<URI> uris = new ArrayList<>();
+            final Iterator<URI> uriIterator = inputSplit.locationsIterator();
+            while(uriIterator.hasNext()) uris.add(uriIterator.next());
+
+            this.locations = uris.toArray(new URI[uris.size()]);
+            if (locations.length > 0) {
+                InputStream inputStream = streamCreatorFn.apply(locations[location]);
                 iterator = IOUtils.lineIterator(new InputStreamReader(inputStream));
             }
         }

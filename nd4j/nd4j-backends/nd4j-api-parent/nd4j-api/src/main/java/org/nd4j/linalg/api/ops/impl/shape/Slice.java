@@ -1,21 +1,18 @@
-/*-
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
  *
- *  * Copyright 2015 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
  *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
  *
- */
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.nd4j.linalg.api.ops.impl.shape;
 
@@ -24,9 +21,11 @@ import lombok.extern.slf4j.Slf4j;
 import lombok.val;
 import org.nd4j.autodiff.samediff.SDVariable;
 import org.nd4j.autodiff.samediff.SameDiff;
+import org.nd4j.base.Preconditions;
 import org.nd4j.imports.NoOpNameFoundException;
 import org.nd4j.imports.descriptors.properties.PropertyMapping;
 import org.nd4j.imports.graphmapper.tf.TFGraphMapper;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.ops.DynamicCustomOp;
 import org.nd4j.linalg.exception.ND4JIllegalStateException;
 import org.tensorflow.framework.AttrValue;
@@ -73,101 +72,16 @@ public class Slice extends DynamicCustomOp {
         return "Slice";
     }
 
-
-    @Override
-    public void assertValidForExecution() {
-        if(numInputArguments() != 1 && numInputArguments() != 3 && numInputArguments() != 4) {
-            throw new ND4JIllegalStateException("Num input arguments must be 1 3 or 4.");
-        }
-    }
-
-    @Override
-    public void initFromTensorFlow(NodeDef nodeDef, SameDiff initWith, Map<String, AttrValue> attributesForNode, GraphDef graph) {
-         /*
-            strided slice typically takes 4 tensor arguments:
-            0) input, it's shape determines number of elements in other arguments
-            1) begin indices
-            2) end indices
-            3) strides
-         */
-
-        val inputBegin = nodeDef.getInput(1);
-        val inputEnd = nodeDef.getInput(2);
-
-        NodeDef beginNode = null;
-        NodeDef endNode = null;
-
-        for(int i = 0; i < graph.getNodeCount(); i++) {
-            if(graph.getNode(i).getName().equals(inputBegin)) {
-                beginNode = graph.getNode(i);
-            }
-            if(graph.getNode(i).getName().equals(inputEnd)) {
-                endNode = graph.getNode(i);
-            }
-
-        }
-
-
-
-        val beginArr = TFGraphMapper.getInstance().getNDArrayFromTensor("value",beginNode,graph);
-        val endArr = TFGraphMapper.getInstance().getNDArrayFromTensor("value",endNode,graph);
-
-        if (beginArr != null && endArr != null) {
-
-            for (int e = 0; e < beginArr.length(); e++)
-                addIArgument(beginArr.getInt(e));
-
-            for (int e = 0; e <  endArr.length(); e++)
-                addIArgument(endArr.getInt(e));
-
-
-        } else {
-            // do nothing
-        }
-
-
-
-    }
-
-
-
-    @Override
-    public Map<String, Map<String, PropertyMapping>> mappingsForFunction() {
-        Map<String,Map<String,PropertyMapping>> ret = new HashMap<>();
-        Map<String,PropertyMapping> map = new HashMap<>();
-
-        val beginMapping = PropertyMapping.builder()
-                .tfInputPosition(1)
-                .propertyNames(new String[]{"begin"})
-                .build();
-
-        val size = PropertyMapping.builder()
-                .tfInputPosition(2)
-                .propertyNames(new String[]{"size"})
-                .build();
-
-
-
-
-
-        map.put("begin",beginMapping);
-        map.put("size",size);
-
-
-
-        ret.put(tensorflowName(),map);
-
-        return ret;
-    }
-
-
-    @Override
-    public Map<String, Object> propertiesForFunction() {
-        return super.propertiesForFunction();
-    }
-
     @Override
     public List<SDVariable> doDiff(List<SDVariable> grad) {
         return Collections.singletonList(f().sliceBp(arg(), grad.get(0), begin, size));
+    }
+
+    @Override
+    public List<DataType> calculateOutputDataTypes(List<DataType> dataTypes){
+        Preconditions.checkState(dataTypes != null & (dataTypes.size() == 1 || dataTypes.size() == 3),
+                "Expected list with 1 or 3 datatypes for %s, got %s", getClass(), dataTypes);
+        //Output type is same as input type. 3 inputs for import case
+        return Collections.singletonList(dataTypes.get(0));
     }
 }

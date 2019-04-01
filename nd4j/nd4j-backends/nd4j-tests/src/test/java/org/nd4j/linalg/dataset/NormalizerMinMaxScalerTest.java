@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.linalg.dataset;
 
 
@@ -5,6 +21,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.nd4j.linalg.BaseNd4jTest;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.dataset.api.iterator.DataSetIterator;
 import org.nd4j.linalg.dataset.api.iterator.TestDataSetIterator;
@@ -44,8 +61,8 @@ public class NormalizerMinMaxScalerTest extends BaseNd4jTest {
         DataSet sampleDataSet = new DataSet(featureSet, labelSet);
 
         //expected min and max
-        INDArray theoreticalMin = Nd4j.create(new double[] {x, y, z});
-        INDArray theoreticalMax = Nd4j.create(new double[] {nSamples * x, nSamples * y, nSamples * z});
+        INDArray theoreticalMin = Nd4j.create(new double[] {x, y, z}, new long[]{1,3});
+        INDArray theoreticalMax = Nd4j.create(new double[] {nSamples * x, nSamples * y, nSamples * z}, new long[]{1,3});
         INDArray theoreticalRange = theoreticalMax.sub(theoreticalMin);
 
         NormalizerMinMaxScaler myNormalizer = new NormalizerMinMaxScaler();
@@ -53,10 +70,10 @@ public class NormalizerMinMaxScalerTest extends BaseNd4jTest {
 
         INDArray minDataSet = myNormalizer.getMin();
         INDArray maxDataSet = myNormalizer.getMax();
-        INDArray minDiff = minDataSet.sub(theoreticalMin).max(1);
-        INDArray maxDiff = maxDataSet.sub(theoreticalMax).max(1);
-        assertEquals(minDiff.getDouble(0, 0), 0.0, 0.000000001);
-        assertEquals(maxDiff.max(1).getDouble(0, 0), 0.0, 0.000000001);
+        INDArray minDiff = minDataSet.sub(theoreticalMin).max();
+        INDArray maxDiff = maxDataSet.sub(theoreticalMax).max();
+        assertEquals(minDiff.getDouble(0), 0.0, 0.000000001);
+        assertEquals(maxDiff.max().getDouble(0), 0.0, 0.000000001);
 
         // SAME TEST WITH THE ITERATOR
         int bSize = 1;
@@ -64,8 +81,8 @@ public class NormalizerMinMaxScalerTest extends BaseNd4jTest {
         myNormalizer.fit(sampleIter);
         minDataSet = myNormalizer.getMin();
         maxDataSet = myNormalizer.getMax();
-        assertEquals(minDataSet.sub(theoreticalMin).max(1).getDouble(0, 0), 0.0, 0.000000001);
-        assertEquals(maxDataSet.sub(theoreticalMax).max(1).getDouble(0, 0), 0.0, 0.000000001);
+        assertEquals(minDataSet.sub(theoreticalMin).max(1).getDouble(0), 0.0, 0.000000001);
+        assertEquals(maxDataSet.sub(theoreticalMax).max(1).getDouble(0), 0.0, 0.000000001);
 
         sampleIter.setPreProcessor(myNormalizer);
         INDArray actual, expected, delta;
@@ -74,7 +91,7 @@ public class NormalizerMinMaxScalerTest extends BaseNd4jTest {
             expected = theoreticalMin.mul(i - 1).div(theoreticalRange);
             actual = sampleIter.next().getFeatures();
             delta = Transforms.abs(actual.sub(expected));
-            assertTrue(delta.max(1).getDouble(0, 0) < 0.0001);
+            assertTrue(delta.max(1).getDouble(0) < 0.0001);
             i++;
         }
 
@@ -99,7 +116,7 @@ public class NormalizerMinMaxScalerTest extends BaseNd4jTest {
         myNormalizer.revert(transformed);
         INDArray delta = Transforms.abs(transformed.getFeatures().sub(sampleDataSet.getFeatures()))
                         .div(sampleDataSet.getFeatures());
-        double maxdeltaPerc = delta.max(0, 1).mul(100).getDouble(0, 0);
+        double maxdeltaPerc = delta.max(0, 1).mul(100).getDouble(0);
         System.out.println("Delta: " + maxdeltaPerc);
         assertTrue(maxdeltaPerc < tolerancePerc);
 
@@ -127,7 +144,7 @@ public class NormalizerMinMaxScalerTest extends BaseNd4jTest {
         myNormalizer.revert(transformed);
         INDArray delta = Transforms.abs(transformed.getFeatures().sub(sampleDataSet.getFeatures()))
                         .div(sampleDataSet.getFeatures());
-        double maxdeltaPerc = delta.max(0, 1).mul(100).getDouble(0, 0);
+        double maxdeltaPerc = delta.max(0, 1).mul(100).getDouble(0);
         System.out.println("Delta: " + maxdeltaPerc);
         assertTrue(maxdeltaPerc < tolerancePerc);
     }
@@ -153,7 +170,7 @@ public class NormalizerMinMaxScalerTest extends BaseNd4jTest {
         //feature set is basically all 10s -> should transform to the min
         INDArray expected = Nd4j.ones(nSamples, nFeatures).mul(givenMin);
         INDArray delta = Transforms.abs(transformed.getFeatures().sub(expected)).div(expected);
-        double maxdeltaPerc = delta.max(0, 1).mul(100).getDouble(0, 0);
+        double maxdeltaPerc = delta.max(0, 1).mul(100).getDouble(0);
         assertTrue(maxdeltaPerc < tolerancePerc);
     }
 

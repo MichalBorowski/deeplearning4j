@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.optimizer.listener;
 
 import org.deeplearning4j.BaseDL4JTest;
@@ -6,7 +22,8 @@ import org.deeplearning4j.nn.conf.MultiLayerConfiguration;
 import org.deeplearning4j.nn.conf.NeuralNetConfiguration;
 import org.deeplearning4j.nn.conf.layers.OutputLayer;
 import org.deeplearning4j.nn.multilayer.MultiLayerNetwork;
-import org.deeplearning4j.optimize.listeners.checkpoint.CheckpointListener;
+import org.deeplearning4j.optimize.listeners.Checkpoint;
+import org.deeplearning4j.optimize.listeners.CheckpointListener;
 import org.deeplearning4j.util.ModelSerializer;
 import org.junit.Rule;
 import org.junit.Test;
@@ -19,6 +36,7 @@ import org.nd4j.linalg.primitives.Pair;
 import java.io.File;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
@@ -88,6 +106,9 @@ public class TestCheckpointListener extends BaseDL4JTest {
 
         assertEquals(5, count);
         assertEquals(5, l.availableCheckpoints().size());
+
+        List<Checkpoint> listStatic = CheckpointListener.availableCheckpoints(f);
+        assertEquals(5, listStatic.size());
     }
 
     @Test
@@ -135,6 +156,16 @@ public class TestCheckpointListener extends BaseDL4JTest {
         assertTrue(ns.contains(35));
 
         assertEquals(3, l.availableCheckpoints().size());
+
+        List<Checkpoint> listStatic = CheckpointListener.availableCheckpoints(f);
+        assertEquals(3, listStatic.size());
+
+        MultiLayerNetwork netStatic = CheckpointListener.loadCheckpointMLN(f, 6);
+        assertEquals(35, netStatic.getIterationCount());
+
+        MultiLayerNetwork netStatic2 = CheckpointListener.loadLastCheckpointMLN(f);
+        assertEquals(35, netStatic2.getIterationCount());
+        assertEquals(netStatic.params(), netStatic2.params());
     }
 
     @Test

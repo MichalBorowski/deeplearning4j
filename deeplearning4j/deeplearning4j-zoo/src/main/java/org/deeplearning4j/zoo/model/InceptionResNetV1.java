@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.zoo.model;
 
 import lombok.AllArgsConstructor;
@@ -25,9 +41,10 @@ import org.nd4j.linalg.learning.config.RmsProp;
 import org.nd4j.linalg.lossfunctions.LossFunctions;
 
 /**
- * A variant of the original FaceNet model that relies on embeddings and triplet loss.
- * Reference: https://arxiv.org/abs/1503.03832
- * Also based on the OpenFace implementation: http://reports-archive.adm.cs.cmu.edu/anon/2016/CMU-CS-16-118.pdf
+ * A variant of the original FaceNet model that relies on embeddings and triplet loss.<br>
+ * Reference: <a href="https://arxiv.org/abs/1503.03832">https://arxiv.org/abs/1503.03832</a><br>
+ * Also based on the OpenFace implementation: <a href="http://reports-archive.adm.cs.cmu.edu/anon/2016/CMU-CS-16-118.pdf">
+ * http://reports-archive.adm.cs.cmu.edu/anon/2016/CMU-CS-16-118.pdf</a>
  *
  * Revised and consolidated version by @crockpotveggies
  */
@@ -78,7 +95,7 @@ public class InceptionResNetV1 extends ZooModel {
                                                         .activation(Activation.SOFTMAX).alpha(0.9).lambda(1e-4)
                                                         .nIn(embeddingSize).nOut(numClasses).build(),
                                         "embeddings")
-                        .setOutputs("outputLayer").backprop(true).pretrain(false);
+                        .setOutputs("outputLayer");
 
         ComputationGraphConfiguration conf = graph.build();
         ComputationGraph model = new ComputationGraph(conf);

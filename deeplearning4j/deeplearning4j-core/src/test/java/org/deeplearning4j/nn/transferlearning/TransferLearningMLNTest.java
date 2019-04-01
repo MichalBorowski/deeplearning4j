@@ -1,22 +1,44 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.nn.transferlearning;
 
 import lombok.extern.slf4j.Slf4j;
 import org.deeplearning4j.BaseDL4JTest;
+import org.deeplearning4j.TestUtils;
 import org.deeplearning4j.nn.api.OptimizationAlgorithm;
 import org.deeplearning4j.nn.conf.BackpropType;
 import org.deeplearning4j.nn.conf.GradientNormalization;
 import org.deeplearning4j.nn.conf.MultiLayerConfiguration;
 import org.deeplearning4j.nn.conf.NeuralNetConfiguration;
 import org.deeplearning4j.nn.conf.constraint.UnitNormConstraint;
+import org.deeplearning4j.nn.conf.distribution.ConstantDistribution;
 import org.deeplearning4j.nn.conf.distribution.NormalDistribution;
 import org.deeplearning4j.nn.conf.inputs.InputType;
 import org.deeplearning4j.nn.conf.layers.*;
 import org.deeplearning4j.nn.conf.preprocessor.CnnToFeedForwardPreProcessor;
 import org.deeplearning4j.nn.conf.preprocessor.FeedForwardToRnnPreProcessor;
 import org.deeplearning4j.nn.conf.preprocessor.RnnToCnnPreProcessor;
+import org.deeplearning4j.nn.conf.serde.JsonMappers;
 import org.deeplearning4j.nn.conf.weightnoise.DropConnect;
 import org.deeplearning4j.nn.multilayer.MultiLayerNetwork;
 import org.deeplearning4j.nn.weights.WeightInit;
+import org.deeplearning4j.nn.weights.WeightInitDistribution;
+import org.deeplearning4j.nn.weights.WeightInitRelu;
+import org.deeplearning4j.nn.weights.WeightInitXavier;
 import org.junit.Test;
 import org.nd4j.linalg.activations.Activation;
 import org.nd4j.linalg.api.ndarray.INDArray;
@@ -24,6 +46,7 @@ import org.nd4j.linalg.dataset.DataSet;
 import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.learning.config.*;
 import org.nd4j.linalg.lossfunctions.LossFunctions;
+import org.nd4j.shade.jackson.core.JsonProcessingException;
 
 import static org.junit.Assert.*;
 
@@ -132,11 +155,14 @@ public class TransferLearningMLNTest extends BaseDL4JTest {
         BaseLayer bl0 = ((BaseLayer) modelNow.getLayerWiseConfigurations().getConf(0).getLayer());
         BaseLayer bl1 = ((BaseLayer) modelNow.getLayerWiseConfigurations().getConf(1).getLayer());
         BaseLayer bl3 = ((BaseLayer) modelNow.getLayerWiseConfigurations().getConf(3).getLayer());
-        assertEquals(bl0.getWeightInit(), WeightInit.XAVIER);
-        assertEquals(bl0.getDist(), null);
-        assertEquals(bl1.getWeightInit(), WeightInit.DISTRIBUTION);
-        assertEquals(bl1.getDist(), new NormalDistribution(1, 1e-1));
-        assertEquals(bl3.getWeightInit(), WeightInit.XAVIER);
+        assertEquals(bl0.getWeightInitFn().getClass(), WeightInitXavier.class);
+        try {
+            assertEquals(JsonMappers.getMapper().writeValueAsString(bl1.getWeightInitFn()),
+                    JsonMappers.getMapper().writeValueAsString(new WeightInitDistribution(new NormalDistribution(1, 1e-1))));
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException(e);
+        }
+        assertEquals(bl3.getWeightInitFn(), new WeightInitXavier());
 
         //modelNow should have the same architecture as modelExpectedArch
         assertArrayEquals(modelExpectedArch.params().shape(), modelNow.params().shape());
@@ -202,7 +228,9 @@ public class TransferLearningMLNTest extends BaseDL4JTest {
         //fit should give the same results
         modelExpectedArch.fit(randomData);
         modelNow.fit(randomData);
-        assertTrue(modelExpectedArch.score() == modelNow.score());
+        double scoreExpected = modelExpectedArch.score();
+        double scoreActual = modelNow.score();
+        assertEquals(scoreExpected, scoreActual, 1e-8);
         assertEquals(modelExpectedArch.params(), modelNow.params());
     }
 
@@ -240,8 +268,8 @@ public class TransferLearningMLNTest extends BaseDL4JTest {
                                                         .gradientNormalizationThreshold(10).build())
                                         .inputPreProcessor(0, new RnnToCnnPreProcessor(V_HEIGHT, V_WIDTH, 3))
                                         .inputPreProcessor(3, new CnnToFeedForwardPreProcessor(7, 7, 10))
-                                        .inputPreProcessor(4, new FeedForwardToRnnPreProcessor()).pretrain(false)
-                                        .backprop(true).backpropType(BackpropType.TruncatedBPTT)
+                                        .inputPreProcessor(4, new FeedForwardToRnnPreProcessor())
+                                        .backpropType(BackpropType.TruncatedBPTT)
                                         .tBPTTForwardLength(V_NFRAMES / 5).tBPTTBackwardLength(V_NFRAMES / 5).build();
         MultiLayerNetwork modelExpectedArch = new MultiLayerNetwork(confForArchitecture);
         modelExpectedArch.init();
@@ -287,7 +315,7 @@ public class TransferLearningMLNTest extends BaseDL4JTest {
                                                         .inputPreProcessor(0,new RnnToCnnPreProcessor(V_HEIGHT, V_WIDTH, 3))
                                                         .inputPreProcessor(3,new CnnToFeedForwardPreProcessor(5, 5, 10))
                                                         .inputPreProcessor(4, new FeedForwardToRnnPreProcessor())
-                                                        .pretrain(false).backprop(true)
+
                                                         .backpropType(BackpropType.TruncatedBPTT)
                                                         .tBPTTForwardLength(V_NFRAMES / 5)
                                                         .tBPTTBackwardLength(V_NFRAMES / 5).build());
@@ -378,7 +406,7 @@ public class TransferLearningMLNTest extends BaseDL4JTest {
                                                                                         .activation(Activation.SOFTMAX)
                                                                                         .build())
                                                         .setInputType(InputType.convolutionalFlat(28, 28, 3))
-                                                        .backprop(true).pretrain(false).build());
+                                                        .build());
         modelToFineTune.init();
         INDArray asFrozenFeatures = modelToFineTune.feedForwardToLayer(2, randomData.getFeatures(), false).get(2); //10x20x12x12
 
@@ -408,7 +436,7 @@ public class TransferLearningMLNTest extends BaseDL4JTest {
                         .layer(5, new DenseLayer.Builder().activation(Activation.RELU).nOut(50).build())
                         .layer(6, new OutputLayer.Builder(LossFunctions.LossFunction.NEGATIVELOGLIKELIHOOD).nOut(10)
                                         .activation(Activation.SOFTMAX).build())
-                        .setInputType(InputType.convolutionalFlat(12, 12, 20)).backprop(true).pretrain(false).build());
+                        .setInputType(InputType.convolutionalFlat(12, 12, 20)).build());
         notFrozen.init();
 
         assertArrayEquals(modelToFineTune.getLayer(0).params().shape(), modelNow.getLayer(0).params().shape());
@@ -468,14 +496,14 @@ public class TransferLearningMLNTest extends BaseDL4JTest {
         BaseLayer l0 = (BaseLayer) net.getLayer(0).conf().getLayer();
         assertEquals(new Adam(1e-4), l0.getIUpdater());
         assertEquals(Activation.TANH.getActivationFunction(), l0.getActivationFn());
-        assertEquals(WeightInit.RELU, l0.getWeightInit());
-        assertEquals(0.1, l0.getL1(), 1e-6);
+        assertEquals(new WeightInitRelu(), l0.getWeightInitFn());
+        assertEquals(0.1, TestUtils.getL1(l0), 1e-6);
 
         BaseLayer l1 = (BaseLayer) net.getLayer(1).conf().getLayer();
         assertEquals(new Adam(1e-4), l1.getIUpdater());
         assertEquals(Activation.HARDSIGMOID.getActivationFunction(), l1.getActivationFn());
-        assertEquals(WeightInit.RELU, l1.getWeightInit());
-        assertEquals(0.2, l1.getL2(), 1e-6);
+        assertEquals(new WeightInitRelu(), l1.getWeightInitFn());
+        assertEquals(0.2, TestUtils.getL2(l1), 1e-6);
 
         assertEquals(BackpropType.Standard, conf.getBackpropType());
 
@@ -483,14 +511,14 @@ public class TransferLearningMLNTest extends BaseDL4JTest {
         l0 = (BaseLayer) net2.getLayer(0).conf().getLayer();
         assertEquals(new Adam(2e-2), l0.getIUpdater());
         assertEquals(Activation.TANH.getActivationFunction(), l0.getActivationFn());
-        assertEquals(WeightInit.RELU, l0.getWeightInit());
-        assertEquals(0.1, l0.getL1(), 1e-6);
+        assertEquals(new WeightInitRelu(), l0.getWeightInitFn());
+        assertEquals(0.1, TestUtils.getL1(l0), 1e-6);
 
         l1 = (BaseLayer) net2.getLayer(1).conf().getLayer();
         assertEquals(new Adam(2e-2), l1.getIUpdater());
         assertEquals(Activation.HARDSIGMOID.getActivationFunction(), l1.getActivationFn());
-        assertEquals(WeightInit.RELU, l1.getWeightInit());
-        assertEquals(0.2, l1.getL2(), 1e-6);
+        assertEquals(new WeightInitRelu(), l1.getWeightInitFn());
+        assertEquals(0.2, TestUtils.getL2(l1), 1e-6);
 
         assertEquals(BackpropType.TruncatedBPTT, net2.getLayerWiseConfigurations().getBackpropType());
     }
@@ -500,36 +528,25 @@ public class TransferLearningMLNTest extends BaseDL4JTest {
 
         DataSet randomData = new DataSet(Nd4j.rand(10, 28 * 28 * 3).reshape(10, 3, 28, 28), Nd4j.rand(10, 10));
         MultiLayerNetwork modelToFineTune =
-                        new MultiLayerNetwork(
-                                        new NeuralNetConfiguration.Builder().seed(123)
-                                                        .weightInit(WeightInit.XAVIER)
-                                                        .updater(new Nesterovs(0.01, 0.9))
-                                                        .list()
-                                                        .layer(0, new ConvolutionLayer.Builder(5, 5).nIn(3).stride(1, 1)
-                                                                        .nOut(20).activation(Activation.IDENTITY)
-                                                                        .build())
-                                                        .layer(1, new SubsamplingLayer.Builder(
-                                                                        SubsamplingLayer.PoolingType.MAX)
-                                                                                        .kernelSize(2, 2).stride(2, 2)
-                                                                                        .build())
-                                                        .layer(2, new ConvolutionLayer.Builder(5, 5).stride(1, 1)
-                                                                        .nOut(50).activation(Activation.IDENTITY)
-                                                                        .build())
-                                                        .layer(3, new SubsamplingLayer.Builder(
-                                                                        SubsamplingLayer.PoolingType.MAX)
-                                                                                        .kernelSize(2, 2).stride(2, 2)
-                                                                                        .build())
-                                                        .layer(4, new DenseLayer.Builder().activation(Activation.RELU)
-                                                                        .nOut(500).build())
-                                                        .layer(5, new DenseLayer.Builder().activation(Activation.RELU)
-                                                                        .nOut(250).build())
-                                                        .layer(6, new OutputLayer.Builder(
-                                                                        LossFunctions.LossFunction.NEGATIVELOGLIKELIHOOD)
-                                                                                        .nOut(100)
-                                                                                        .activation(Activation.SOFTMAX)
-                                                                                        .build())
-                                                        .setInputType(InputType.convolutionalFlat(28, 28, 3)) //See note below
-                                                        .backprop(true).pretrain(false).build());
+                new MultiLayerNetwork(
+                        new NeuralNetConfiguration.Builder().seed(123)
+                                .weightInit(WeightInit.XAVIER)
+                                .updater(new Nesterovs(0.01, 0.9))
+                                .list()
+                                .layer(0, new ConvolutionLayer.Builder(5, 5).nIn(3).stride(1, 1)
+                                        .nOut(20).activation(Activation.IDENTITY).build())
+                                .layer(1, new SubsamplingLayer.Builder(PoolingType.MAX)
+                                        .kernelSize(2, 2).stride(2, 2).build())
+                                .layer(2, new ConvolutionLayer.Builder(5, 5).stride(1, 1)
+                                        .nOut(50).activation(Activation.IDENTITY).build())
+                                .layer(3, new SubsamplingLayer.Builder(PoolingType.MAX)
+                                        .kernelSize(2, 2).stride(2, 2).build())
+                                .layer(4, new DenseLayer.Builder().activation(Activation.RELU).nOut(500).build())
+                                .layer(5, new DenseLayer.Builder().activation(Activation.RELU).nOut(250).build())
+                                .layer(6, new OutputLayer.Builder(LossFunctions.LossFunction.NEGATIVELOGLIKELIHOOD)
+                                        .nOut(100).activation(Activation.SOFTMAX).build())
+                                .setInputType(InputType.convolutionalFlat(28, 28, 3)) //See note below
+                                .build());
         modelToFineTune.init();
         INDArray asFrozenFeatures = modelToFineTune.feedForwardToLayer(2, randomData.getFeatures(), false).get(2); //10x20x12x12
 
@@ -554,8 +571,8 @@ public class TransferLearningMLNTest extends BaseDL4JTest {
                         .layer(2, new DenseLayer.Builder().activation(Activation.RELU).nIn(150).nOut(50).build())
                         .layer(3, new OutputLayer.Builder(LossFunctions.LossFunction.NEGATIVELOGLIKELIHOOD).nIn(50)
                                         .nOut(10).activation(Activation.SOFTMAX).build())
-                        .inputPreProcessor(0, new CnnToFeedForwardPreProcessor(12, 12, 20)).backprop(true)
-                        .pretrain(false).build());
+                        .inputPreProcessor(0, new CnnToFeedForwardPreProcessor(12, 12, 20))
+                        .build());
         notFrozen.init();
 
         assertArrayEquals(modelToFineTune.getLayer(0).params().shape(), modelNow.getLayer(0).params().shape());
@@ -612,7 +629,64 @@ public class TransferLearningMLNTest extends BaseDL4JTest {
         assertNull(l.getIDropout());
         assertNull(l.getWeightNoise());
         assertNull(l.getConstraints());
-        assertEquals(0.0, l.getL2(), 0.0);
+        assertNull(TestUtils.getL2Reg(l));
     }
 
+
+    @Test
+    public void testTransferLearningSubsequent() {
+        final INDArray input = Nd4j.create(6,6,6,6);
+        final MultiLayerNetwork net = new MultiLayerNetwork(new NeuralNetConfiguration.Builder()
+                .weightInit(new ConstantDistribution(666))
+                .list()
+                .setInputType(InputType.inferInputTypes(input)[0])
+                .layer(new Convolution2D.Builder(3, 3).nOut(10).build())
+                .layer(new Convolution2D.Builder(1, 1).nOut(3).build())
+                .layer(new OutputLayer.Builder().nOut(2).lossFunction(LossFunctions.LossFunction.MSE)
+                        .build()).build());
+        net.init();
+
+        MultiLayerNetwork newGraph = new TransferLearning
+                .Builder(net)
+                .fineTuneConfiguration(new FineTuneConfiguration.Builder().build())
+                .nOutReplace(0, 7, new ConstantDistribution(333))
+                .nOutReplace(1, 3, new ConstantDistribution(111))
+                .removeLayersFromOutput(1)
+                .addLayer(new OutputLayer.Builder()
+                        .nIn(48).nOut(2)
+                        .lossFunction(LossFunctions.LossFunction.MSE)
+                        .build())
+                .setInputPreProcessor(2, new CnnToFeedForwardPreProcessor(4,4,3))
+                .build();
+        newGraph.init();
+
+        assertEquals("Incorrect # inputs", 7, newGraph.layerInputSize(1));
+
+        newGraph.output(input);
+    }
+
+    @Test
+    public void testChangeNOutNIn() {
+        INDArray input = Nd4j.create(new long[] {1, 2, 4, 4});
+        MultiLayerNetwork net = new MultiLayerNetwork(new NeuralNetConfiguration.Builder()
+                .list()
+                .setInputType(InputType.inferInputTypes(input)[0])
+                .layer(new Convolution2D.Builder(1, 1).nOut(10).build())
+                .layer(new SubsamplingLayer.Builder(1,1).build())
+                .layer(new Convolution2D.Builder(1, 1).nOut(7).build())
+                .layer(new OutputLayer.Builder().activation(Activation.SOFTMAX).nOut(2).build())
+                .build());
+        net.init();
+
+        final MultiLayerNetwork newNet = new TransferLearning.Builder(net)
+                .nOutReplace(0, 5, WeightInit.XAVIER)
+                .nInReplace(2, 5, WeightInit.XAVIER)
+                .build();
+
+        newNet.init();
+
+        assertEquals("Incorrect number of outputs!", 5 , newNet.layerSize(0));
+        assertEquals("Incorrect number of inputs!", 5, newNet.layerInputSize(2));
+        newNet.output(input);
+    }
 }

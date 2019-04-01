@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.nn.conf.preprocessor;
 
 import lombok.*;
@@ -115,8 +131,8 @@ public class RnnToCnnPreProcessor implements InputPreProcessor {
         if (maskArray == null) {
             return new Pair<>(maskArray, currentMaskState);
         } else if (maskArray.rank() == 2) {
-            //Need to reshape mask array from [minibatch,timeSeriesLength] to [minibatch*timeSeriesLength, 1]
-            return new Pair<>(TimeSeriesUtils.reshapeTimeSeriesMaskToVector(maskArray,
+            //Need to reshape mask array from [minibatch,timeSeriesLength] to 4d minibatch format: [minibatch*timeSeriesLength, 1, 1, 1]
+            return new Pair<>(TimeSeriesUtils.reshapeTimeSeriesMaskToCnn4dMask(maskArray,
                     LayerWorkspaceMgr.noWorkspacesImmutable(), ArrayType.INPUT), currentMaskState);
         } else {
             throw new IllegalArgumentException("Received mask array of rank " + maskArray.rank()

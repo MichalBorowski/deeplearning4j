@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.spark.models.embeddings.word2vec;
 
 import org.deeplearning4j.models.word2vec.VocabWord;
@@ -73,7 +89,7 @@ public class VocabHolder implements Serializable {
         /*
             we use wordIndex as part of seed here, to guarantee that during word syn0 initialization on dwo distinct nodes, initial weights will be the same for the same word
          */
-        return Nd4j.rand(lseed * seed.get(), new int[] {1, vectorLength}).subi(0.5).divi(vectorLength);
+        return Nd4j.rand(new int[] {1, vectorLength}, lseed * seed.get()).subi(0.5).divi(vectorLength);
     }
 
     public Iterable<Map.Entry<VocabWord, INDArray>> getSplit(VocabCache<VocabWord> vocabCache) {

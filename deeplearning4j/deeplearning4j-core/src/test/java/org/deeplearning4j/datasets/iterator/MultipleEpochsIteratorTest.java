@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.datasets.iterator;
 
 import org.datavec.api.records.reader.RecordReader;
@@ -5,24 +21,12 @@ import org.datavec.api.records.reader.impl.csv.CSVRecordReader;
 import org.datavec.api.split.FileSplit;
 import org.deeplearning4j.BaseDL4JTest;
 import org.deeplearning4j.datasets.datavec.RecordReaderDataSetIterator;
-import org.deeplearning4j.datasets.iterator.impl.CifarDataSetIterator;
-import org.deeplearning4j.nn.conf.MultiLayerConfiguration;
-import org.deeplearning4j.nn.conf.NeuralNetConfiguration;
-import org.deeplearning4j.nn.conf.layers.DenseLayer;
-import org.deeplearning4j.nn.conf.layers.OutputLayer;
-import org.deeplearning4j.nn.conf.preprocessor.CnnToFeedForwardPreProcessor;
-import org.deeplearning4j.nn.multilayer.MultiLayerNetwork;
-import org.deeplearning4j.nn.weights.WeightInit;
-import org.deeplearning4j.optimize.listeners.ScoreIterationListener;
 import org.deeplearning4j.nn.util.TestDataSetConsumer;
-import org.junit.Ignore;
 import org.junit.Test;
-import org.nd4j.linalg.activations.Activation;
 import org.nd4j.linalg.dataset.DataSet;
 import org.nd4j.linalg.dataset.api.iterator.DataSetIterator;
 import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.io.ClassPathResource;
-import org.nd4j.linalg.lossfunctions.LossFunctions;
 
 import java.util.Iterator;
 import java.util.concurrent.atomic.AtomicLong;
@@ -92,30 +96,6 @@ public class MultipleEpochsIteratorTest extends BaseDL4JTest {
         }
 
         assertEquals(epochs, multiIter.epochs);
-    }
-
-    @Ignore // use when checking cifar dataset iterator
-    @Test
-    public void testCifarDataSetIteratorReset() {
-        int epochs = 2;
-        Nd4j.getRandom().setSeed(12345);
-        MultiLayerConfiguration conf = new NeuralNetConfiguration.Builder()
-                        .weightInit(WeightInit.XAVIER).seed(12345L).list()
-                        .layer(0, new DenseLayer.Builder().nIn(400).nOut(50).activation(Activation.RELU).build())
-                        .layer(1, new OutputLayer.Builder(LossFunctions.LossFunction.MCXENT)
-                                        .activation(Activation.SOFTMAX).nIn(50).nOut(10).build())
-                        .pretrain(false).backprop(true)
-                        .inputPreProcessor(0, new CnnToFeedForwardPreProcessor(20, 20, 1)).build();
-
-        MultiLayerNetwork net = new MultiLayerNetwork(conf);
-        net.init();
-        net.setListeners(new ScoreIterationListener(1));
-
-        MultipleEpochsIterator ds =
-                        new MultipleEpochsIterator(epochs, new CifarDataSetIterator(10, 20, new int[] {20, 20, 1}));
-        net.fit(ds);
-        assertEquals(epochs, ds.epochs);
-        assertEquals(2, ds.batch);
     }
 
 

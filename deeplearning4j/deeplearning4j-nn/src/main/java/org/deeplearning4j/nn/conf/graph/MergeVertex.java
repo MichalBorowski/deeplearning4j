@@ -1,20 +1,18 @@
-/*-
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
  *
- *  * Copyright 2016 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
  *
- */
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.deeplearning4j.nn.conf.graph;
 
@@ -22,6 +20,7 @@ package org.deeplearning4j.nn.conf.graph;
 import lombok.val;
 import org.deeplearning4j.nn.conf.inputs.InputType;
 import org.deeplearning4j.nn.conf.inputs.InvalidInputTypeException;
+import org.deeplearning4j.nn.conf.layers.Convolution3D;
 import org.deeplearning4j.nn.conf.memory.LayerMemoryReport;
 import org.deeplearning4j.nn.conf.memory.MemoryReport;
 import org.deeplearning4j.nn.graph.ComputationGraph;
@@ -29,11 +28,11 @@ import org.nd4j.linalg.api.ndarray.INDArray;
 
 /** A MergeVertex is used to combine the activations of two or more layers/GraphVertex by means of concatenation/merging.<br>
  * Exactly how this is done depends on the type of input.<br>
- * For 2d (feed forward layer) inputs: MergeVertex([numExamples,layerSize1],[numExamples,layerSize2]) -> [numExamples,layerSize1 + layerSize2]<br>
- * For 3d (time series) inputs: MergeVertex([numExamples,layerSize1,timeSeriesLength],[numExamples,layerSize2,timeSeriesLength])
- *      -> [numExamples,layerSize1 + layerSize2,timeSeriesLength]<br>
- * For 4d (convolutional) inputs: MergeVertex([numExamples,depth1,width,height],[numExamples,depth2,width,height])
- *      -> [numExamples,depth1 + depth2,width,height]<br>
+ * For 2d (feed forward layer) inputs: {@code MergeVertex([numExamples,layerSize1],[numExamples,layerSize2]) -> [numExamples,layerSize1 + layerSize2]}<br>
+ * For 3d (time series) inputs: {@code MergeVertex([numExamples,layerSize1,timeSeriesLength],[numExamples,layerSize2,timeSeriesLength])
+ *      -> [numExamples,layerSize1 + layerSize2,timeSeriesLength]}<br>
+ * For 4d (convolutional) inputs: {@code MergeVertex([numExamples,depth1,width,height],[numExamples,depth2,width,height])
+ *      -> [numExamples,depth1 + depth2,width,height]}<br>
  * @author Alex Black
  */
 public class MergeVertex extends GraphVertex {
@@ -54,7 +53,7 @@ public class MergeVertex extends GraphVertex {
     }
 
     @Override
-    public int numParams(boolean backprop) {
+    public long numParams(boolean backprop) {
         return 0;
     }
 
@@ -139,6 +138,40 @@ public class MergeVertex extends GraphVertex {
                     return InputType.recurrent(-1, tsLength);
                 }
             }
+
+        }  else if (first.getType() == InputType.Type.CNN3D) {
+            // CNN3D inputs: check that the channels, width and height match:
+            InputType.InputTypeConvolutional3D firstConv = (InputType.InputTypeConvolutional3D) first;
+
+            // FIXME: int cast
+            val fd = (int) firstConv.getDepth();
+            val fw = (int) firstConv.getWidth();
+            val fh = (int) firstConv.getHeight();
+            val fc = (int) firstConv.getChannels();
+
+            int depthSum = fc;
+            InputType.InputTypeConvolutional3D otherConv = null;
+            for (int i = 1; i < vertexInputs.length; i++) {
+                if (vertexInputs[i].getType() != InputType.Type.CNN3D) {
+                    throw new InvalidInputTypeException(
+                            "Invalid input: MergeVertex cannot process activations of different types:" + " first type = " + InputType.Type.CNN3D + ", input type " + (i + 1) + " = " + vertexInputs[i].getType());
+                }
+
+                otherConv = (InputType.InputTypeConvolutional3D) vertexInputs[i];
+                val od = (int) otherConv.getDepth();
+                val ow = (int) otherConv.getWidth();
+                val oh = (int) otherConv.getHeight();
+                val oc = (int) otherConv.getChannels();
+
+                if (fd != od || fw != ow || fh != oh) {
+                    throw new InvalidInputTypeException("Invalid input: MergeVertex cannot merge CNN3D activations of different width/heights:" + "first [channels,width,height] = [" + fd + "," + fw + "," + fh
+                            + "], input " + i + " = [" + od + "," + ow + "," + oh + "]");
+                }
+
+                depthSum += oc;
+            }
+
+            return InputType.convolutional3D(Convolution3D.DataFormat.NDHWC, fd, fh, fw, depthSum);
         } else {
             //CNN inputs... also check that the channels, width and heights match:
             InputType.InputTypeConvolutional firstConv = (InputType.InputTypeConvolutional) first;

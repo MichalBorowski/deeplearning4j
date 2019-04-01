@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.jita.handler.impl;
 
 import com.google.common.collect.HashBasedTable;
@@ -888,6 +904,12 @@ public class CudaZeroHandler implements MemoryHandler {
             return;
         }
 
+        val okDevice = dstPoint.isActualOnDeviceSide();
+        val okHost = dstPoint.isActualOnHostSide();
+
+        val odPtr = dstPoint.getDevicePointer();
+        val ohPtr = dstPoint.getHostPointer();
+
         // FIXME: cross-thread access, might cause problems
         if (!dstPoint.isActualOnHostSide())
             AtomicAllocator.getInstance().synchronizeHostData(buffer);
@@ -902,28 +924,34 @@ public class CudaZeroHandler implements MemoryHandler {
 
             if (workspace == null) {
                 // if we're out of workspace, we should mark our buffer as detached, so gc will pick it up eventually
-                alloc(AllocationStatus.DEVICE, dstPoint, dstPoint.getShape(), false);
+                val pairH = alloc(AllocationStatus.HOST, dstPoint, dstPoint.getShape(), false);
+                val pairD = alloc(AllocationStatus.DEVICE, dstPoint, dstPoint.getShape(), false);
+                dstPoint.getPointers().setDevicePointer(pairD.getDevicePointer());
+                dstPoint.getPointers().setHostPointer(pairH.getHostPointer());
+
+                //log.info("New host pointer: {}; Old host pointer: {}", dstPoint.getHostPointer().address(), ohPtr.address());
 
                 CudaContext context = getCudaContext();
 
                 val profD = PerformanceTracker.getInstance().helperStartTransaction();
 
-                if (nativeOps.memcpyAsync(dstPoint.getDevicePointer(), dstPoint.getHostPointer(),
-                        buffer.length() * buffer.getElementSize(), 1, context.getSpecialStream()) == 0)
-                    throw new ND4JIllegalStateException("memcpyAsync failed");
+                if (okDevice) {
+                    if (nativeOps.memcpyAsync(dstPoint.getDevicePointer(), odPtr, buffer.length() * buffer.getElementSize(), CudaConstants.cudaMemcpyDeviceToDevice, context.getSpecialStream()) == 0)
+                        throw new ND4JIllegalStateException("memcpyAsync failed");
 
-                context.syncSpecialStream();
+                    context.syncSpecialStream();
+                    PerformanceTracker.getInstance().helperRegisterTransaction(dstPoint.getDeviceId(), profD / 2, dstPoint.getNumberOfBytes(), MemcpyDirection.DEVICE_TO_DEVICE);
+                } else {
+                    if (nativeOps.memcpyAsync(dstPoint.getDevicePointer(), ohPtr, buffer.length() * buffer.getElementSize(), CudaConstants.cudaMemcpyHostToDevice, context.getSpecialStream()) == 0)
+                        throw new ND4JIllegalStateException("memcpyAsync failed");
 
-                PerformanceTracker.getInstance().helperRegisterTransaction(dstPoint.getDeviceId(), profD / 2, dstPoint.getNumberOfBytes(), MemcpyDirection.HOST_TO_DEVICE);
-
-                // updating host pointer now
-                alloc(AllocationStatus.HOST, dstPoint, dstPoint.getShape(), false);
-
+                    context.syncSpecialStream();
+                    PerformanceTracker.getInstance().helperRegisterTransaction(dstPoint.getDeviceId(), profD / 2, dstPoint.getNumberOfBytes(), MemcpyDirection.HOST_TO_DEVICE);
+                }
                 // marking it as detached
                 dstPoint.setAttached(false);
 
                 // marking it as proper on device
-                dstPoint.tickHostRead();
                 dstPoint.tickDeviceWrite();
             } else {
                 // this call will automagically take care of workspaces, so it'll be either

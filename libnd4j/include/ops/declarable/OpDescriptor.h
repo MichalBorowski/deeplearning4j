@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 //
 // @author raver119@gmail.com
 //
@@ -6,9 +22,13 @@
 #define LIBND4J_OPDESCRIPTOR_H
 
 #include <string>
+#include <vector>
+#include <map>
+#include <initializer_list>
 #include <helpers/helper_hash.h>
 #include <ops/InputType.h>
 #include <graph/generated/node_generated.h>
+#include <array/DataType.h>
 
 namespace nd4j {
     namespace ops {
@@ -58,6 +78,16 @@ namespace nd4j {
             // default InputType is numeric
             InputType _inputType = InputType_NUMERIC;
 
+
+            bool _sameMode = false;
+            std::vector<nd4j::DataType> _allowedIns;
+            std::vector<nd4j::DataType> _allowedOuts;
+
+            // optional per-input configuration
+            std::map<int, std::vector<nd4j::DataType>> _outputTypes;
+            std::map<int, std::vector<nd4j::DataType>> _inputTypes;
+
+            bool checkDataTypesMatch(nd4j::DataType needle, std::vector<nd4j::DataType> &haystack) const;
         public:
             // default constructor
             OpDescriptor(int numInputs, int numOutputs, std::string opName, bool allowsInplace);
@@ -121,8 +151,30 @@ namespace nd4j {
 
             void setHash(Nd4jLong hash);
 
-            void setInputType(InputType type);
             InputType inputType();
+
+
+
+            OpDescriptor* setInputType(InputType type);
+            OpDescriptor* setAllowedInputTypes(const std::initializer_list<nd4j::DataType> &dtype);
+            OpDescriptor* setAllowedOutputTypes(const std::initializer_list<nd4j::DataType> &dtype);
+            OpDescriptor* setAllowedInputTypes(int index, const std::vector<nd4j::DataType> &dtype);
+            OpDescriptor* setAllowedOutputTypes(int index, const std::vector<nd4j::DataType> &dtype);
+            OpDescriptor* setAllowedInputTypes(int index,  nd4j::DataType dtype);
+            OpDescriptor* setAllowedOutputTypes(int index, nd4j::DataType dtype);
+            OpDescriptor* setAllowedInputTypes(nd4j::DataType dtype);
+            OpDescriptor* setAllowedOutputTypes(nd4j::DataType dtype);
+            OpDescriptor* setSameMode(bool reallySame);
+            OpDescriptor* setInputType(int idx, nd4j::DataType dtype);
+            OpDescriptor* setOutputType(int idx, nd4j::DataType dtype);
+
+            std::vector<nd4j::DataType> getOutputTypesForOutput(int index);
+
+            bool checkInputMatch(int index, nd4j::DataType dataType);
+            bool checkOutputMatch(int index, nd4j::DataType dataType);
+            bool isSameMode();
+
+            bool isInherit(int index);
         };
     }
 }

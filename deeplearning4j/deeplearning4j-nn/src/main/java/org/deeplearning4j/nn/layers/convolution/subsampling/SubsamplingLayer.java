@@ -1,26 +1,25 @@
-/*-
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
  *
- *  * Copyright 2015 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
  *
- */
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.deeplearning4j.nn.layers.convolution.subsampling;
 
 import lombok.extern.slf4j.Slf4j;
 import org.deeplearning4j.exception.DL4JInvalidInputException;
 import org.deeplearning4j.nn.api.Layer;
+import org.deeplearning4j.nn.api.MaskState;
 import org.deeplearning4j.nn.conf.ConvolutionMode;
 import org.deeplearning4j.nn.conf.NeuralNetConfiguration;
 import org.deeplearning4j.nn.conf.layers.PoolingType;
@@ -28,12 +27,13 @@ import org.deeplearning4j.nn.gradient.DefaultGradient;
 import org.deeplearning4j.nn.gradient.Gradient;
 import org.deeplearning4j.nn.layers.AbstractLayer;
 import org.deeplearning4j.nn.layers.LayerHelper;
+import org.deeplearning4j.nn.layers.mkldnn.MKLDNNSubsamplingHelper;
 import org.deeplearning4j.util.ConvolutionUtils;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.api.ops.DynamicCustomOp;
 import org.nd4j.linalg.api.ops.Op;
 import org.nd4j.linalg.api.ops.impl.layers.convolution.LegacyPooling2D;
-import org.nd4j.linalg.api.ops.impl.transforms.IsMax;
+import org.nd4j.linalg.api.ops.impl.transforms.any.IsMax;
 import org.nd4j.linalg.api.shape.Shape;
 import org.nd4j.linalg.convolution.Convolution;
 import org.nd4j.linalg.factory.Nd4j;
@@ -90,19 +90,21 @@ public class SubsamplingLayer extends AbstractLayer<org.deeplearning4j.nn.conf.l
                 } else {
                     OneTimeLogger.info(log, "cuDNN not found: "
                             + "use cuDNN for better GPU performance by including the deeplearning4j-cuda module. "
-                            + "For more information, please refer to: https://deeplearning4j.org/cudnn", t);
+                            + "For more information, please refer to: https://deeplearning4j.org/docs/latest/deeplearning4j-config-cudnn", t);
                 }
             }
+        } else if("CPU".equalsIgnoreCase(backend) ){
+            helper = new MKLDNNSubsamplingHelper();
+            log.debug("Created MKL-DNN helper: MKLDNNSubsamplingHelper, layer {}", layerConf().getLayerName());
+        }
+        if (helper != null && !helper.checkSupported()) {
+            log.debug("Removed helper {} as not supported", helper.getClass());
+            helper = null;
         }
     }
 
     @Override
-    public double calcL2(boolean backpropParamsOnly) {
-        return 0;
-    }
-
-    @Override
-    public double calcL1(boolean backpropParamsOnly) {
+    public double calcRegularizationScore(boolean backpropOnlyParams) {
         return 0;
     }
 
@@ -144,6 +146,11 @@ public class SubsamplingLayer extends AbstractLayer<org.deeplearning4j.nn.conf.l
                 ret = helper.backpropGradient(input, epsilon, kernel, strides, pad,
                         layerConf().getPoolingType(), convolutionMode, dilation, workspaceMgr);
             } catch (Exception e){
+                if(e.getMessage() != null && e.getMessage().contains("Failed to allocate")){
+                    //This is a memory exception - don't fallback to built-in implementation
+                    throw e;
+                }
+
                 if(layerConf().isCudnnAllowFallback()){
                     helperCountFail++;
                     log.warn("CuDNN execution failed - falling back on built-in implementation",e);
@@ -152,10 +159,6 @@ public class SubsamplingLayer extends AbstractLayer<org.deeplearning4j.nn.conf.l
                 }
             }
             if (ret != null) {
-                //Backprop dropout, if present
-                INDArray gradPostDropout = ret.getRight();
-                gradPostDropout = backpropDropOutIfPresent(gradPostDropout);
-                ret.setSecond(gradPostDropout);
                 return ret;
             }
         }
@@ -225,7 +228,7 @@ public class SubsamplingLayer extends AbstractLayer<org.deeplearning4j.nn.conf.l
                         .build();
                 Nd4j.getExecutioner().exec(op);
 
-                INDArray isMax = Nd4j.getExecutioner().execAndReturn(new IsMax(col2d, 1));
+                INDArray isMax = Nd4j.getExecutioner().exec(new IsMax(col2d, col2d, 1));
                 isMax.muliColumnVector(epsilon1d);
                 break;
             case AVG:
@@ -241,7 +244,7 @@ public class SubsamplingLayer extends AbstractLayer<org.deeplearning4j.nn.conf.l
                         convolutionMode == ConvolutionMode.Same, col6dPermuted);
                 INDArray pNorm = Transforms.abs(col2d, true); //dup as we need col2d again later
                 Transforms.pow(pNorm, pnorm, false);
-                pNorm = pNorm.sum(1);
+                pNorm = pNorm.sum(1).reshape(pNorm.size(0), 1);
                 Transforms.pow(pNorm, (1.0 / pnorm), false);
 
                 //dL/dIn = dL/dOut * dOut/dIn
@@ -276,7 +279,6 @@ public class SubsamplingLayer extends AbstractLayer<org.deeplearning4j.nn.conf.l
         if (layerConf().getPoolingType() == PoolingType.AVG)
             outEpsilon.divi(ArrayUtil.prod(layerConf().getKernelSize()));
 
-        outEpsilon = backpropDropOutIfPresent(outEpsilon);
         return new Pair<>(retGradient, outEpsilon);
     }
 
@@ -297,9 +299,8 @@ public class SubsamplingLayer extends AbstractLayer<org.deeplearning4j.nn.conf.l
     @Override
     public INDArray activate(boolean training, LayerWorkspaceMgr workspaceMgr) {
         assertInputSet(false);
-        if (training && !dropoutApplied && layerConf().getIDropout() != null) {
-            applyDropOutIfNecessary(true, workspaceMgr);
-        }
+        //Normally we would apply dropout first. However, dropout on subsampling layers is not something that users typically expect
+        // consequently, we'll skip it here
 
         //Input validation: expect rank 4 matrix
         if (input.rank() != 4) {
@@ -378,16 +379,6 @@ public class SubsamplingLayer extends AbstractLayer<org.deeplearning4j.nn.conf.l
     }
 
     @Override
-    public Layer transpose() {
-        throw new UnsupportedOperationException(layerId());
-    }
-
-    @Override
-    public Layer clone() {
-        return new SubsamplingLayer(conf.clone());
-    }
-
-    @Override
     public boolean isPretrainLayer() {
         return false;
     }
@@ -413,7 +404,7 @@ public class SubsamplingLayer extends AbstractLayer<org.deeplearning4j.nn.conf.l
     }
 
     @Override
-    public int numParams() {
+    public long numParams() {
         return 0;
     }
 
@@ -424,12 +415,6 @@ public class SubsamplingLayer extends AbstractLayer<org.deeplearning4j.nn.conf.l
     public double score() {
         return 0;
     }
-
-    @Override
-    public void accumulateScore(double accum) {
-        throw new UnsupportedOperationException(layerId());
-    }
-
 
     @Override
     public void update(INDArray gradient, String paramType) {
@@ -449,5 +434,17 @@ public class SubsamplingLayer extends AbstractLayer<org.deeplearning4j.nn.conf.l
     @Override
     public void setParams(INDArray params) {
 
+    }
+
+    @Override
+    public Pair<INDArray, MaskState> feedForwardMaskArray(INDArray maskArray, MaskState currentMaskState, int minibatchSize) {
+        if (maskArray == null) {
+            //For same mode (with stride 1): output activations size is always same size as input activations size -> mask array is same size
+            return new Pair<>(maskArray, currentMaskState);
+        }
+
+        INDArray outMask = ConvolutionUtils.cnn2dMaskReduction(maskArray, layerConf().getKernelSize(), layerConf().getStride(),
+                layerConf().getPadding(), layerConf().getDilation(), layerConf().getConvolutionMode());
+        return super.feedForwardMaskArray(outMask, currentMaskState, minibatchSize);
     }
 }

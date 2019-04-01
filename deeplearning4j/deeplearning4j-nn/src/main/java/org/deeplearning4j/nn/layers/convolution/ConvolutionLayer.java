@@ -1,33 +1,32 @@
-/*-
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
  *
- *  * Copyright 2016 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
  *
- */
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.nn.layers.convolution;
 
 
 import org.deeplearning4j.exception.DL4JInvalidInputException;
-import org.deeplearning4j.nn.api.Layer;
+import org.deeplearning4j.nn.api.MaskState;
 import org.deeplearning4j.nn.conf.CacheMode;
 import org.deeplearning4j.nn.conf.ConvolutionMode;
 import org.deeplearning4j.nn.conf.NeuralNetConfiguration;
 import org.deeplearning4j.nn.gradient.DefaultGradient;
 import org.deeplearning4j.nn.gradient.Gradient;
-import org.deeplearning4j.nn.graph.ComputationGraph;
 import org.deeplearning4j.nn.layers.BaseLayer;
 import org.deeplearning4j.nn.layers.LayerHelper;
+import org.deeplearning4j.nn.layers.mkldnn.MKLDNNConvHelper;
 import org.deeplearning4j.nn.params.ConvolutionParamInitializer;
 import org.deeplearning4j.util.ConvolutionUtils;
 import org.nd4j.linalg.activations.IActivation;
@@ -44,7 +43,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
-import java.util.Properties;
 
 
 /**
@@ -90,9 +88,16 @@ public class ConvolutionLayer extends BaseLayer<org.deeplearning4j.nn.conf.layer
                 } else {
                     OneTimeLogger.info(log, "cuDNN not found: "
                             + "use cuDNN for better GPU performance by including the deeplearning4j-cuda module. "
-                            + "For more information, please refer to: https://deeplearning4j.org/cudnn", t);
+                            + "For more information, please refer to: https://deeplearning4j.org/docs/latest/deeplearning4j-config-cudnn", t);
                 }
             }
+        } else if("CPU".equalsIgnoreCase(backend)){
+            helper = new MKLDNNConvHelper();
+            log.debug("Created MKLDNNConvHelper, layer {}", layerConf().getLayerName());
+        }
+        if (helper != null && !helper.checkSupported()) {
+            log.debug("Removed helper {} as not supported", helper.getClass());
+            helper = null;
         }
     }
 
@@ -105,6 +110,7 @@ public class ConvolutionLayer extends BaseLayer<org.deeplearning4j.nn.conf.layer
     public Pair<Gradient, INDArray> backpropGradient(INDArray epsilon, LayerWorkspaceMgr workspaceMgr) {
         assertInputSet(true);
         INDArray weights = getParamWithNoise(ConvolutionParamInitializer.WEIGHT_KEY, true, workspaceMgr);
+        INDArray bias = getParamWithNoise(ConvolutionParamInitializer.BIAS_KEY, true, workspaceMgr);
 
         // FIXME: int cast
         int miniBatch = (int) input.size(0);
@@ -159,16 +165,21 @@ public class ConvolutionLayer extends BaseLayer<org.deeplearning4j.nn.conf.layer
 
             Pair<Gradient, INDArray> ret = null;
             try {
-                ret = helper.backpropGradient(input, weights, delta, kernel, strides, pad,
-                        biasGradView, weightGradView, afn, layerConf().getCudnnAlgoMode(),
-                        layerConf().getCudnnBwdFilterAlgo(), layerConf().getCudnnBwdDataAlgo(), convolutionMode,
-                        dilation, workspaceMgr);
+                ret = helper.backpropGradient(input, weights, bias, delta, kernel, strides,
+                        pad, biasGradView, weightGradView, afn,
+                        layerConf().getCudnnAlgoMode(), layerConf().getCudnnBwdFilterAlgo(), layerConf().getCudnnBwdDataAlgo(),
+                        convolutionMode, dilation, workspaceMgr);
             } catch (Exception e){
+                if(e.getMessage().contains("Failed to allocate")){
+                   //This is a memory exception - don't fallback to built-in implementation
+                    throw e;
+                }
+
                 if(layerConf().isCudnnAllowFallback()){
                     helperCountFail++;
                     log.warn("CuDNN execution failed - falling back on built-in implementation",e);
                 } else {
-                    throw new RuntimeException(e);
+                    throw new RuntimeException("Error during ConovlutionLayer CuDNN helper backprop - isCudnnAllowFallback() is set to false", e);
                 }
             }
 
@@ -246,6 +257,36 @@ public class ConvolutionLayer extends BaseLayer<org.deeplearning4j.nn.conf.layer
         return preOutput(training, forBackprop, workspaceMgr);
     }
 
+    protected void validateInputRank() {
+        //Input validation: expect rank 4 matrix
+        if (input.rank() != 4) {
+            String layerName = conf.getLayer().getLayerName();
+            if (layerName == null)
+                layerName = "(not named)";
+            throw new DL4JInvalidInputException("Got rank " + input.rank()
+                    + " array as input to ConvolutionLayer (layer name = " + layerName + ", layer index = "
+                    + index + ") with shape " + Arrays.toString(input.shape()) + ". "
+                    + "Expected rank 4 array with shape [minibatchSize, layerInputDepth, inputHeight, inputWidth]."
+                    + (input.rank() == 2
+                    ? " (Wrong input type (see InputType.convolutionalFlat()) or wrong data type?)"
+                    : "")
+                    + " " + layerId());
+        }
+    }
+
+    protected void validateInputDepth(int inDepth) {
+        if (input.size(1) != inDepth) {
+            String layerName = conf.getLayer().getLayerName();
+            if (layerName == null)
+                layerName = "(not named)";
+            throw new DL4JInvalidInputException("Cannot do forward pass in Convolution layer (layer name = " + layerName
+                    + ", layer index = " + index + "): input array channels does not match CNN layer configuration"
+                    + " (data input channels = " + input.size(1) + ", [minibatch,inputDepth,height,width]="
+                    + Arrays.toString(input.shape()) + "; expected" + " input channels = " + inDepth + ") "
+                    + layerId());
+        }
+    }
+
     /**
      * PreOutput method that also returns the im2col2d array (if being called for backprop), as this can be re-used
      * instead of being calculated again.
@@ -260,36 +301,14 @@ public class ConvolutionLayer extends BaseLayer<org.deeplearning4j.nn.conf.layer
         INDArray bias = getParamWithNoise(ConvolutionParamInitializer.BIAS_KEY, training, workspaceMgr);
         INDArray weights = getParamWithNoise(ConvolutionParamInitializer.WEIGHT_KEY, training, workspaceMgr);
 
-        //Input validation: expect rank 4 matrix
-        if (input.rank() != 4) {
-            String layerName = conf.getLayer().getLayerName();
-            if (layerName == null)
-                layerName = "(not named)";
-            throw new DL4JInvalidInputException("Got rank " + input.rank()
-                            + " array as input to ConvolutionLayer (layer name = " + layerName + ", layer index = "
-                            + index + ") with shape " + Arrays.toString(input.shape()) + ". "
-                            + "Expected rank 4 array with shape [minibatchSize, layerInputDepth, inputHeight, inputWidth]."
-                            + (input.rank() == 2
-                                            ? " (Wrong input type (see InputType.convolutionalFlat()) or wrong data type?)"
-                                            : "")
-                            + " " + layerId());
-        }
+        validateInputRank();
 
         // FIXME: int cast
         int miniBatch = (int) input.size(0);
-
         int outDepth = (int) weights.size(0);
         int inDepth = (int) weights.size(1);
-        if (input.size(1) != inDepth) {
-            String layerName = conf.getLayer().getLayerName();
-            if (layerName == null)
-                layerName = "(not named)";
-            throw new DL4JInvalidInputException("Cannot do forward pass in Convolution layer (layer name = " + layerName
-                            + ", layer index = " + index + "): input array channels does not match CNN layer configuration"
-                            + " (data input channels = " + input.size(1) + ", [minibatch,inputDepth,height,width]="
-                            + Arrays.toString(input.shape()) + "; expected" + " input channels = " + inDepth + ") "
-                            + layerId());
-        }
+        validateInputDepth(inDepth);
+
         int kH = (int) weights.size(2);
         int kW = (int) weights.size(3);
 
@@ -334,6 +353,11 @@ public class ConvolutionLayer extends BaseLayer<org.deeplearning4j.nn.conf.layer
                 ret = helper.preOutput(input, weights, bias, kernel, strides, pad, layerConf().getCudnnAlgoMode(),
                         layerConf().getCudnnFwdAlgo(), convolutionMode, dilation, workspaceMgr);
             } catch (Exception e){
+                if(e.getMessage() != null && e.getMessage().contains("Failed to allocate")){
+                    //This is a memory exception - don't fallback to built-in implementation
+                    throw e;
+                }
+
                 if(layerConf().isCudnnAllowFallback()){
                     helperCountFail++;
                     log.warn("CuDNN execution failed - falling back on built-in implementation",e);
@@ -356,7 +380,8 @@ public class ConvolutionLayer extends BaseLayer<org.deeplearning4j.nn.conf.layer
         //Post reshaping: rows are such that minibatch varies slowest, outW fastest as we step through the rows post-reshape
         INDArray col = Nd4j.createUninitialized(new int[] {miniBatch, outH, outW, inDepth, kH, kW}, 'c');
         INDArray col2 = col.permute(0, 3, 4, 5, 1, 2);
-        Convolution.im2col(input, kH, kW, strides[0], strides[1], pad[0], pad[1], dilation[0], dilation[1],
+        INDArray im2ColIn = input.castTo(col2.dataType());      //No op if already (for example) float
+        Convolution.im2col(im2ColIn, kH, kW, strides[0], strides[1], pad[0], pad[1], dilation[0], dilation[1],
                         convolutionMode == ConvolutionMode.Same, col2);
 
         INDArray im2col2d = Shape.newShapeNoCopy(col, new int[] {miniBatch * outH * outW, inDepth * kH * kW}, false);
@@ -413,7 +438,7 @@ public class ConvolutionLayer extends BaseLayer<org.deeplearning4j.nn.conf.layer
         IActivation afn = layerConf().getActivationFn();
 
         if (helper != null && Shape.strideDescendingCAscendingF(z)) {
-            INDArray ret = helper.activate(z, layerConf().getActivationFn());
+            INDArray ret = helper.activate(z, layerConf().getActivationFn(), training);
             if (ret != null) {
                 return ret;
             }
@@ -421,11 +446,6 @@ public class ConvolutionLayer extends BaseLayer<org.deeplearning4j.nn.conf.layer
 
         INDArray activation = afn.getActivation(z, training);
         return activation;
-    }
-
-    @Override
-    public Layer transpose() {
-        throw new UnsupportedOperationException("Not supported - " + layerId());
     }
 
     @Override
@@ -449,15 +469,21 @@ public class ConvolutionLayer extends BaseLayer<org.deeplearning4j.nn.conf.layer
     }
 
     @Override
-    public INDArray params() {
-        //C order flattening, to match the gradient flattening order
-        return Nd4j.toFlattened('c', params.values());
-    }
-
-    @Override
     public void setParams(INDArray params) {
         //Override, as base layer does f order parameter flattening by default
         setParams(params, 'c');
+    }
+
+    @Override
+    public Pair<INDArray, MaskState> feedForwardMaskArray(INDArray maskArray, MaskState currentMaskState, int minibatchSize) {
+        if (maskArray == null) {
+            //For same mode (with stride 1): output activations size is always same size as input activations size -> mask array is same size
+            return new Pair<>(maskArray, currentMaskState);
+        }
+
+        INDArray outMask = ConvolutionUtils.cnn2dMaskReduction(maskArray, layerConf().getKernelSize(), layerConf().getStride(),
+                layerConf().getPadding(), layerConf().getDilation(), layerConf().getConvolutionMode());
+        return new Pair<>(outMask, currentMaskState);
     }
 
 }

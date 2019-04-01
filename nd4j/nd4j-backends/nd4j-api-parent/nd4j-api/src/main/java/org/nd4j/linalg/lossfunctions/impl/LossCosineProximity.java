@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.linalg.lossfunctions.impl;
 
 import lombok.EqualsAndHashCode;
@@ -5,6 +21,7 @@ import onnx.OnnxProto3;
 import org.nd4j.autodiff.functions.DifferentialFunction;
 import org.nd4j.autodiff.samediff.SDVariable;
 import org.nd4j.autodiff.samediff.SameDiff;
+import org.nd4j.base.Preconditions;
 import org.nd4j.linalg.api.ops.Op;
 import org.nd4j.linalg.primitives.Pair;
 import org.nd4j.linalg.activations.IActivation;
@@ -35,16 +52,12 @@ public class LossCosineProximity extends DifferentialFunction implements ILossFu
      * @return
      */
     public INDArray scoreArray(INDArray labels, INDArray preOutput, IActivation activationFn, INDArray mask) {
-        if (labels.size(1) != preOutput.size(1)) {
-            throw new IllegalArgumentException(
-                            "Labels array numColumns (size(1) = " + labels.size(1) + ") does not match output layer"
-                                            + " number of outputs (nOut = " + preOutput.size(1) + ") ");
-
+        if(!labels.equalShapes(preOutput)){
+            Preconditions.throwEx("Labels and preOutput must have equal shapes: got shapes %s vs %s", labels.shape(), preOutput.shape());
         }
         /*
          mean of -(y.dot(yhat)/||y||*||yhat||)
          */
-        //INDArray postOutput = Nd4j.getExecutioner().execAndReturn(Nd4j.getOpFactory().createTransform(activationFn, preOutput.dup()));
         INDArray postOutput = activationFn.getActivation(preOutput.dup(), true);
 
         INDArray yhatmag = postOutput.norm2(1);
@@ -84,16 +97,13 @@ public class LossCosineProximity extends DifferentialFunction implements ILossFu
     @Override
     public INDArray computeScoreArray(INDArray labels, INDArray preOutput, IActivation activationFn, INDArray mask) {
         INDArray scoreArr = scoreArray(labels, preOutput, activationFn, mask);
-        return scoreArr.sum(1);
+        return scoreArr.sum(true,1);
     }
 
     @Override
     public INDArray computeGradient(INDArray labels, INDArray preOutput, IActivation activationFn, INDArray mask) {
-        if (labels.size(1) != preOutput.size(1)) {
-            throw new IllegalArgumentException(
-                            "Labels array numColumns (size(1) = " + labels.size(1) + ") does not match output layer"
-                                            + " number of outputs (nOut = " + preOutput.size(1) + ") ");
-
+        if(!labels.equalShapes(preOutput)){
+            Preconditions.throwEx("Labels and preOutput must have equal shapes: got shapes %s vs %s", labels.shape(), preOutput.shape());
         }
         INDArray yhat = activationFn.getActivation(preOutput.dup(), true);
         INDArray yL2norm = labels.norm2(1);
@@ -102,7 +112,7 @@ public class LossCosineProximity extends DifferentialFunction implements ILossFu
         INDArray yhatL2normSq = yhatL2norm.mul(yhatL2norm);
 
         //Note: This is not really the L1 norm since I am not taking abs values
-        INDArray yhatDotyL1norm = labels.mul(yhat).sum(1);
+        INDArray yhatDotyL1norm = labels.mul(yhat).sum(true,1);
 
         INDArray dLda = labels.mulColumnVector(yhatL2normSq);
         dLda.subi(yhat.mulColumnVector(yhatDotyL1norm));

@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.list;
 
 import lombok.NonNull;
@@ -23,8 +39,33 @@ public class NDArrayList extends  BaseNDArrayList<Double>  {
     private INDArray container;
     private int size;
 
-    public NDArrayList() {
+
+    /**
+     * Initialize with the desired size.
+     * This will set the list.size()
+     * to be equal to the passed in size
+     * @param size the initial size of the array
+     */
+    public NDArrayList(int size) {
         this.container = Nd4j.create(10L);
+        this.size = size;
+    }
+
+    /**
+     * Specify the underlying ndarray for this list.
+     * @param container the underlying array.
+     * @param size the initial size of the array. This will set list.size()
+     *             to be equal to the passed in size.
+     */
+    public NDArrayList(@NonNull INDArray container,int size) {
+        Preconditions.checkState(container == null || container.rank() == 1, "Container must be rank 1: is rank %s",
+                container == null ? 0 : container.rank());
+        this.container = container;
+        this.size = size;
+    }
+
+    public NDArrayList() {
+        this(0);
     }
 
     /**
@@ -32,9 +73,7 @@ public class NDArrayList extends  BaseNDArrayList<Double>  {
      * @param container the underlying array.
      */
     public NDArrayList(@NonNull INDArray container) {
-        Preconditions.checkState(container == null || container.rank() == 1, "Container must be rank 1: is rank %s",
-                container == null ? 0 : container.rank());
-        this.container = container;
+        this(container,0);
     }
 
 
@@ -51,7 +90,7 @@ public class NDArrayList extends  BaseNDArrayList<Double>  {
             throw new ND4JIllegalStateException("Array is empty!");
         }
 
-         return container.get(NDArrayIndex.interval(0,size));
+        return container.get(NDArrayIndex.interval(0,size));
     }
 
     @Override
@@ -124,8 +163,9 @@ public class NDArrayList extends  BaseNDArrayList<Double>  {
     public boolean addAll(Collection<? extends Double> collection) {
         if(collection instanceof NDArrayList) {
             NDArrayList ndArrayList = (NDArrayList) collection;
-            ndArrayList.growCapacity(this.size() + collection.size());
-
+            growCapacity(this.size() + collection.size());
+            container.put(new INDArrayIndex[]{NDArrayIndex.interval(size,size + collection.size())},ndArrayList.container.get(NDArrayIndex.interval(0,ndArrayList.size())));
+            size += ndArrayList.size();
         }
         else {
             for(Double d : collection) {
@@ -137,7 +177,6 @@ public class NDArrayList extends  BaseNDArrayList<Double>  {
 
     @Override
     public boolean addAll(int i, Collection<? extends Double> collection) {
-
         for(Double d : collection) {
             add(i,d);
         }

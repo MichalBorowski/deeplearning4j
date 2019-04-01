@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.nn.layers.recurrent;
 
 import java.util.Arrays;
@@ -13,19 +29,19 @@ import lombok.NonNull;
 import org.deeplearning4j.nn.workspace.LayerWorkspaceMgr;
 
 /**
+ * Masks timesteps with activation equal to the specified masking value, defaulting to 0.0.
+ * Assumes that the input shape is [batch_size, input_size, timesteps].
  *
- * Masks timesteps with 0 activation. Assumes that the input shape is [batch_size, input_size, timesteps].
-   @author Martin Boyanov mboyanov@gmail.com
+ * @author Martin Boyanov mboyanov@gmail.com
  */
 public class MaskZeroLayer extends BaseWrapperLayer {
 
-    /**
-     *
-     */
     private static final long serialVersionUID = -7369482676002469854L;
+    private double maskingValue;
 
-    public MaskZeroLayer(@NonNull Layer underlying){
+    public MaskZeroLayer(@NonNull Layer underlying, double maskingValue){
         super(underlying);
+        this.maskingValue = maskingValue;
     }
 
 
@@ -55,22 +71,25 @@ public class MaskZeroLayer extends BaseWrapperLayer {
 
     private void setMaskFromInput(INDArray input) {
         if (input.rank() != 3) {
-            throw new IllegalArgumentException("Expected input of shape [batch_size, timestep_input_size, timestep], got shape "+Arrays.toString(input.shape()) + " instead");
+            throw new IllegalArgumentException("Expected input of shape [batch_size, timestep_input_size, timestep], " +
+                    "got shape "+Arrays.toString(input.shape()) + " instead");
         }
-        INDArray mask = input.eq(0).sum(1).neq(input.shape()[1]);
+        INDArray mask = input.eq(maskingValue).sum(1).neq(input.shape()[1]);
         underlying.setMaskArray(mask);
     }
 
     @Override
-    public int numParams() {
+    public long numParams() {
         return underlying.numParams();
     }
 
     @Override
-    public Pair<INDArray, MaskState> feedForwardMaskArray(INDArray maskArray, MaskState currentMaskState, int minibatchSize) {
+    public Pair<INDArray, MaskState> feedForwardMaskArray(INDArray maskArray, MaskState currentMaskState,
+                                                          int minibatchSize) {
         underlying.feedForwardMaskArray(maskArray, currentMaskState, minibatchSize);
 
-        //Input: 2d mask array, for masking a time series. After extracting out the last time step, we no longer need the mask array
+        //Input: 2d mask array, for masking a time series. After extracting out the last time step,
+        // we no longer need the mask array
         return new Pair<>(null, currentMaskState);
     }
 

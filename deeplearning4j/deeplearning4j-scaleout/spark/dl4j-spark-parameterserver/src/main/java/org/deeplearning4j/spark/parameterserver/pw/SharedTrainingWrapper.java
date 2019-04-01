@@ -1,43 +1,73 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.spark.parameterserver.pw;
 
 import lombok.extern.slf4j.Slf4j;
 import lombok.val;
 import org.bytedeco.javacpp.Loader;
+import org.deeplearning4j.api.storage.StatsStorageRouter;
+import org.deeplearning4j.api.storage.listener.RoutingIterationListener;
+import org.deeplearning4j.config.DL4JEnvironmentVars;
 import org.deeplearning4j.exception.DL4JInvalidConfigException;
 import org.deeplearning4j.nn.api.Model;
+import org.deeplearning4j.nn.api.Updater;
 import org.deeplearning4j.nn.graph.ComputationGraph;
 import org.deeplearning4j.nn.multilayer.MultiLayerNetwork;
+import org.deeplearning4j.nn.updater.BaseMultiLayerUpdater;
+import org.deeplearning4j.optimize.api.TrainingListener;
 import org.deeplearning4j.optimize.listeners.SleepyTrainingListener;
 import org.deeplearning4j.optimize.solvers.accumulation.EncodedGradientsAccumulator;
+import org.deeplearning4j.optimize.solvers.accumulation.EncodingHandler;
 import org.deeplearning4j.optimize.solvers.accumulation.MessageHandler;
+import org.deeplearning4j.optimize.solvers.accumulation.encoding.ThresholdAlgorithm;
+import org.deeplearning4j.optimize.solvers.accumulation.SmartFancyBlockingQueue;
 import org.deeplearning4j.parallelism.ParallelWrapper;
 import org.deeplearning4j.spark.parameterserver.conf.SharedTrainingConfiguration;
 import org.deeplearning4j.spark.parameterserver.iterators.VirtualDataSetIterator;
 import org.deeplearning4j.spark.parameterserver.iterators.VirtualIterator;
 import org.deeplearning4j.spark.parameterserver.iterators.VirtualMultiDataSetIterator;
-import org.deeplearning4j.spark.parameterserver.networking.SilentTrainingDriver;
-import org.deeplearning4j.spark.parameterserver.networking.WiredEncodingHandler;
-import org.deeplearning4j.spark.parameterserver.networking.messages.SilentIntroductoryMessage;
+import org.deeplearning4j.spark.parameterserver.networking.v2.ModelParamsConsumer;
+import org.deeplearning4j.spark.parameterserver.networking.v2.UpdaterParamsConsumer;
+import org.deeplearning4j.spark.parameterserver.networking.v2.UpdatesConsumer;
+import org.deeplearning4j.spark.parameterserver.networking.v2.WiredEncodingHandler;
 import org.deeplearning4j.spark.parameterserver.training.SharedTrainingResult;
 import org.deeplearning4j.spark.parameterserver.training.SharedTrainingWorker;
 import org.deeplearning4j.spark.parameterserver.util.BlockingObserver;
+import org.deeplearning4j.spark.parameterserver.util.CountingIterator;
+import org.deeplearning4j.spark.util.SparkUtils;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.dataset.DataSet;
 import org.nd4j.linalg.dataset.api.MultiDataSet;
 import org.nd4j.linalg.factory.Nd4j;
-import org.nd4j.parameterserver.distributed.VoidParameterServer;
 import org.nd4j.parameterserver.distributed.conf.VoidConfiguration;
 import org.nd4j.parameterserver.distributed.enums.TransportType;
-import org.nd4j.parameterserver.distributed.transport.MulticastTransport;
-import org.nd4j.parameterserver.distributed.transport.RoutedTransport;
-import org.nd4j.parameterserver.distributed.transport.Transport;
 import org.nd4j.parameterserver.distributed.util.NetworkOrganizer;
+import org.nd4j.parameterserver.distributed.v2.ModelParameterServer;
+import org.nd4j.parameterserver.distributed.v2.transport.UpdaterParametersProvider;
+import org.nd4j.parameterserver.distributed.v2.transport.impl.AeronUdpTransport;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * This class maintains ParallelWrapper instance in Spark environment, and provides primitives for inter-executor
@@ -47,7 +77,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 @Slf4j
 public class SharedTrainingWrapper {
-    public static SharedTrainingWrapper INSTANCE = new SharedTrainingWrapper();
+    private static SharedTrainingWrapper INSTANCE = new SharedTrainingWrapper();
+    private static AtomicLong LAST_INSTANCE_ID = new AtomicLong(Long.MIN_VALUE);
     protected ParallelWrapper wrapper;
     protected VirtualDataSetIterator iteratorDS;
     protected VirtualMultiDataSetIterator iteratorMDS;
@@ -57,12 +88,15 @@ public class SharedTrainingWrapper {
 
 
     protected AtomicBoolean isFirst = new AtomicBoolean(false);
+    protected AtomicBoolean exceptionEncountered = new AtomicBoolean(false);
+    protected Throwable exception;
 
+    protected ThreadLocal<AtomicInteger> iteratorDataSetCount = new ThreadLocal<>();    //Using AtomicInteger because it's mutable, not because it's atomic
     protected ThreadLocal<BlockingObserver> observer = new ThreadLocal<>();
     protected EncodedGradientsAccumulator accumulator;
     protected Model originalModel;
 
-    protected SilentTrainingDriver driver;
+    protected UpdatesConsumer consumer;
 
     protected SharedTrainingWrapper() {
         init();
@@ -77,7 +111,28 @@ public class SharedTrainingWrapper {
         iteratorDS = new VirtualDataSetIterator(iteratorsDS);
     }
 
-    public static SharedTrainingWrapper getInstance() {
+    public static synchronized SharedTrainingWrapper getInstance(long id) {
+        if(LAST_INSTANCE_ID.get() != Long.MIN_VALUE && LAST_INSTANCE_ID.get() != id){
+            log.debug("Shutting down existing SharedTrainingWrapper instances; resetting state - previous instance ID {}," +
+                    " new instance ID {}", LAST_INSTANCE_ID.get(), id);
+            if(INSTANCE.wrapper != null){
+                INSTANCE.wrapper.shutdown();
+                INSTANCE.wrapper = null;
+            }
+            INSTANCE.iteratorsDS.clear();
+            INSTANCE.iteratorsMDS.clear();
+            INSTANCE.exceptionEncountered.set(false);
+            INSTANCE.iteratorDataSetCount = new ThreadLocal<>();
+            INSTANCE.accumulator = null;
+            INSTANCE.originalModel = null;
+            INSTANCE.consumer = null;
+            LAST_INSTANCE_ID.set(id);
+        }
+
+        if(LAST_INSTANCE_ID.get() == Long.MIN_VALUE){
+            LAST_INSTANCE_ID.set(id);
+        }
+
         return INSTANCE;
     }
 
@@ -87,13 +142,19 @@ public class SharedTrainingWrapper {
      * @param iterator
      */
     public void attachDS(Iterator<DataSet> iterator) {
-        log.info("Attaching thread...");
+        log.debug("Attaching thread...");
+
+        //Count the number of minibatches - used for reporting/debugging purposes
+        if(iteratorDataSetCount.get() == null)
+            iteratorDataSetCount.set(new AtomicInteger(0));
+        AtomicInteger count = iteratorDataSetCount.get();
+        count.set(0);
 
         // we're creating our Observable wrapper
-        VirtualIterator<DataSet> wrapped = new VirtualIterator<>(iterator);
+        VirtualIterator<DataSet> wrapped = new VirtualIterator<>(new CountingIterator<>(iterator, count));
 
         // and creating Observer which will be used to monitor progress within iterator
-        BlockingObserver obs = new BlockingObserver();
+        BlockingObserver obs = new BlockingObserver(exceptionEncountered);
         wrapped.addObserver(obs);
 
         // putting that "somewhere"
@@ -109,13 +170,19 @@ public class SharedTrainingWrapper {
      * @param iterator
      */
     public void attachMDS(Iterator<MultiDataSet> iterator) {
-        log.info("Attaching thread...");
+        log.debug("Attaching thread...");
+
+        //Count the number of minibatches - used for reporting/debugging purposes
+        if(iteratorDataSetCount.get() == null)
+            iteratorDataSetCount.set(new AtomicInteger(0));
+        AtomicInteger count = iteratorDataSetCount.get();
+        count.set(0);
 
         // we're creating our Observable wrapper
-        VirtualIterator<MultiDataSet> wrapped = new VirtualIterator<>(iterator);
+        VirtualIterator<MultiDataSet> wrapped = new VirtualIterator<>(new CountingIterator<>(iterator, count));
 
         // and creating Observer which will be used to monitor progress within iterator
-        BlockingObserver obs = new BlockingObserver();
+        BlockingObserver obs = new BlockingObserver(exceptionEncountered);
         wrapped.addObserver(obs);
 
         // putting that "somewhere"
@@ -130,6 +197,10 @@ public class SharedTrainingWrapper {
             first call instantiates pw, messenger etc, and gets in charge here.
          */
         if (isFirst.compareAndSet(false, true)) {
+            //Reset past exception encountered in case we're doing correct fit after incorrect...
+            exceptionEncountered.set(false);
+            exception = null;
+
             SharedTrainingConfiguration trainingConfiguration = worker.getBroadcastConfiguration().getValue();
             VoidConfiguration voidConfiguration = worker.getBroadcastConfiguration().getValue().getVoidConfiguration();
 
@@ -160,19 +231,34 @@ public class SharedTrainingWrapper {
 
             // now we're attaching VoidParameterServer to GradientsAccumulator, but doing that only once
             if (wrapper == null) {
-                log.info("Starting ParallelWrapper at thread {}", Thread.currentThread().getId());
+                log.debug("Starting ParallelWrapper at thread {}", Thread.currentThread().getId());
 
                 model = worker.getInitialModel();
-                if (model == null)
+                if (model == null) {
                     model = worker.getInitialModelGraph();
+                }
 
                 if (model == null)
                     throw new DL4JInvalidConfigException("No model was defined for training");
 
-                MessageHandler handler = new WiredEncodingHandler(trainingConfiguration.getThreshold(),
-                                trainingConfiguration.getMinThreshold(), trainingConfiguration.getThresholdStep(),
-                                trainingConfiguration.getStepTrigger(), trainingConfiguration.getStepDelay(),
-                                trainingConfiguration.getShakeFrequency());
+                List<TrainingListener> listeners = worker.getListeners();
+                if(listeners != null){
+                    model.setListeners(listeners);
+                    StatsStorageRouter r = worker.getRouter();
+                    if(r != null){
+                        for(TrainingListener l : listeners){
+                            if(l instanceof RoutingIterationListener){
+                                ((RoutingIterationListener) l).setStorageRouter(r);
+                            }
+                        }
+                    }
+                }
+
+                val handler = new WiredEncodingHandler(trainingConfiguration.getThresholdAlgorithm(), trainingConfiguration.getResidualPostProcessor(), null, trainingConfiguration.isEncodingDebugMode());
+
+                // TODO: if there will be no code difference - use the same class instead of 2 different classes
+                val modelParamsSupplier = new ModelParamsConsumer();
+                val updateParamsSupplier = new UpdaterParamsConsumer();
 
                 // this accumulator will provide sharing gradients over network, via WiredEncodedHandler. But we create it only once
                 if (accumulator == null) {
@@ -190,32 +276,11 @@ public class SharedTrainingWrapper {
                                     : EncodedGradientsAccumulator.getOptimalBufferSize(model, numWorkers, 2);
 
                     accumulator = new EncodedGradientsAccumulator.Builder(numWorkers).messageHandler(handler)
-                                    .encodingThreshold(trainingConfiguration.getThreshold())
-                                    .memoryParameters(bufferSize, queueSize).build();
-
-                    // FIXME: implement support for Custom transport implementation
-                    Transport transport =
-                                    voidConfiguration.getTransportType() == TransportType.ROUTED ? new RoutedTransport()
-                                                    : voidConfiguration.getTransportType() == TransportType.BROADCAST
-                                                                    ? new MulticastTransport() : null;
-
-                    if (transport == null)
-                        throw new DL4JInvalidConfigException(
-                                        "No Transport implementation was defined for this training session!");
-
-                    // let's check for spark local edge case
-                    if (!VoidParameterServer.getInstance().isInit()) {
-                        // all nodes that are NOT master - enforced to be Clients
-                        voidConfiguration.setForcedRole(null);
-
-                        // TODO: tbd: let's allow one of executor nodes to be silent worker maybe? or this going to be too expensive?
-                    }
-
-                    driver = new SilentTrainingDriver(accumulator);
-                    VoidParameterServer.getInstance().init(voidConfiguration, transport, driver);
-
-                    // we're saving reference to original model
-                    originalModel = model;
+                            .thresholdAlgorithm(trainingConfiguration.getThresholdAlgorithm())
+                            .residualPostProcessor(trainingConfiguration.getResidualPostProcessor())
+                            .memoryParameters(bufferSize, queueSize)
+                            .encodingDebugMode(trainingConfiguration.isEncodingDebugMode())
+                            .build();
 
                     // we should introduce ourselves to controller
                     // FIXME: if localIP is null - use original ip discovery available in VoidParameterServer
@@ -229,7 +294,7 @@ public class SharedTrainingWrapper {
 
                     // last resort here...
                     if (localIP == null)
-                        localIP = System.getenv("DL4J_VOID_IP");
+                        localIP = System.getenv(DL4JEnvironmentVars.DL4J_VOID_IP);
 
                     // set it to localhost, and hope for BroadcastTransport used
                     if (localIP == null) {
@@ -237,14 +302,85 @@ public class SharedTrainingWrapper {
                         log.warn("Can't get IP address to start VoidParameterServer client. Using localhost instead");
                     }
 
-                    // FIXME: do we need port here, in case of Multicast/Broadcast Transport?
-                    SilentIntroductoryMessage sim =
-                                    new SilentIntroductoryMessage(localIP, voidConfiguration.getUnicastPort());
+                    log.debug("Checking for ModelParameterServer existence");
 
-                    // we're sending this message to all shards, though it's just one Shard by design here - Spark Master
-                    VoidParameterServer.getInstance().sendMessageToAllShards(sim);
+                    // we're saving reference to original model
+                    originalModel = model;
 
+                    // if we're running in spark localhost mode - we don't want double initialization
+                    if (!ModelParameterServer.getInstance().isInitialized()) {
+                        log.info("Initializing transport [{}:{}] with root as [{}:{}]...", localIP, voidConfiguration.getPortSupplier().getPort(),
+                                voidConfiguration.getControllerAddress(), voidConfiguration.getUnicastControllerPort());
+                        // FIXME: implement support for Custom transport implementation
+
+                        val transport = voidConfiguration.getTransportType() == TransportType.ROUTED_UDP ? new AeronUdpTransport(localIP, voidConfiguration.getPortSupplier().getPort(),
+                                voidConfiguration.getControllerAddress(), voidConfiguration.getUnicastControllerPort(), voidConfiguration) :  null;
+
+                        if (transport == null)
+                            throw new DL4JInvalidConfigException(
+                                    "No Transport implementation was defined for this training session!");
+
+                        consumer = UpdatesConsumer.builder()
+                                .numWorkers(numWorkers)
+                                .accumulator(accumulator)
+                                .params(model.params())
+                                .build();
+
+                        accumulator.setExternalSource(consumer.getUpdatesQueue());
+
+                        log.debug("Configuring transport...");
+                        //  pass values right away
+                        ModelParameterServer.getInstance().configure(voidConfiguration, transport, new UpdaterParametersProvider() {
+                            @Override
+                            public INDArray getUpdaterParameters() {
+                                log.info("Serving updater parameters...");
+                                Updater updater = null;
+                                if (originalModel instanceof MultiLayerNetwork) {
+                                    updater = ((MultiLayerNetwork) originalModel).getUpdater();
+                                } else if (originalModel instanceof ComputationGraph) {
+                                    updater = ((ComputationGraph) originalModel).getUpdater();
+                                }
+
+                                if (updater != null) {
+                                    if (updater instanceof BaseMultiLayerUpdater) {
+                                        return ((BaseMultiLayerUpdater) updater).getStateViewArrayCopy();
+                                    } else {
+                                        log.error("Updater doesn't implement getStateViewArrayCopy()");
+                                        return null;
+                                    }
+                                } else {
+                                    log.warn("No Updater in the model");
+                                    return null;
+                                }
+                            };
+                        });
+
+                        ModelParameterServer.getInstance().addUpdatesSubscriber(consumer);
+                        ModelParameterServer.getInstance().addModelParamsSubscriber(modelParamsSupplier);
+                        ModelParameterServer.getInstance().addUpdaterParamsSubscriber(updateParamsSupplier);
+                    }
+
+                    log.debug("Starting ModelParameterServer...");
                     // after initialization finished, we're ok to actually start training
+                    ModelParameterServer.getInstance().launch();
+
+                    // waiting for introduction. probably no-op in 99.9999% cases
+                    while (!ModelParameterServer.getInstance().getTransport().isIntroduced()) {
+                        try {
+                            Thread.sleep(100);
+                        } catch (InterruptedException e) {
+                            throw new RuntimeException(e);
+                        }
+                    }
+                }
+
+                // propagate iteration/epoch numbers
+                if (originalModel instanceof MultiLayerNetwork) {
+                    ((MultiLayerNetwork) model).setIterationCount(ModelParameterServer.getInstance().getStartPosition().getFirst());
+                    ((MultiLayerNetwork) model).setEpochCount(ModelParameterServer.getInstance().getStartPosition().getSecond());
+                } else if (originalModel instanceof ComputationGraph) {
+                    ((ComputationGraph) model).getConfiguration().setIterationCount(ModelParameterServer.getInstance().getStartPosition().getFirst());
+                    ((ComputationGraph) model).getConfiguration().setEpochCount(ModelParameterServer.getInstance().getStartPosition().getSecond());
                 }
 
                 // if we're going to extend iteratation for debugging purposes - let's do that here
@@ -254,20 +390,38 @@ public class SharedTrainingWrapper {
                                     .timerIteration(trainingConfiguration.getDebugLongerIterations()).build());
                 }
 
+                // :)
+                accumulator.markExternalUpdates(true);
+
                 // we're launching PW only if number of workers is more then 1
                 if (numWorkers > 1) {
-                    log.info("Params at PW: {}", originalModel.params().meanNumber().doubleValue());
+                    //log.info("Params at PW:  {mean: [{}]; stdev: [{}]}", originalModel.params().meanNumber().doubleValue(), originalModel.params().stdNumber().doubleValue());
 
-                    wrapper = new ParallelWrapper.Builder<>(originalModel).workers(numWorkers)
+                    wrapper = new ParallelWrapper.Builder<>(originalModel)
+                                    .workers(numWorkers)
                                     .workspaceMode(trainingConfiguration.getWorkspaceMode())
-                                    .trainingMode(ParallelWrapper.TrainingMode.CUSTOM).gradientsAccumulator(accumulator)
-                                    .prefetchBuffer(trainingConfiguration.getPrefetchSize()).build();
+                                    .trainingMode(ParallelWrapper.TrainingMode.CUSTOM)
+                                    .gradientsAccumulator(accumulator)
+                                    .prefetchBuffer(trainingConfiguration.getPrefetchSize())
+                                    .modelParamsSupplier(modelParamsSupplier)
+                                    .updaterParamsSupplier(updateParamsSupplier)
+                                    .thresholdAlgorithm(trainingConfiguration.getThresholdAlgorithm())
+                                    .residualPostProcessor(trainingConfiguration.getResidualPostProcessor())
+                                    .build();
+                    wrapper.setExceptionEncountered(exceptionEncountered);
                 } else {
-                    log.info("Using standalone model instead...");
+                    log.debug("Using standalone model instead...");
 
                     // since there'll be only one consumer, we don't need complex sync logic anymore
                     accumulator.fallbackToSingleConsumerMode(true);
                     accumulator.touch();
+
+                    // checking if there were updated params received (i.e. if that's failover routine
+                    val mParams = modelParamsSupplier.get();
+                    if (mParams != null) {
+                        log.info("Updating model params to the most recent ones...");
+                        originalModel.params().assign(mParams);
+                    }
 
                     // ok. attaching accumulator to model
                     if (model instanceof ComputationGraph) {
@@ -285,32 +439,55 @@ public class SharedTrainingWrapper {
             // TODO: optionally we might be waiting until we have >1 splits delivered
 
 
-            driver.bypassMode(false);
+            if (consumer != null)
+                consumer.bypassMode(false);
 
             // now we're just calling for fit
-            if (wrapper != null) {
-                if (iteratorDS != null)
-                    wrapper.fit(iteratorDS);
-                else if (iteratorMDS != null)
-                    wrapper.fit(iteratorMDS);
-                else
-                    throw new DL4JInvalidConfigException("No iterators were defined for training");
-            } else {
-                // if wrapper is null, we're fitting standalone model then
-                if (iteratorDS != null) {
-                    if (model instanceof ComputationGraph) {
-                        ((ComputationGraph) originalModel).fit(iteratorDS);
-                    } else if (model instanceof MultiLayerNetwork) {
-                        ((MultiLayerNetwork) originalModel).fit(iteratorDS);
+            if(iteratorDS == null && iteratorMDS == null)
+                throw new DL4JInvalidConfigException("No iterators were defined for training");
+
+            try {
+                while((iteratorDS != null && iteratorDS.hasNext()) || (iteratorMDS != null && iteratorMDS.hasNext())) {
+                    //Loop as a guard against concurrent modifications and RCs
+
+                    if (wrapper != null) {
+                        if (iteratorDS != null)
+                            wrapper.fit(iteratorDS);
+                        else
+                            wrapper.fit(iteratorMDS);
+                    } else {
+                        // if wrapper is null, we're fitting standalone model then
+                        if (iteratorDS != null) {
+                            if (model instanceof ComputationGraph) {
+                                ((ComputationGraph) originalModel).fit(iteratorDS);
+                            } else if (model instanceof MultiLayerNetwork) {
+                                ((MultiLayerNetwork) originalModel).fit(iteratorDS);
+                            }
+                        } else {
+                            if (model instanceof ComputationGraph) {
+                                ((ComputationGraph) originalModel).fit(iteratorMDS);
+                            } else if (model instanceof MultiLayerNetwork) {
+                                ((MultiLayerNetwork) originalModel).fit(iteratorMDS);
+                            }
+                        }
                     }
-                } else if (iteratorMDS != null) {
-                    ((ComputationGraph) originalModel).fit(iteratorMDS);
-                } else
-                    throw new DL4JInvalidConfigException("No iterators were defined for training");
+
+                    consumer.getUpdatesQueue().purge();
+                }
+            } catch (Throwable t){
+                log.warn("Exception encountered during fit operation", t);
+                exceptionEncountered.set(true);
+                exception = t;
             }
 
 
             // conditionally shutdown & reset ParallelWrapper
+            EncodedGradientsAccumulator accum;
+            if(wrapper != null){
+                accum = (EncodedGradientsAccumulator) wrapper.getGradientsAccumulator();        //Store before possible shutdown for below
+            } else {
+                accum = accumulator;
+            }
             if (trainingConfiguration.isEpochReset()) {
                 wrapper.shutdown();
                 wrapper = null;
@@ -323,7 +500,8 @@ public class SharedTrainingWrapper {
             accumulator.reset();
 
             // current TrainingDriver won't be receiving any updates beyond this point
-            driver.bypassMode(true);
+            if (consumer != null)
+                consumer.bypassMode(true);
 
 
             isFirst.set(false);
@@ -337,20 +515,40 @@ public class SharedTrainingWrapper {
                 updaterState = ((MultiLayerNetwork) originalModel).getUpdater().getStateViewArray();
             }
 
+            //Get threshold algorithm instances from each thread, and average them - they may have state that needs
+            // to be averaged and persisted, to avoid starting threshold adaption from scratch
+            EncodingHandler mh = (EncodingHandler) accum.getHandler();
+            ThresholdAlgorithm taAveraged = mh.getAverageThresholdAlgorithm();
+
             // FIXME: fill stats here
             return SharedTrainingResult.builder().aggregationsCount(1).scoreSum(originalModel.score())
                             .updaterStateArray(updaterState).listenerMetaData(new ArrayList<>())
-                            .listenerStaticInfo(new ArrayList<>()).listenerUpdates(new ArrayList<>()).build();
+                            .listenerStaticInfo(new ArrayList<>()).listenerUpdates(new ArrayList<>())
+                            .minibatchesPerExecutor(Collections.singletonMap(SparkUtils.getSparkExecutorId(), iteratorDataSetCount.get().get()))
+                            .thresholdAlgorithm(taAveraged)
+                            .build();
         } else {
             // blocking call right here, all non-master threads will be blocked here
             try {
                 observer.get().waitTillDone();
                 //observer.get().wait();
 
-                log.info("Feeder thread done...");
+                log.info("Feeder [{}] thread done...", Thread.currentThread().getName());
 
-                //  nothing to do here, just give away empty result
-                return new SharedTrainingResult();
+                if(exceptionEncountered.get()){
+                    //Propagate exception
+                    Throwable t;
+                    if(wrapper == null || exception != null) {
+                        t = exception;
+                    } else {
+                        t = wrapper.getException();
+                    }
+
+                    throw new RuntimeException("Training failed due to exception in ParallelWrapper fit operation", t);
+                }
+
+                //  nothing to do here, just give away empty result (other than iterator count)
+                return SharedTrainingResult.builder().minibatchesPerExecutor(Collections.singletonMap(SparkUtils.getSparkExecutorId(), iteratorDataSetCount.get().get())).build();
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 // FIXME: we don't really need to throw it again, it's here only for debugging purposes

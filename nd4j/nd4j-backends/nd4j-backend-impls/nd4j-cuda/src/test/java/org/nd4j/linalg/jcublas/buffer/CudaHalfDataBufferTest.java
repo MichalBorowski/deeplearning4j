@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.linalg.jcublas.buffer;
 
 import org.junit.Before;
@@ -35,9 +51,9 @@ public class CudaHalfDataBufferTest {
     public void testConversion1() throws Exception {
         DataBuffer bufferOriginal = new CudaFloatDataBuffer(new float[]{1f, 2f, 3f, 4f, 5f});
 
-        DataBuffer bufferHalfs = Nd4j.getNDArrayFactory().convertDataEx(DataBuffer.TypeEx.FLOAT, bufferOriginal, DataBuffer.TypeEx.FLOAT16);
+        DataBuffer bufferHalfs = Nd4j.getNDArrayFactory().convertDataEx(DataTypeEx.FLOAT, bufferOriginal, DataTypeEx.FLOAT16);
 
-        DataBuffer bufferRestored = Nd4j.getNDArrayFactory().convertDataEx(DataBuffer.TypeEx.FLOAT16, bufferHalfs, DataBuffer.TypeEx.FLOAT);
+        DataBuffer bufferRestored = Nd4j.getNDArrayFactory().convertDataEx(DataTypeEx.FLOAT16, bufferHalfs, DataTypeEx.FLOAT);
 
 
         logger.info("Buffer original: {}", Arrays.toString(bufferOriginal.asFloat()));
@@ -50,7 +66,7 @@ public class CudaHalfDataBufferTest {
     public void testSerialization1() throws Exception {
         DataBuffer bufferOriginal = new CudaFloatDataBuffer(new float[]{1f, 2f, 3f, 4f, 5f});
 
-        DataBuffer bufferHalfs = Nd4j.getNDArrayFactory().convertDataEx(DataBuffer.TypeEx.FLOAT, bufferOriginal, DataBuffer.TypeEx.FLOAT16);
+        DataBuffer bufferHalfs = Nd4j.getNDArrayFactory().convertDataEx(DataTypeEx.FLOAT, bufferOriginal, DataTypeEx.FLOAT16);
 
         File tempFile = File.createTempFile("alpha", "11");
         tempFile.deleteOnExit();
@@ -73,9 +89,9 @@ public class CudaHalfDataBufferTest {
     public void testSerialization2() throws Exception {
         DataBuffer bufferOriginal = new CudaFloatDataBuffer(new float[]{1f, 2f, 3f, 4f, 5f});
 
-        DataBuffer bufferHalfs = Nd4j.getNDArrayFactory().convertDataEx(DataBuffer.TypeEx.FLOAT, bufferOriginal, DataBuffer.TypeEx.FLOAT16);
+        DataBuffer bufferHalfs = Nd4j.getNDArrayFactory().convertDataEx(DataTypeEx.FLOAT, bufferOriginal, DataTypeEx.FLOAT16);
 
-        DataTypeUtil.setDTypeForContext(DataBuffer.Type.HALF);
+        DataTypeUtil.setDTypeForContext(DataType.HALF);
 
         File tempFile = File.createTempFile("alpha", "11");
         tempFile.deleteOnExit();
@@ -91,11 +107,11 @@ public class CudaHalfDataBufferTest {
         DataBuffer bufferRestored = Nd4j.createBuffer(bufferOriginal.length());
         bufferRestored.read(dis);
 
-        assertEquals(bufferRestored.dataType(), DataBuffer.Type.HALF);
+        assertEquals(bufferRestored.dataType(), DataType.HALF);
 
-        DataTypeUtil.setDTypeForContext(DataBuffer.Type.FLOAT);
+        DataTypeUtil.setDTypeForContext(DataType.FLOAT);
 
-        DataBuffer bufferConverted = Nd4j.getNDArrayFactory().convertDataEx(DataBuffer.TypeEx.FLOAT16, bufferRestored, DataBuffer.TypeEx.FLOAT);
+        DataBuffer bufferConverted = Nd4j.getNDArrayFactory().convertDataEx(DataTypeEx.FLOAT16, bufferRestored, DataTypeEx.FLOAT);
 
         assertArrayEquals(bufferOriginal.asFloat(), bufferConverted.asFloat(), 0.01f);
     }

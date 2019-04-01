@@ -1,20 +1,19 @@
-/*-
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
  *
- *  * Copyright 2017 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
  *
- */
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.nn.modelimport.keras.config;
 
 import lombok.Data;
@@ -35,17 +34,14 @@ public class KerasLayerConfiguration {
     private final String LAYER_FIELD_CLASS_NAME = "class_name";
     private final String LAYER_FIELD_LAYER = "layer";
 
-    /* Basic layer names */
-    // Missing Layers: Lambda, ActivityRegularization, Masking
-    // Conv3DTranspose, SeparableConv1D, ConvRNN2D, ConvLSTM2D
-    // CuDNNGRU, CuDNNLSTM (TF only)
-    // LocallyConnected1D-2D
-    // Missing layers from keras 1: Highway, MaxoutDense
     private final String LAYER_CLASS_NAME_ACTIVATION = "Activation";
     private final String LAYER_CLASS_NAME_INPUT = "InputLayer";
     private final String LAYER_CLASS_NAME_PERMUTE = "Permute";
     private final String LAYER_CLASS_NAME_DROPOUT = "Dropout";
     private final String LAYER_CLASS_NAME_REPEAT = "RepeatVector";
+    private final String LAYER_CLASS_NAME_LAMBDA = "Lambda";
+    private final String LAYER_CLASS_NAME_MASKING = "Masking";
+
 
     private final String LAYER_CLASS_NAME_SPATIAL_DROPOUT_1D = "SpatialDropout1D";
     private final String LAYER_CLASS_NAME_SPATIAL_DROPOUT_2D = "SpatialDropout2D";
@@ -110,6 +106,8 @@ public class KerasLayerConfiguration {
     private final String LAYER_CLASS_NAME_CONVOLUTION_2D = ""; // 1: Convolution2D, 2: Conv2D
     private final String LAYER_CLASS_NAME_CONVOLUTION_3D = ""; // 1: Convolution2D, 2: Conv2D
     private final String LAYER_CLASS_NAME_LEAKY_RELU = "LeakyReLU";
+    private final String LAYER_CLASS_NAME_PRELU = "PReLU";
+    private final String LAYER_CLASS_NAME_THRESHOLDED_RELU = "ThresholdedReLU";
     private final String LAYER_CLASS_NAME_UPSAMPLING_1D = "UpSampling1D";
     private final String LAYER_CLASS_NAME_UPSAMPLING_2D = "UpSampling2D";
     private final String LAYER_CLASS_NAME_UPSAMPLING_3D = "UpSampling3D";
@@ -118,6 +116,11 @@ public class KerasLayerConfiguration {
     private final String LAYER_CLASS_NAME_SEPARABLE_CONVOLUTION_2D = ""; // 1: SeparableConvolution2D, 2: SeparableConv2D
     private final String LAYER_CLASS_NAME_DECONVOLUTION_2D = ""; // 1: Deconvolution2D, 2: Conv2DTranspose
     private final String LAYER_CLASS_NAME_DECONVOLUTION_3D = "Conv2DTranspose"; // Keras 2 only
+
+    // Locally connected layers
+    private final String LAYER_CLASS_NAME_LOCALLY_CONNECTED_2D = "LocallyConnected2D";
+    private final String LAYER_CLASS_NAME_LOCALLY_CONNECTED_1D = "LocallyConnected1D";
+
 
     /* Partially shared layer configurations. */
     private final String LAYER_FIELD_INPUT_SHAPE = "input_shape";
@@ -165,6 +168,10 @@ public class KerasLayerConfiguration {
     private final String LAYER_FIELD_EMBEDDINGS_CONSTRAINT = ""; // 1: W_constraint, 2: embeddings_constraint
     private final String LAYER_FIELD_MASK_ZERO = "mask_zero";
     private final String LAYER_FIELD_INPUT_LENGTH = "input_length";
+
+    /* Masking layer properties */
+    private final String LAYER_FIELD_MASK_VALUE = "mask_value";
+
 
     /* Keras separable convolution types */
     private final String LAYER_PARAM_NAME_DEPTH_WISE_KERNEL = "depthwise_kernel";
@@ -290,11 +297,17 @@ public class KerasLayerConfiguration {
     private final String INIT_TRUNCATED_NORMAL = "truncated_normal";
     private final String INIT_TRUNCATED_NORMAL_ALIAS = "TruncatedNormal";
     private final String INIT_GLOROT_NORMAL = "glorot_normal";
+    private final String INIT_GLOROT_NORMAL_ALIAS = "GlorotNormal";
     private final String INIT_GLOROT_UNIFORM = "glorot_uniform";
+    private final String INIT_GLOROT_UNIFORM_ALIAS = "GlorotUniform";
     private final String INIT_HE_NORMAL = "he_normal";
+    private final String INIT_HE_NORMAL_ALIAS = "HeNormal";
     private final String INIT_HE_UNIFORM = "he_uniform";
+    private final String INIT_HE_UNIFORM_ALIAS = "HeUniform";
     private final String INIT_LECUN_UNIFORM = "lecun_uniform";
+    private final String INIT_LECUN_UNIFORM_ALIAS = "LecunUniform";
     private final String INIT_LECUN_NORMAL = "lecun_normal";
+    private final String INIT_LECUN_NORMAL_ALIAS = "LecunNormal";
     private final String INIT_NORMAL = "normal";
     private final String INIT_RANDOM_NORMAL = "random_normal";
     private final String INIT_RANDOM_NORMAL_ALIAS = "RandomNormal";

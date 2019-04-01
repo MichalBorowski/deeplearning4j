@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.linalg.indexing;
 
 import com.google.common.primitives.Longs;
@@ -116,6 +132,15 @@ public class ShapeOffsetResolution implements Serializable {
             }
             //point or interval is possible
             if (arr.isRowVector()) {
+                //1D edge case
+                if(arr.rank() == 1 && indexes.length == 1 && indexes[0] instanceof IntervalIndex){
+                    offset = indexes[0].offset();
+                    this.shapes = new long[1];
+                    this.shapes[0] = indexes[0].length();
+                    this.strides = new long[]{arr.stride(0)};
+                    this.offsets = new long[1];
+                    return true;
+                }
                 if (indexes[0] instanceof PointIndex) {
                     if (indexes.length > 1 && indexes[1] instanceof IntervalIndex) {
                         offset = indexes[1].offset();
@@ -196,7 +221,7 @@ public class ShapeOffsetResolution implements Serializable {
             long[] shape = new long[minDimensions];
             Arrays.fill(shape, 1);
             long[] stride = new long[minDimensions];
-            Arrays.fill(stride, arr.elementStride());
+            Arrays.fill(stride, 1);
             long[] offsets = new long[minDimensions];
             long offset = 0;
             //used for filling in elements of the actual shape stride and offsets
@@ -244,7 +269,7 @@ public class ShapeOffsetResolution implements Serializable {
             long[] shape = new long[minDimensions];
             Arrays.fill(shape, 1);
             long[] stride = new long[minDimensions];
-            Arrays.fill(stride, arr.elementStride());
+            Arrays.fill(stride, 1);
             long[] offsets = new long[minDimensions];
 
             for (int i = 0; i < shape.length; i++) {
@@ -276,7 +301,7 @@ public class ShapeOffsetResolution implements Serializable {
             long[] shape = new long[minDimensions];
             Arrays.fill(shape, 1);
             long[] stride = new long[minDimensions];
-            Arrays.fill(stride, arr.elementStride());
+            Arrays.fill(stride, 1);
             long[] offsets = new long[minDimensions];
             int prependNewAxes = 0;
             boolean allFirst = false;
@@ -379,7 +404,7 @@ public class ShapeOffsetResolution implements Serializable {
                 if (i < arr.rank() && arr.size(i) == 1)
                     oneDimensionWithAllEncountered.add(i);
                 //different dimension from new axis (look for new axis dimensions
-                //at at the beginning. track when the last new axis is encountered.
+                //at the beginning. track when the last new axis is encountered.
                 if (newAxesPrepend > 0 && lastPrependIndex < 0) {
                     lastPrependIndex = i - 1;
                 }
@@ -393,7 +418,7 @@ public class ShapeOffsetResolution implements Serializable {
                 shapeIndex++;
                 strideIndex++;
                 //different dimension from new axis (look for new axis dimensions
-                //at at the beginning. track when the last new axis is encountered.
+                //at the beginning. track when the last new axis is encountered.
                 if (newAxesPrepend > 0 && lastPrependIndex < 0) {
                     lastPrependIndex = i - 1;
                 }
@@ -435,7 +460,7 @@ public class ShapeOffsetResolution implements Serializable {
                 strideIndex++;
 
                 //different dimension from new axis (look for new axis dimensions
-                //at at the beginning. track when the last new axis is encountered.
+                //at the beginning. track when the last new axis is encountered.
                 if (newAxesPrepend > 0 && lastPrependIndex < 0) {
                     lastPrependIndex = i - 1;
                 }
@@ -558,9 +583,9 @@ public class ShapeOffsetResolution implements Serializable {
         //finally fill in teh rest of the strides if any are left over
         while (accumStrides.size() < accumOffsets.size()) {
             if (!isColumnVector)
-                accumStrides.add(0, (long) arr.elementStride());
+                accumStrides.add(0, 1L);
             else
-                accumStrides.add((long) arr.elementStride());
+                accumStrides.add(1L);
         }
 
 
@@ -628,31 +653,6 @@ public class ShapeOffsetResolution implements Serializable {
         else
             this.offset += ArrayUtil.calcOffsetLong2(accumShape, accumOffsets, accumStrides)
                     / Math.max(1, numIntervals);
-
-
-        //collapse singular dimensions with specified index
-        List<Integer> removeShape = new ArrayList<>();
-        for (int i = 0; i < Math.min(this.shapes.length, indexes.length); i++) {
-            if (this.shapes[i] == 1 && indexes[i] instanceof SpecifiedIndex) {
-                removeShape.add(i);
-            }
-        }
-
-
-        if (!removeShape.isEmpty()) {
-            List<Long> newShape = new ArrayList<>();
-            List<Long> newStrides = new ArrayList<>();
-            for (int i = 0; i < this.shapes.length; i++) {
-                if (!removeShape.contains(i)) {
-                    newShape.add(this.shapes[i]);
-                    newStrides.add(this.strides[i]);
-                }
-            }
-
-            this.shapes = Longs.toArray(newShape);
-            this.strides = Longs.toArray(newStrides);
-        }
-
     }
 
     public void resolveFixedDimensionsCOO(INDArrayIndex... indexes) {

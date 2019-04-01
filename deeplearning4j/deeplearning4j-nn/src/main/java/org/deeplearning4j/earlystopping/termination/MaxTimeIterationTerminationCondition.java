@@ -1,27 +1,29 @@
-/*-
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
  *
- *  * Copyright 2015 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
  *
- */
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.deeplearning4j.earlystopping.termination;
+
+import lombok.Data;
+import org.nd4j.shade.jackson.annotation.JsonProperty;
 
 import java.util.concurrent.TimeUnit;
 
 /**Terminate training based on max time.
  */
+@Data
 public class MaxTimeIterationTerminationCondition implements IterationTerminationCondition {
 
     private long maxTimeAmount;
@@ -29,7 +31,7 @@ public class MaxTimeIterationTerminationCondition implements IterationTerminatio
     private long initializationTime;
     private long endTime;
 
-    public MaxTimeIterationTerminationCondition(long maxTimeAmount, TimeUnit maxTimeUnit) {
+    public MaxTimeIterationTerminationCondition(@JsonProperty("maxTimeAmount") long maxTimeAmount, @JsonProperty("maxTimeUnit") TimeUnit maxTimeUnit) {
         if (maxTimeAmount <= 0 || maxTimeUnit == null)
             throw new IllegalArgumentException(
                             "Invalid maximum training time: " + "amount = " + maxTimeAmount + " unit = " + maxTimeUnit);

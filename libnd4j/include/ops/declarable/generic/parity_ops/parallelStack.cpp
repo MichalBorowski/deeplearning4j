@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 //
 // @author Yurii Shyrma (iuriish@yahoo.com), created on 01.11.2017
 //
@@ -13,15 +29,14 @@ namespace ops  {
 
 
 CUSTOM_OP_IMPL(parallel_stack, -1, 1, false, 0, 0) {
-	
-	NDArray<T>* input  = INPUT_VARIABLE(0);
-	NDArray<T>* output = OUTPUT_VARIABLE(0);
+	auto input  = INPUT_VARIABLE(0);
+	auto output = OUTPUT_VARIABLE(0);
 	
 	// check whether shapes of all input array are the same				
 	for (int i = 0; i < (int) block.width() - 1; ++i)
 		REQUIRE_TRUE(shape::equalsSoft((INPUT_VARIABLE(i))->getShapeInfo(), (INPUT_VARIABLE(i+1))->getShapeInfo()), 0, "PARALLEL_STACK op: the shapes of all input arrays must be the same !");
  	 	
- 	std::vector<NDArray<T>*> inArrs(block.width());
+ 	std::vector<NDArray*> inArrs(block.width());
  	for(int i = 0; i < block.width(); ++i)
 		inArrs[i] = INPUT_VARIABLE(i);
 	
@@ -31,6 +46,11 @@ CUSTOM_OP_IMPL(parallel_stack, -1, 1, false, 0, 0) {
   	return Status::OK();
 }
 
+	DECLARE_TYPES(parallel_stack) {
+		getOpDescriptor()
+				->setAllowedInputTypes(nd4j::DataType::ANY)
+				->setAllowedOutputTypes({ALL_FLOATS});
+	}
 
 DECLARE_SHAPE_FN(parallel_stack) {
 	
@@ -45,7 +65,7 @@ DECLARE_SHAPE_FN(parallel_stack) {
 	for(int i = 1; i <= rank; ++i)
 		outShapeInfo[i+1] = inShapeInfo[i];
 	
-	shape::updateStrides(outShapeInfo, shape::order(inShapeInfo));
+	ShapeUtils::updateStridesAndType(outShapeInfo, inShapeInfo, shape::order(inShapeInfo));
   	
   	return SHAPELIST(outShapeInfo);
 }

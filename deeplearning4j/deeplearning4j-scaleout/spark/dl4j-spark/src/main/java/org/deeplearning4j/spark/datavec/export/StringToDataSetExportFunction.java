@@ -1,18 +1,18 @@
-/*-
- *  * Copyright 2016 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
- */
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.deeplearning4j.spark.datavec.export;
 
@@ -21,11 +21,14 @@ import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.function.VoidFunction;
+import org.apache.spark.broadcast.Broadcast;
 import org.datavec.api.io.converters.SelfWritableConverter;
 import org.datavec.api.records.reader.RecordReader;
 import org.datavec.api.records.reader.impl.collection.CollectionRecordReader;
 import org.datavec.api.split.StringSplit;
 import org.datavec.api.writable.Writable;
+import org.datavec.spark.util.DefaultHadoopConfig;
+import org.datavec.spark.util.SerializableHadoopConfig;
 import org.deeplearning4j.datasets.datavec.RecordReaderDataSetIterator;
 import org.deeplearning4j.util.UIDProvider;
 import org.nd4j.linalg.dataset.DataSet;
@@ -43,7 +46,7 @@ import java.util.List;
  */
 public class StringToDataSetExportFunction implements VoidFunction<Iterator<String>> {
 
-    private static final Configuration conf = new Configuration();
+    private final Broadcast<SerializableHadoopConfig> conf;
 
     private final URI outputDir;
     private final RecordReader recordReader;
@@ -57,12 +60,18 @@ public class StringToDataSetExportFunction implements VoidFunction<Iterator<Stri
 
     public StringToDataSetExportFunction(URI outputDir, RecordReader recordReader, int batchSize, boolean regression,
                     int labelIndex, int numPossibleLabels) {
+        this(outputDir, recordReader, batchSize, regression, labelIndex, numPossibleLabels, null);
+    }
+
+    public StringToDataSetExportFunction(URI outputDir, RecordReader recordReader, int batchSize, boolean regression,
+                                         int labelIndex, int numPossibleLabels, Broadcast<SerializableHadoopConfig> configuration) {
         this.outputDir = outputDir;
         this.recordReader = recordReader;
         this.batchSize = batchSize;
         this.regression = regression;
         this.labelIndex = labelIndex;
         this.numPossibleLabels = numPossibleLabels;
+        this.conf = configuration;
     }
 
     @Override
@@ -95,7 +104,8 @@ public class StringToDataSetExportFunction implements VoidFunction<Iterator<Stri
         String filename = "dataset_" + uid + "_" + (outputCount++) + ".bin";
 
         URI uri = new URI(outputDir.getPath() + "/" + filename);
-        FileSystem file = FileSystem.get(uri, conf);
+        Configuration c = conf == null ? DefaultHadoopConfig.get() : conf.getValue().getConfiguration();
+        FileSystem file = FileSystem.get(uri, c);
         try (FSDataOutputStream out = file.create(new Path(uri))) {
             ds.save(out);
         }

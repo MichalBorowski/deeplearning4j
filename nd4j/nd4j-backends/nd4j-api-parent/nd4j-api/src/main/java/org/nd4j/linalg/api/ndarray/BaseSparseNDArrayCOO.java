@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.linalg.api.ndarray;
 
 import com.google.common.primitives.Doubles;
@@ -7,7 +23,9 @@ import com.google.flatbuffers.FlatBufferBuilder;
 import net.ericaro.neoitertools.Generator;
 import org.nd4j.linalg.api.blas.params.MMulTranspose;
 import org.nd4j.linalg.api.buffer.DataBuffer;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.ops.executioner.OpExecutioner;
+import org.nd4j.linalg.api.shape.LongShapeDescriptor;
 import org.nd4j.linalg.api.shape.Shape;
 import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.indexing.*;
@@ -46,7 +64,7 @@ public class BaseSparseNDArrayCOO extends BaseSparseNDArray {
 
         this.values = values;
         this.indices = indices;
-        setShapeInformation(Nd4j.getShapeInfoProvider().createShapeInformation(shape));
+        setShapeInformation(Nd4j.getShapeInfoProvider().createShapeInformation(shape, Nd4j.dataType()));
         init(shape);
         this.length = values.length();
         int[] flags = new int[rank()];
@@ -62,7 +80,7 @@ public class BaseSparseNDArrayCOO extends BaseSparseNDArray {
         this.values = createValueBuffer(values);
         length = values.length;
 
-        setShapeInformation(Nd4j.getShapeInfoProvider().createShapeInformation(shape));
+        setShapeInformation(Nd4j.getShapeInfoProvider().createShapeInformation(shape, Nd4j.dataType()));
         init(shape);
         this.sparseInformation = createSparseInformationBuffer(rank());
         checkBufferCoherence();
@@ -73,7 +91,7 @@ public class BaseSparseNDArrayCOO extends BaseSparseNDArray {
         this.values = createValueBuffer(values);
         length = values.length;
 
-        setShapeInformation(Nd4j.getShapeInfoProvider().createShapeInformation(shape));
+        setShapeInformation(Nd4j.getShapeInfoProvider().createShapeInformation(shape, Nd4j.dataType()));
         init(shape);
         this.sparseInformation = createSparseInformationBuffer(rank());
         checkBufferCoherence();
@@ -84,7 +102,7 @@ public class BaseSparseNDArrayCOO extends BaseSparseNDArray {
         this.values = createValueBuffer(values);
         length = values.length;
 
-        setShapeInformation(Nd4j.getShapeInfoProvider().createShapeInformation(shape));
+        setShapeInformation(Nd4j.getShapeInfoProvider().createShapeInformation(shape, Nd4j.dataType()));
         init(shape);
         this.sparseInformation = createSparseInformationBuffer(rank());
         checkBufferCoherence();
@@ -95,7 +113,7 @@ public class BaseSparseNDArrayCOO extends BaseSparseNDArray {
         this.values = createValueBuffer(values);
         length = values.length;
 
-        setShapeInformation(Nd4j.getShapeInfoProvider().createShapeInformation(shape));
+        setShapeInformation(Nd4j.getShapeInfoProvider().createShapeInformation(shape, Nd4j.dataType()));
         init(shape);
         this.sparseInformation = createSparseInformationBuffer(rank());
         checkBufferCoherence();
@@ -105,7 +123,7 @@ public class BaseSparseNDArrayCOO extends BaseSparseNDArray {
     public BaseSparseNDArrayCOO(DataBuffer values, DataBuffer indices, DataBuffer sparseInformation, long[] shape) {
         this.values = Nd4j.createBuffer(values, 0, values.length());
         this.indices = indices;
-        setShapeInformation(Nd4j.getShapeInfoProvider().createShapeInformation(shape));
+        setShapeInformation(Nd4j.getShapeInfoProvider().createShapeInformation(shape, Nd4j.dataType()));
         init(shape);
         this.sparseInformation = sparseInformation;
         this.length = countNNZ();
@@ -220,10 +238,6 @@ public class BaseSparseNDArrayCOO extends BaseSparseNDArray {
         throw new UnsupportedOperationException();
     }
 
-    @Override
-    public INDArray convertToHalfs() {
-        return null;
-    }
 
 
     /**
@@ -723,6 +737,11 @@ public class BaseSparseNDArrayCOO extends BaseSparseNDArray {
     }
 
     @Override
+    public long getLong(long index) {
+        return 0;
+    }
+
+    @Override
     public double getDouble(int... indices) {
         int valIdx = reverseIndexes(indices);
         if (valIdx == -1) {
@@ -785,8 +804,18 @@ public class BaseSparseNDArrayCOO extends BaseSparseNDArray {
     }
 
     @Override
+    public INDArray reshape(char order, boolean enforceView, long... newShape) {
+        return null;
+    }
+
+    @Override
     public INDArray reshape(int[] shape) {
         return null;
+    }
+
+    @Override
+    public LongShapeDescriptor shapeDescriptor() {
+        throw new UnsupportedOperationException();
     }
 
     public SparseFormat getFormat() {
@@ -1171,6 +1200,11 @@ public class BaseSparseNDArrayCOO extends BaseSparseNDArray {
         return Shape.offset(shapeInformation) > 0 || data().originalDataBuffer() != null; // TODO or if sparseOffset/flags != [0, ..,0]
     }
 
+    @Override
+    public String getStringUnsafe(long index) {
+        return null;
+    }
+
 
     public int getNumHiddenDimension() {
         if (hiddenDimensions() == null || hiddenDimensions().length == 0) {
@@ -1239,16 +1273,6 @@ public class BaseSparseNDArrayCOO extends BaseSparseNDArray {
 
     }
 
-    @Override
-    public INDArray convertToFloats() {
-        return null;
-    }
-
-    @Override
-    public INDArray convertToDoubles() {
-        return null;
-    }
-
     /**
      * This method returns true if this INDArray is special case: no-value INDArray
      *
@@ -1256,6 +1280,56 @@ public class BaseSparseNDArrayCOO extends BaseSparseNDArray {
      */
     @Override
     public boolean isEmpty() {
+        return false;
+    }
+
+    @Override
+    public boolean isR() {
+        return false;
+    }
+
+    @Override
+    public boolean isZ() {
+        return false;
+    }
+
+    @Override
+    public boolean isB() {
+        return false;
+    }
+
+    @Override
+    public INDArray castTo(DataType dataType) {
+        return null;
+    }
+
+    @Override
+    public boolean all() {
+        return false;
+    }
+
+    @Override
+    public boolean any() {
+        return false;
+    }
+
+    @Override
+    public boolean none() {
+        return false;
+    }
+
+    @Override
+    public boolean closeable() {
+        return false;
+    }
+
+    @Override
+    public void close() {
+
+    }
+
+    @Override
+    public boolean isS() {
         return false;
     }
 }

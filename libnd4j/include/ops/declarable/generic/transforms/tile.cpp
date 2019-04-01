@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 //
 // @author raver119@gmail.com
 // @author Yurii Shyrma (iuriish@yahoo.com)
@@ -14,8 +30,8 @@ namespace ops {
 
 CUSTOM_OP_IMPL(tile, 1, 1, false, 0, -2) {
     
-    NDArray<T>* input  = INPUT_VARIABLE(0);
-    NDArray<T>* output = OUTPUT_VARIABLE(0);    
+    auto input  = INPUT_VARIABLE(0);
+    auto output = OUTPUT_VARIABLE(0);
     
     const int inRank = input->rankOf();
     std::vector<Nd4jLong> reps;
@@ -26,7 +42,7 @@ CUSTOM_OP_IMPL(tile, 1, 1, false, 0, -2) {
     } 
     else if (block.width() > 1)  {
         
-        NDArray<T>* reps_vector = INPUT_VARIABLE(1);
+        auto reps_vector = INPUT_VARIABLE(1);
         REQUIRE_TRUE(reps_vector->lengthOf() == inRank, 0, "TILE op: repeats vector length should be equal to input rank, but got %i and %i correspondingly !", reps_vector->lengthOf(), inRank);
 
         reps = reps_vector->template asVectorT<Nd4jLong>();
@@ -39,6 +55,12 @@ CUSTOM_OP_IMPL(tile, 1, 1, false, 0, -2) {
 
     return Status::OK();
 }
+
+    DECLARE_TYPES(tile) {
+        getOpDescriptor()->setAllowedInputTypes(0, {ALL_FLOATS})
+                ->setAllowedInputTypes(1, {ALL_INTS})
+                ->setAllowedOutputTypes({ALL_FLOATS});
+    }
 
 
 DECLARE_SHAPE_FN(tile) {
@@ -53,7 +75,7 @@ DECLARE_SHAPE_FN(tile) {
     } 
     else if (block.width() > 1)  {
         
-        NDArray<T>* reps_vector = INPUT_VARIABLE(1);
+        auto reps_vector = INPUT_VARIABLE(1);
         REQUIRE_TRUE(reps_vector->lengthOf() == inRank, 0, "TILE op: repeats vector length should be equal to input rank, but got %i and %i correspondingly !", reps_vector->lengthOf(), inRank);
         reps = reps_vector->template asVectorT<Nd4jLong>();
     }
@@ -69,20 +91,22 @@ DECLARE_SHAPE_FN(tile) {
         shape[e] = shape::sizeAt(inShape, e) * reps[e];
 
     if (shape::order(inShape) == 'c')
-        shape::shapeBuffer(shape.size(), shape.data(), newShape);
+        shape::shapeBuffer(shape.size(), block.dataType(), shape.data(), newShape);
     else
-        shape::shapeBufferFortran(shape.size(), shape.data(), newShape);
-       
+        shape::shapeBufferFortran(shape.size(), block.dataType(), shape.data(), newShape);
+
+    ArrayOptions::copyDataType(newShape, inShape);
+
     return SHAPELIST(newShape);
 }
 
 
 ////////////////////////////////////////////////////////////////////////
-CUSTOM_OP_IMPL(tile_bp, 1, 1, false, 0, -2) {
+CUSTOM_OP_IMPL(tile_bp, 2, 1, false, 0, -2) {
     
-    NDArray<T>* input = INPUT_VARIABLE(0);
-    NDArray<T>* gradO = INPUT_VARIABLE(1);
-    NDArray<T>* gradI = OUTPUT_VARIABLE(0);    
+    auto input = INPUT_VARIABLE(0);
+    auto gradO = INPUT_VARIABLE(1);
+    auto gradI = OUTPUT_VARIABLE(0);
     
     const int inRank = input->rankOf();
 
@@ -94,12 +118,13 @@ CUSTOM_OP_IMPL(tile_bp, 1, 1, false, 0, -2) {
 
         reps = ArrayUtils::toLongVector(*(block.getIArguments()));        
     } 
-    else if (block.width() > 1)  {
+    else if (block.width() > 2)  {
         
-        NDArray<T>* reps_vector = INPUT_VARIABLE(1);
+        auto reps_vector = INPUT_VARIABLE(1);
         REQUIRE_TRUE(reps_vector->lengthOf() == inRank, 0, "TILE_BP op: repeats vector length should be equal to input rank, but got %i and %i correspondingly !", reps_vector->lengthOf(), inRank);
 
         reps = reps_vector->template asVectorT<Nd4jLong>();
+        gradO = INPUT_VARIABLE(2);
     }
     else {
         REQUIRE_TRUE(false, 0, "TILE_BP op: this op requires repeats vector, either as IArgs or second array with length equal to rank of input array to be tiled !");
@@ -108,10 +133,18 @@ CUSTOM_OP_IMPL(tile_bp, 1, 1, false, 0, -2) {
     for (int i = 0; i < inRank; ++i)
         REQUIRE_TRUE(gradO->sizeAt(i) == gradI->sizeAt(i) * reps[i], 0, "TILE_BP op: shapes of input array and output's gradients array (next epsilon) are inconsistent !");
             
-    helpers::tileBP<T>(*gradO, *gradI, reps);
+    helpers::tileBP(*gradO, *gradI, reps);
 
     return Status::OK();
 }
+
+        DECLARE_TYPES(tile_bp) {
+            getOpDescriptor()->setAllowedInputTypes(0, {ALL_FLOATS});
+            getOpDescriptor()->setAllowedInputTypes(1, {ALL_INTS, ALL_FLOATS});
+            getOpDescriptor()->setAllowedInputTypes(2, {ALL_FLOATS});
+
+            getOpDescriptor()->setAllowedOutputTypes({ALL_FLOATS});
+        }
 
 DECLARE_SHAPE_FN(tile_bp) {
     
@@ -129,7 +162,7 @@ DECLARE_SHAPE_FN(tile_bp) {
     } 
     else if (block.width() > 1)  {
         
-        NDArray<T>* reps_vector = INPUT_VARIABLE(1);
+        auto reps_vector = INPUT_VARIABLE(1);
         REQUIRE_TRUE(reps_vector->lengthOf() == inRank, 0, "TILE_BP op: repeats vector length should be equal to input rank, but got %i and %i correspondingly !", reps_vector->lengthOf(), inRank);
         reps = reps_vector->template asVectorT<Nd4jLong>();
     }

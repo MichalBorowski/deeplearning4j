@@ -1,20 +1,18 @@
-/*-
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
  *
- *  * Copyright 2015 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
  *
- */
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.deeplearning4j.datasets.fetchers;
 
@@ -64,6 +62,9 @@ public class MnistDataFetcher extends BaseDataFetcher {
     protected boolean oneIndexed = false;
     protected boolean fOrder = false; //MNIST is C order, EMNIST is F order
 
+    protected boolean firstShuffle = true;
+    protected final int numExamples;
+
 
     /**
      * Constructor telling whether to binarize the dataset or not
@@ -71,10 +72,10 @@ public class MnistDataFetcher extends BaseDataFetcher {
      * @throws IOException
      */
     public MnistDataFetcher(boolean binarize) throws IOException {
-        this(binarize, true, true, System.currentTimeMillis());
+        this(binarize, true, true, System.currentTimeMillis(), NUM_EXAMPLES);
     }
 
-    public MnistDataFetcher(boolean binarize, boolean train, boolean shuffle, long rngSeed) throws IOException {
+    public MnistDataFetcher(boolean binarize, boolean train, boolean shuffle, long rngSeed, int numExamples) throws IOException {
         if (!mnistExists()) {
             new MnistFetcher().downloadAndUntar();
         }
@@ -123,6 +124,7 @@ public class MnistDataFetcher extends BaseDataFetcher {
         for (int i = 0; i < order.length; i++)
             order[i] = i;
         rng = new Random(rngSeed);
+        this.numExamples = numExamples;
         reset(); //Shuffle order
     }
 
@@ -190,9 +192,7 @@ public class MnistDataFetcher extends BaseDataFetcher {
                 for (int j = 0; j < 28 * 28; j++) {
                     working[j] = img[28 * (j % 28) + j / 28];
                 }
-                byte[] temp = img;
                 img = working;
-                working = temp;
             }
 
             int label = man.readLabel(order[cursor]);
@@ -236,8 +236,19 @@ public class MnistDataFetcher extends BaseDataFetcher {
     public void reset() {
         cursor = 0;
         curr = null;
-        if (shuffle)
-            MathUtils.shuffleArray(order, rng);
+        if (shuffle) {
+            if((train && numExamples < NUM_EXAMPLES) || (!train && numExamples < NUM_EXAMPLES_TEST)){
+                //Shuffle only first N elements
+                if(firstShuffle){
+                    MathUtils.shuffleArray(order, rng);
+                    firstShuffle = false;
+                } else {
+                    MathUtils.shuffleArraySubset(order, numExamples, rng);
+                }
+            } else {
+                MathUtils.shuffleArray(order, rng);
+            }
+        }
     }
 
     @Override

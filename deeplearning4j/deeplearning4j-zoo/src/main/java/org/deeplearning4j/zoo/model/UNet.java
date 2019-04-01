@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.zoo.model;
 
 import lombok.AllArgsConstructor;
@@ -24,9 +40,12 @@ import org.nd4j.linalg.lossfunctions.LossFunctions;
 /**
  * U-Net
  *
- * An implementation of U-Net, a deep learning network for image segmentation in Deeplearning4j. The u-net is convolutional network architecture for fast and precise segmentation of images. Up to now it has outperformed the prior best method (a sliding-window convolutional network) on the ISBI challenge for segmentation of neuronal structures in electron microscopic stacks.
+ * An implementation of U-Net, a deep learning network for image segmentation in Deeplearning4j.
+ * The u-net is convolutional network architecture for fast and precise segmentation of images.
+ * Up to now it has outperformed the prior best method (a sliding-window convolutional network) on the ISBI challenge for
+ * segmentation of neuronal structures in electron microscopic stacks.
  *
- * <p>Paper: https://arxiv.org/abs/1505.04597</p>
+ * <p>Paper: <a href="https://arxiv.org/abs/1505.04597">https://arxiv.org/abs/1505.04597</a></p>
  * <p>Weights are available for image segmentation trained on a synthetic dataset</p>
  *
  * @author Justin Long (crockpotveggies)
@@ -87,7 +106,6 @@ public class UNet extends ZooModel {
                 .optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT)
                 .updater(updater)
                 .weightInit(weightInit)
-                .dist(new TruncatedNormalDistribution(0.0, 0.5))
                 .l2(5e-5)
                 .miniBatch(true)
                 .cacheMode(cacheMode)
@@ -185,7 +203,7 @@ public class UNet extends ZooModel {
                 .addLayer("up9-1", new Upsampling2D.Builder(2).build(), "conv8-2")
                 .addLayer("up9-2", new ConvolutionLayer.Builder(2,2).stride(1,1).nOut(64)
                         .convolutionMode(ConvolutionMode.Same).cudnnAlgoMode(cudnnAlgoMode)
-                        .activation(Activation.RELU).build(), "up8-1")
+                        .activation(Activation.RELU).build(), "up9-1")
                 .addVertex("merge9", new MergeVertex(), "conv1-2", "up9-2")
                 .addLayer("conv9-1", new ConvolutionLayer.Builder(3,3).stride(1,1).nOut(64)
                         .convolutionMode(ConvolutionMode.Same).cudnnAlgoMode(cudnnAlgoMode)
@@ -198,11 +216,12 @@ public class UNet extends ZooModel {
                         .activation(Activation.RELU).build(), "conv9-2")
 
                 .addLayer("conv10", new ConvolutionLayer.Builder(3,3).stride(1,1).nOut(1)
-                        .convolutionMode(ConvolutionMode.Truncate).cudnnAlgoMode(cudnnAlgoMode)
-                        .activation(Activation.SIGMOID).build(), "conv9-3")
-                .addLayer("output", new CnnLossLayer.Builder(LossFunctions.LossFunction.MCXENT).build(), "conv10")
+                        .convolutionMode(ConvolutionMode.Same).cudnnAlgoMode(cudnnAlgoMode)
+                        .activation(Activation.IDENTITY).build(), "conv9-3")
+                .addLayer("output", new CnnLossLayer.Builder(LossFunctions.LossFunction.XENT)
+                        .activation(Activation.SIGMOID).build(), "conv10")
 
-                .setOutputs("output").backprop(true).pretrain(false);
+                .setOutputs("output");
 
         return graph;
     }

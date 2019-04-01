@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.jita.memory.impl;
 
 import org.bytedeco.javacpp.Pointer;
@@ -9,6 +25,9 @@ import org.nd4j.jita.allocator.pointers.CudaPointer;
 import org.nd4j.jita.allocator.pointers.PointersPair;
 import org.nd4j.jita.allocator.utils.AllocationUtils;
 import org.nd4j.jita.memory.MemoryProvider;
+import org.nd4j.linalg.api.memory.AllocationsTracker;
+import org.nd4j.linalg.api.memory.enums.AllocationKind;
+import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.nativeblas.NativeOps;
 import org.nd4j.nativeblas.NativeOpsHolder;
 import org.slf4j.Logger;
@@ -84,6 +103,7 @@ public class CudaDirectProvider implements MemoryProvider {
                 //                    throw new RuntimeException("Device allocation happened");
 
 
+                AllocationsTracker.getInstance().markAllocated(AllocationKind.GENERAL, deviceId, reqMem);
                 Pointer pointer = nativeOps.mallocDevice(reqMem, null, 0);
                 //log.info("Device [{}] allocation, Thread id: {}, ReqMem: {}, Pointer: {}", AtomicAllocator.getInstance().getDeviceId(), Thread.currentThread().getId(), reqMem, pointer != null ? pointer.address() : null);
 
@@ -143,6 +163,7 @@ public class CudaDirectProvider implements MemoryProvider {
                 //       log.info("Deallocating {} bytes on [DEVICE]", reqMem);
 
                 NativeOps nativeOps = NativeOpsHolder.getInstance().getDeviceNativeOps();
+                AllocationsTracker.getInstance().markReleased(AllocationKind.GENERAL, point.getDeviceId(), reqMem);
 
                 long result = nativeOps.freeDevice(point.getPointers().getDevicePointer(), new CudaPointer(0));
                 if (result == 0)

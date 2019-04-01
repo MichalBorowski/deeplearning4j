@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.nn.layers;
 
 import org.deeplearning4j.BaseDL4JTest;
@@ -20,6 +36,7 @@ import org.nd4j.linalg.activations.Activation;
 import org.nd4j.linalg.activations.impl.ActivationELU;
 import org.nd4j.linalg.activations.impl.ActivationRationalTanh;
 import org.nd4j.linalg.activations.impl.ActivationSoftmax;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.dataset.DataSet;
 import org.nd4j.linalg.dataset.api.iterator.DataSetIterator;
@@ -34,6 +51,11 @@ import static org.junit.Assert.*;
  */
 
 public class ActivationLayerTest extends BaseDL4JTest {
+
+    @Override
+    public DataType getDataType(){
+        return DataType.FLOAT;
+    }
 
     @Test
     public void testInputTypes() {
@@ -65,7 +87,7 @@ public class ActivationLayerTest extends BaseDL4JTest {
                         .layer(1, new org.deeplearning4j.nn.conf.layers.OutputLayer.Builder(
                                         LossFunctions.LossFunction.MCXENT).weightInit(WeightInit.XAVIER)
                                                         .activation(Activation.SOFTMAX).nIn(10).nOut(10).build())
-                        .backprop(true).pretrain(false).build();
+                        .build();
 
         MultiLayerNetwork network = new MultiLayerNetwork(conf);
         network.init();
@@ -83,7 +105,7 @@ public class ActivationLayerTest extends BaseDL4JTest {
                         .layer(2, new OutputLayer.Builder(LossFunctions.LossFunction.MCXENT)
                                         .weightInit(WeightInit.XAVIER).activation(Activation.SOFTMAX).nIn(10).nOut(10)
                                         .build())
-                        .backprop(true).pretrain(false).build();
+                        .build();
 
         MultiLayerNetwork network2 = new MultiLayerNetwork(conf2);
         network2.init();
@@ -97,11 +119,11 @@ public class ActivationLayerTest extends BaseDL4JTest {
 
         // check activations
         network.init();
-        network.setInput(next.getFeatureMatrix());
+        network.setInput(next.getFeatures());
         List<INDArray> activations = network.feedForward(true);
 
         network2.init();
-        network2.setInput(next.getFeatureMatrix());
+        network2.setInput(next.getFeatures());
         List<INDArray> activations2 = network2.feedForward(true);
 
         assertEquals(activations.get(1).reshape(activations2.get(2).shape()), activations2.get(2));
@@ -135,7 +157,7 @@ public class ActivationLayerTest extends BaseDL4JTest {
                                         LossFunctions.LossFunction.RECONSTRUCTION_CROSSENTROPY)
                                                         .activation(Activation.SOFTMAX).nIn(layerSize).nOut(nOut)
                                                         .build())
-                        .backprop(true).pretrain(false).build();
+                        .build();
 
         MultiLayerNetwork network = new MultiLayerNetwork(conf);
         network.init();
@@ -155,7 +177,7 @@ public class ActivationLayerTest extends BaseDL4JTest {
                                         LossFunctions.LossFunction.RECONSTRUCTION_CROSSENTROPY)
                                                         .activation(Activation.SOFTMAX).nIn(layerSize).nOut(nOut)
                                                         .build())
-                        .backprop(true).pretrain(false).build();
+                        .build();
 
         MultiLayerNetwork network2 = new MultiLayerNetwork(conf2);
         network2.init();
@@ -196,7 +218,7 @@ public class ActivationLayerTest extends BaseDL4JTest {
                         .layer(1, new org.deeplearning4j.nn.conf.layers.OutputLayer.Builder(
                                         LossFunctions.LossFunction.MCXENT).weightInit(WeightInit.XAVIER)
                                                         .activation(Activation.SOFTMAX).nOut(10).build())
-                        .backprop(true).pretrain(false).setInputType(InputType.convolutionalFlat(28, 28, 1)).build();
+                        .setInputType(InputType.convolutionalFlat(28, 28, 1)).build();
 
         MultiLayerNetwork network = new MultiLayerNetwork(conf);
         network.init();
@@ -216,7 +238,7 @@ public class ActivationLayerTest extends BaseDL4JTest {
                                         .layer(2, new OutputLayer.Builder(LossFunctions.LossFunction.MCXENT)
                                                         .weightInit(WeightInit.XAVIER).activation(Activation.SOFTMAX)
                                                         .nOut(10).build())
-                                        .backprop(true).pretrain(false)
+
                                         .setInputType(InputType.convolutionalFlat(28, 28, 1)).build();
 
         MultiLayerNetwork network2 = new MultiLayerNetwork(conf2);
@@ -230,11 +252,11 @@ public class ActivationLayerTest extends BaseDL4JTest {
 
         // check activations
         network.init();
-        network.setInput(next.getFeatureMatrix());
+        network.setInput(next.getFeatures());
         List<INDArray> activations = network.feedForward(true);
 
         network2.init();
-        network2.setInput(next.getFeatureMatrix());
+        network2.setInput(next.getFeatures());
         List<INDArray> activations2 = network2.feedForward(true);
 
         assertEquals(activations.get(1).reshape(activations2.get(2).shape()), activations2.get(2));

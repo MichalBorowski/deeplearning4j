@@ -1,20 +1,19 @@
-/*-
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
  *
- *  * Copyright 2017 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
  *
- */
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.nn.modelimport.keras.layers.core;
 
 
@@ -100,20 +99,13 @@ public class KerasPermute extends KerasLayer {
         if (inputType[0] instanceof InputType.InputTypeConvolutional) {
             switch (this.getDimOrder()) {
                 case THEANO:
-                    if (Arrays.equals(permutationIndices, new int[]{1, 3, 2})) // channels first, swapping H and W.
-                        preprocessor = new PermutePreprocessor(permutationIndices);
-                    else
-                        throw new InvalidKerasConfigurationException("Attempting to permute dimensions other than" +
-                                "spatial dimensions (height and width), got " + Arrays.toString(permutationIndices));
+                    preprocessor = new PermutePreprocessor(permutationIndices);
                     break;
                 case NONE: // TF by default
                 case TENSORFLOW:
-                    if (Arrays.equals(permutationIndices, new int[]{2, 1, 3})) // channels last, swapping H and W
-                        preprocessor = new PermutePreprocessor(new int[]{1, 3, 2}); // DL4J is channels first
-                    else
-                        throw new InvalidKerasConfigurationException("Attempting to permute dimensions other than" +
-                                "spatial dimensions (height and width) in Permute layer, got "
-                                + Arrays.toString(permutationIndices));
+                    // account for channels last
+                    permutationIndices = new int[] {permutationIndices[2], permutationIndices[0], permutationIndices[1]};
+                    preprocessor = new PermutePreprocessor(new int[]{1, 3, 2});
             }
         } else if (inputType[0] instanceof InputType.InputTypeRecurrent) {
             if (Arrays.equals(permutationIndices, new int[] {2, 1}))

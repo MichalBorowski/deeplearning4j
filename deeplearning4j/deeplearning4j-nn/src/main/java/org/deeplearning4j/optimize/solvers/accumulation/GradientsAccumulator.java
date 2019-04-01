@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.optimize.solvers.accumulation;
 
 import org.deeplearning4j.optimize.api.StepFunction;
@@ -16,7 +32,10 @@ public interface GradientsAccumulator extends Serializable {
      *
      * @param source
      */
-    void setExternalSource(Queue<INDArray> source);
+    void setExternalSource(IndexedTail source);
+
+
+    IndexedTail getExternalSource();
 
     /**
      * This method applies accumulated updates via given StepFunction
@@ -24,7 +43,7 @@ public interface GradientsAccumulator extends Serializable {
      * @param function
      * @param params
      */
-    void applyUpdate(StepFunction function, INDArray params, INDArray updates);
+    void applyUpdate(StepFunction function, INDArray params, INDArray updates, boolean isFinalStep);
 
     /**
      * This method applies accumulated updates via given StepFunction
@@ -39,7 +58,7 @@ public interface GradientsAccumulator extends Serializable {
      *
      * @param array
      */
-    void storeUpdate(INDArray array);
+    void storeUpdate(INDArray array, int iterationNumber, int epochNumber);
 
     /**
      * This method accepts updates suitable for StepFunction and puts them to the queue, which is used in backpropagation loop
@@ -51,6 +70,13 @@ public interface GradientsAccumulator extends Serializable {
     void receiveUpdate(INDArray array);
 
     /**
+     * This method allows to highlight early availability of updates
+     *
+     * @param updatesAvailable
+     */
+    void markExternalUpdates(boolean updatesAvailable);
+
+    /**
      * This method resets all accumulated updates (if any)
      */
     void reset();
@@ -59,4 +85,10 @@ public interface GradientsAccumulator extends Serializable {
      * This method does initialization of given worker wrt Thread-Device Affinity
      */
     void touch();
+
+    /**
+     * This method checks if there are any (probably external) updates available
+     * @return
+     */
+    boolean hasAnything();
 }

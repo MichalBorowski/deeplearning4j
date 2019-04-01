@@ -1,9 +1,28 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.linalg.api.ops.impl.shape;
 
 import org.nd4j.autodiff.samediff.SDVariable;
 import org.nd4j.autodiff.samediff.SameDiff;
+import org.nd4j.base.Preconditions;
 import org.nd4j.imports.NoOpNameFoundException;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.ops.DynamicCustomOp;
+import org.nd4j.linalg.api.shape.LongShapeDescriptor;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -30,27 +49,25 @@ import java.util.List;
  * @author Max Pumperla
  */
 public class Eye extends DynamicCustomOp {
+    public static final DataType DEFAULT_DTYPE = DataType.FLOAT;
 
     private int numRows;
     private int numCols;
-    private boolean isVariableInput = false;
     private int[] batchDimension = new int[] {};
+    private DataType dataType = DEFAULT_DTYPE;
 
     public Eye() {
     }
 
     public Eye(SameDiff sameDiff, SDVariable numRows){
         super(null, sameDiff, new SDVariable[] {numRows}, false);
-        isVariableInput = true;
     }
 
     public Eye(SameDiff sameDiff, SDVariable numRows, SDVariable numCols){
         super(null, sameDiff, new SDVariable[] {numRows, numCols}, false);
-        isVariableInput = true;
     }
     public Eye(SameDiff sameDiff, SDVariable numRows, SDVariable numCols, SDVariable batch_shape){
         super(null, sameDiff, new SDVariable[] {numRows, numCols, batch_shape}, false);
-        isVariableInput = true;
     }
     public Eye(SameDiff sameDiff,  int numRows) {
         super(null, sameDiff, new SDVariable[] {}, false);
@@ -60,35 +77,24 @@ public class Eye extends DynamicCustomOp {
     }
 
     public Eye(SameDiff sameDiff,  int numRows, int numCols) {
+        this(sameDiff, numRows, numCols, DEFAULT_DTYPE);
+    }
+
+    public Eye(SameDiff sameDiff,  int numRows, int numCols, DataType dataType) {
         super(null, sameDiff, new SDVariable[] {}, false);
         this.numRows = numRows;
         this.numCols = numCols;
+        this.dataType = dataType;
         addArgs();
     }
 
-    public Eye(SameDiff sameDiff,  int numRows, int numCols, int[] batchDimension) {
+    public Eye(SameDiff sameDiff,  int numRows, int numCols, DataType dataType, int[] batchDimension) {
         super(null, sameDiff, new SDVariable[] {}, false);
         this.numRows = numRows;
         this.numCols = numCols;
         this.batchDimension = batchDimension;
+        this.dataType = dataType;
         addArgs();
-    }
-
-    @Override
-    public List<long[]> calculateOutputShape(){
-        if(isVariableInput){
-            return super.calculateOutputShape();
-        }
-        long[] outputShape = new long[2 + batchDimension.length];
-        int i;
-        for(i = 0; i < batchDimension.length; i++){
-            outputShape[i] = batchDimension[i];
-        }
-        outputShape[i++] = numRows;
-        outputShape[i] = numCols;
-        List<long[]> ret = new ArrayList<>();
-        ret.add(outputShape);
-        return ret;
     }
 
     protected void addArgs() {
@@ -118,8 +124,26 @@ public class Eye extends DynamicCustomOp {
     }
 
     @Override
+    public List<LongShapeDescriptor> calculateOutputShape(){
+        List<LongShapeDescriptor> l = super.calculateOutputShape();
+        if(dataType != null && l != null && l.size() > 0){
+            l.set(0, l.get(0).asDataType(dataType));
+        }
+        return l;
+    }
+
+    @Override
     public List<SDVariable> doDiff(List<SDVariable> outGrad){
-        return Collections.singletonList(sameDiff.onesLike(arg()));
+        if(arg() != null){
+            return Collections.singletonList(sameDiff.onesLike(arg()));
+        } else {
+            return Collections.emptyList();
+        }
+    }
+
+    @Override
+    public List<DataType> calculateOutputDataTypes(List<DataType> dataTypes){
+        return Collections.singletonList(dataType == null ? DEFAULT_DTYPE : dataType);
     }
 
 }

@@ -1,10 +1,28 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.clustering.lsh;
 
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.ndarray.INDArray;
-import org.nd4j.linalg.api.ops.impl.broadcast.BroadcastEqualTo;
+import org.nd4j.linalg.api.ops.impl.broadcast.bool.BroadcastEqualTo;
 import org.nd4j.linalg.factory.Nd4j;
 
 import java.util.Random;
@@ -74,7 +92,7 @@ public class RandomProjectionLSHTest {
     @Test
     public void testRawBucketOfReflexive(){
         rpLSH.makeIndex(inputs);
-        int idx = (new Random()).nextInt(100);
+        int idx = (new Random(12345)).nextInt(100);
         INDArray row = inputs.getRow(idx);
         assertEquals(1.0f, rpLSH.rawBucketOf(row).maxNumber().floatValue(), 1e-3f);
     }
@@ -88,7 +106,7 @@ public class RandomProjectionLSHTest {
     @Test
     public void testBucketReflexive(){
         rpLSH.makeIndex(inputs);
-        int idx = (new Random()).nextInt(100);
+        int idx = (new Random(12345)).nextInt(100);
         INDArray row = inputs.getRow(idx);
         assertEquals(1.0f, rpLSH.bucket(row).maxNumber().floatValue(), 1e-3f);
     }
@@ -97,7 +115,7 @@ public class RandomProjectionLSHTest {
     @Test
     public void testBucketDataReflexiveDimensions() {
         rpLSH.makeIndex(inputs);
-        int idx = (new Random()).nextInt(100);
+        int idx = (new Random(12345)).nextInt(100);
         INDArray row = inputs.getRow(idx);
         INDArray bucketData = rpLSH.bucketData(row);
 
@@ -108,12 +126,13 @@ public class RandomProjectionLSHTest {
     @Test
     public void testBucketDataReflexive(){
         rpLSH.makeIndex(inputs);
-        int idx = (new Random()).nextInt(100);
+        int idx = (new Random(12345)).nextInt(100);
         INDArray row = inputs.getRow(idx);
         INDArray bucketData =  rpLSH.bucketData(row);
 
-        INDArray res = Nd4j.zeros(bucketData.shape());
+        INDArray res = Nd4j.zeros(DataType.BOOL, bucketData.shape());
         Nd4j.getExecutioner().exec(new BroadcastEqualTo(bucketData, row, res, -1));
+        res = res.castTo(DataType.FLOAT);
 
         assertEquals(
                 String.format("Expected one bucket content to be the query %s, but found %s", row, rpLSH.bucket(row)),
@@ -124,7 +143,7 @@ public class RandomProjectionLSHTest {
     @Test
     public void testSearchReflexiveDimensions() {
         rpLSH.makeIndex(inputs);
-        int idx = (new Random()).nextInt(100);
+        int idx = (new Random(12345)).nextInt(100);
         INDArray row = inputs.getRow(idx);
         INDArray searchResults = rpLSH.search(row, 10.0f);
 
@@ -137,14 +156,15 @@ public class RandomProjectionLSHTest {
     @Test
     public void testSearchReflexive() {
         rpLSH.makeIndex(inputs);
-        int idx = (new Random()).nextInt(100);
+        int idx = (new Random(12345)).nextInt(100);
         INDArray row = inputs.getRow(idx);
 
         INDArray searchResults = rpLSH.search(row, 10.0f);
 
 
-        INDArray res = Nd4j.zeros(searchResults.shape());
+        INDArray res = Nd4j.zeros(DataType.BOOL, searchResults.shape());
         Nd4j.getExecutioner().exec(new BroadcastEqualTo(searchResults, row, res, -1));
+        res = res.castTo(DataType.FLOAT);
 
         assertEquals(
                 String.format("Expected one search result to be the query %s, but found %s", row, searchResults),
@@ -156,7 +176,7 @@ public class RandomProjectionLSHTest {
     @Test
     public void testANNSearchReflexiveDimensions() {
         rpLSH.makeIndex(inputs);
-        int idx = (new Random()).nextInt(100);
+        int idx = (new Random(12345)).nextInt(100);
         INDArray row = inputs.getRow(idx);
         INDArray searchResults = rpLSH.search(row, 100);
 
@@ -169,14 +189,15 @@ public class RandomProjectionLSHTest {
     @Test
     public void testANNSearchReflexive() {
         rpLSH.makeIndex(inputs);
-        int idx = (new Random()).nextInt(100);
+        int idx = (new Random(12345)).nextInt(100);
         INDArray row = inputs.getRow(idx);
 
         INDArray searchResults = rpLSH.search(row, 100);
 
 
-        INDArray res = Nd4j.zeros(searchResults.shape());
+        INDArray res = Nd4j.zeros(DataType.BOOL, searchResults.shape());
         Nd4j.getExecutioner().exec(new BroadcastEqualTo(searchResults, row, res, -1));
+        res = res.castTo(DataType.FLOAT);
 
         assertEquals(
                 String.format("Expected one search result to be the query %s, but found %s", row, searchResults),

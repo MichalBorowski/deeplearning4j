@@ -1,25 +1,25 @@
-/*-
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
  *
- *  * Copyright 2015 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
  *
- */
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.deeplearning4j.clustering.vptree;
 
 import org.deeplearning4j.clustering.sptree.DataPoint;
+import org.junit.BeforeClass;
 import org.junit.Test;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.exception.ND4JIllegalStateException;
 import org.nd4j.linalg.factory.Nd4j;
@@ -47,6 +47,11 @@ public class VpTreeNodeTest {
         public int compareTo(DistIndex r) {
             return Double.compare(dist, r.dist);
         }
+    }
+
+    @BeforeClass
+    public static void beforeClass(){
+        Nd4j.setDataType(DataType.FLOAT);
     }
 
     @Test
@@ -202,7 +207,7 @@ public class VpTreeNodeTest {
     }
 
     public static INDArray generateNaturalsMatrix(int nrows, int ncols) {
-        INDArray col = Nd4j.arange(0, nrows).transpose();
+        INDArray col = Nd4j.arange(0, nrows).reshape(nrows, 1).castTo(DataType.FLOAT);
         INDArray points = Nd4j.zeros(nrows, ncols);
         if (points.isColumnVectorOrScalar())
             points = col.dup();
@@ -227,11 +232,11 @@ public class VpTreeNodeTest {
         final int queryPoint = 12;
 
         INDArray points = generateNaturalsMatrix(nrows, ncols);
-        INDArray query = Nd4j.zeros(1, ncols);
+        INDArray query = Nd4j.zeros(DataType.FLOAT, 1, ncols);
         for (int i = 0; i < ncols; i++)
             query.putScalar(0, i, queryPoint);
 
-        INDArray trueResults = Nd4j.zeros(K, ncols);
+        INDArray trueResults = Nd4j.zeros(DataType.FLOAT, K, ncols);
         for (int j = 0; j < K; j++) {
             int pt = queryPoint - K / 2 + j;
             for (int i = 0; i < ncols; i++)
@@ -245,7 +250,7 @@ public class VpTreeNodeTest {
         tree.search(query, K, results, distances);
         int dimensionToSort = 0;
 
-        INDArray sortedResults = Nd4j.zeros(K, ncols);
+        INDArray sortedResults = Nd4j.zeros(DataType.FLOAT, K, ncols);
         int i = 0;
         for (DataPoint p : results) {
             sortedResults.putRow(i++, p.getPoint());
@@ -257,7 +262,7 @@ public class VpTreeNodeTest {
         VPTreeFillSearch fillSearch = new VPTreeFillSearch(tree, K, query);
         fillSearch.search();
         results = fillSearch.getResults();
-        sortedResults = Nd4j.zeros(K, ncols);
+        sortedResults = Nd4j.zeros(DataType.FLOAT, K, ncols);
         i = 0;
         for (DataPoint p : results)
             sortedResults.putRow(i++, p.getPoint());

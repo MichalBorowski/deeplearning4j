@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 //
 // @author raver119@gmail.com
 //
@@ -16,7 +32,7 @@ namespace nd4j {
             //new NDArray<T>('c', {100, 100});
 
             STORE_RESULT(*z);
-            return ND4J_STATUS_OK;
+            return Status::OK();
         }
         DECLARE_SHAPE_FN(testcustom) {
             // this test op will just return back original shape doubled
@@ -30,11 +46,17 @@ namespace nd4j {
                 shapeOf[e] = inputShape->at(0)[e+1] * 2;
 
 
-            shape::shapeBuffer(shape::rank(inputShape->at(0)), shapeOf, newShape);
+            shape::shapeBuffer(shape::rank(inputShape->at(0)), block.dataType(), shapeOf, newShape);
 
             RELEASE(shapeOf, block.getWorkspace());
 
             return SHAPELIST(newShape);
+        }
+
+        DECLARE_TYPES(testcustom) {
+            getOpDescriptor()
+                    ->setAllowedInputTypes(nd4j::DataType::ANY)
+                    ->setSameMode(true);
         }
     }
 }

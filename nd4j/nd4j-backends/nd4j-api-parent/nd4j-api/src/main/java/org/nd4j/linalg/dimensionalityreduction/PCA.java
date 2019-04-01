@@ -1,24 +1,22 @@
-/*-
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
  *
- *  * Copyright 2015 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
  *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
  *
- */
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.nd4j.linalg.dimensionalityreduction;
 
+import org.nd4j.base.Preconditions;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.eigen.Eigen;
 import org.nd4j.linalg.factory.Nd4j;
@@ -184,8 +182,8 @@ public class PCA {
         long n = A.columns();
 
         // The prepare SVD results, we'll decomp A to UxSxV'
-        INDArray s = Nd4j.create(m < n ? m : n);
-        INDArray VT = Nd4j.create(n, n, 'f');
+        INDArray s = Nd4j.create(A.dataType(), m < n ? m : n);
+        INDArray VT = Nd4j.create(A.dataType(), new long[]{n, n}, 'f');
 
         // Note - we don't care about U 
         Nd4j.getBlasWrapper().lapack().gesvd(A, s, null, VT);
@@ -195,7 +193,7 @@ public class PCA {
         // So now let's rip out the appropriate number of left singular vectors from
         // the V output (note we pulls rows since VT is a transpose of V)
         INDArray V = VT.transpose();
-        INDArray factor = Nd4j.create(n, nDims, 'f');
+        INDArray factor = Nd4j.create(A.dataType(),new long[]{n, nDims}, 'f');
         for (int i = 0; i < nDims; i++) {
             factor.putColumn(i, V.getColumn(i));
         }
@@ -251,8 +249,8 @@ public class PCA {
         long n = A.columns();
 
         // The prepare SVD results, we'll decomp A to UxSxV'
-        INDArray s = Nd4j.create(m < n ? m : n);
-        INDArray VT = Nd4j.create(n, n, 'f');
+        INDArray s = Nd4j.create(A.dataType(), m < n ? m : n);
+        INDArray VT = Nd4j.create(A.dataType(), new long[]{n, n}, 'f');
 
         // Note - we don't care about U 
         Nd4j.getBlasWrapper().lapack().gesvd(A, s, null, VT);
@@ -280,7 +278,7 @@ public class PCA {
         // So now let's rip out the appropriate number of left singular vectors from
         // the V output (note we pulls rows since VT is a transpose of V)
         INDArray V = VT.transpose();
-        INDArray factor = Nd4j.create(n, k, 'f');
+        INDArray factor = Nd4j.createUninitialized(A.dataType(), new long[]{n, k}, 'f');
         for (int i = 0; i < k; i++) {
             factor.putColumn(i, V.getColumn(i));
         }
@@ -333,11 +331,8 @@ public class PCA {
         long dlength = in.rows();
         long vlength = in.columns();
 
-        INDArray sum = Nd4j.create(vlength);
         INDArray product = Nd4j.create(vlength, vlength);
-
-        for (int i = 0; i < vlength; i++)
-            sum.getColumn(i).assign(in.getColumn(i).sumNumber().doubleValue() / dlength);
+        INDArray sum = in.sum(0).divi(dlength);
 
         for (int i = 0; i < dlength; i++) {
             INDArray dx1 = in.getRow(i).sub(sum);
@@ -357,7 +352,7 @@ public class PCA {
      *      the columns of element 0 and the eigenvalues are element 1.
      */
     public static INDArray[] principalComponents(INDArray cov) {
-        assert cov.rows() == cov.columns();
+        Preconditions.checkArgument(cov.isMatrix() && cov.isSquare(), "Convariance matrix must be a square matrix: has shape %s", cov.shape());
         INDArray[] result = new INDArray[2];
         result[0] = Nd4j.eye(cov.rows());
         result[1] = Eigen.symmetricGeneralizedEigenvalues(result[0], cov, true);

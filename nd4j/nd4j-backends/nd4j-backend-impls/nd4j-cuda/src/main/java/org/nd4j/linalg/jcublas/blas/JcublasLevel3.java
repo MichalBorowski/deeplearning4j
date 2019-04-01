@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.linalg.jcublas.blas;
 
 
@@ -11,11 +27,8 @@ import org.nd4j.jita.allocator.pointers.cuda.cublasHandle_t;
 import org.nd4j.jita.conf.CudaEnvironment;
 import org.nd4j.linalg.api.blas.impl.BaseLevel3;
 import org.nd4j.linalg.api.buffer.DataBuffer;
-import org.nd4j.linalg.api.complex.IComplexDouble;
-import org.nd4j.linalg.api.complex.IComplexFloat;
-import org.nd4j.linalg.api.complex.IComplexNDArray;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.ndarray.INDArray;
-import org.nd4j.linalg.api.ops.executioner.GridExecutioner;
 import org.nd4j.linalg.api.ops.executioner.OpExecutionerUtil;
 import org.nd4j.linalg.factory.DataTypeValidation;
 import org.nd4j.linalg.factory.Nd4j;
@@ -27,8 +40,10 @@ import org.nd4j.nativeblas.Nd4jBlas;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import static org.bytedeco.javacpp.cublas.*;
-import static org.bytedeco.javacpp.cuda.*;
+import org.bytedeco.cuda.cudart.*;
+import org.bytedeco.cuda.cublas.*;
+import static org.bytedeco.cuda.global.cudart.*;
+import static org.bytedeco.cuda.global.cublas.*;
 import static org.nd4j.linalg.jcublas.blas.CudaBlas.*;
 
 /**
@@ -93,7 +108,7 @@ public class JcublasLevel3 extends BaseLevel3 {
                     INDArray B, int ldb, float beta, INDArray C, int ldc) {
         //A = Shape.toOffsetZero(A);
         //B = Shape.toOffsetZero(B);
-        if (Nd4j.dataType() != DataBuffer.Type.FLOAT)
+        if (Nd4j.dataType() != DataType.FLOAT)
             logger.warn("FLOAT gemm called");
 
         Nd4j.getExecutioner().push();
@@ -121,7 +136,7 @@ public class JcublasLevel3 extends BaseLevel3 {
     @Override
     protected void ssymm(char Order, char Side, char Uplo, int M, int N, float alpha, INDArray A, int lda, INDArray B,
                     int ldb, float beta, INDArray C, int ldc) {
-        if (Nd4j.dataType() != DataBuffer.Type.FLOAT)
+        if (Nd4j.dataType() != DataType.FLOAT)
             logger.warn("FLOAT symm called");
 
         Nd4j.getExecutioner().push();
@@ -150,7 +165,7 @@ public class JcublasLevel3 extends BaseLevel3 {
     protected void ssyrk(char Order, char Uplo, char Trans, int N, int K, float alpha, INDArray A, int lda, float beta,
                     INDArray C, int ldc) {
 
-        if (Nd4j.dataType() != DataBuffer.Type.FLOAT)
+        if (Nd4j.dataType() != DataType.FLOAT)
             logger.warn("FLOAT syrk called");
 
         Nd4j.getExecutioner().push();
@@ -189,7 +204,7 @@ public class JcublasLevel3 extends BaseLevel3 {
     @Override
     protected void strsm(char Order, char Side, char Uplo, char TransA, char Diag, int M, int N, float alpha,
                     INDArray A, int lda, INDArray B, int ldb) {
-        if (Nd4j.dataType() != DataBuffer.Type.FLOAT)
+        if (Nd4j.dataType() != DataType.FLOAT)
             logger.warn("FLOAT trsm called");
 
         Nd4j.getExecutioner().push();
@@ -218,7 +233,7 @@ public class JcublasLevel3 extends BaseLevel3 {
                     INDArray B, int ldb, double beta, INDArray C, int ldc) {
         //A = Shape.toOffsetZero(A);
         //B = Shape.toOffsetZero(B);
-        if (Nd4j.dataType() != DataBuffer.Type.DOUBLE)
+        if (Nd4j.dataType() != DataType.DOUBLE)
             logger.warn("DOUBLE gemm called");
 
         Nd4j.getExecutioner().push();
@@ -248,7 +263,7 @@ public class JcublasLevel3 extends BaseLevel3 {
     @Override
     protected void dsymm(char Order, char Side, char Uplo, int M, int N, double alpha, INDArray A, int lda, INDArray B,
                     int ldb, double beta, INDArray C, int ldc) {
-        if (Nd4j.dataType() != DataBuffer.Type.DOUBLE)
+        if (Nd4j.dataType() != DataType.DOUBLE)
             logger.warn("DOUBLE symm called");
 
         Nd4j.getExecutioner().push();
@@ -276,7 +291,7 @@ public class JcublasLevel3 extends BaseLevel3 {
     @Override
     protected void dsyrk(char Order, char Uplo, char Trans, int N, int K, double alpha, INDArray A, int lda,
                     double beta, INDArray C, int ldc) {
-        if (Nd4j.dataType() != DataBuffer.Type.DOUBLE)
+        if (Nd4j.dataType() != DataType.DOUBLE)
             logger.warn("DOUBLE syrk called");
 
         Nd4j.getExecutioner().push();
@@ -302,7 +317,7 @@ public class JcublasLevel3 extends BaseLevel3 {
     @Override
     protected void dsyr2k(char Order, char Uplo, char Trans, int N, int K, double alpha, INDArray A, int lda,
                     INDArray B, int ldb, double beta, INDArray C, int ldc) {
-        if (Nd4j.dataType() != DataBuffer.Type.DOUBLE)
+        if (Nd4j.dataType() != DataType.DOUBLE)
             logger.warn("DOUBLE syr2k called");
 
         Nd4j.getExecutioner().push();
@@ -330,7 +345,7 @@ public class JcublasLevel3 extends BaseLevel3 {
     @Override
     protected void dtrmm(char Order, char Side, char Uplo, char TransA, char Diag, int M, int N, double alpha,
                     INDArray A, int lda, INDArray B, int ldb) {
-        if (Nd4j.dataType() != DataBuffer.Type.DOUBLE)
+        if (Nd4j.dataType() != DataType.DOUBLE)
             logger.warn("DOUBLE trmm called");
 
         Nd4j.getExecutioner().push();
@@ -358,7 +373,7 @@ public class JcublasLevel3 extends BaseLevel3 {
     @Override
     protected void dtrsm(char Order, char Side, char Uplo, char TransA, char Diag, int M, int N, double alpha,
                     INDArray A, int lda, INDArray B, int ldb) {
-        if (Nd4j.dataType() != DataBuffer.Type.DOUBLE)
+        if (Nd4j.dataType() != DataType.DOUBLE)
             logger.warn("DOUBLE trsm called");
 
         Nd4j.getExecutioner().push();
@@ -380,137 +395,5 @@ public class JcublasLevel3 extends BaseLevel3 {
 
         allocator.registerAction(ctx, B, A);
         OpExecutionerUtil.checkForAny(B);
-    }
-
-    @Override
-    protected void cgemm(char Order, char TransA, char TransB, int M, int N, int K, IComplexFloat alpha,
-                    IComplexNDArray A, int lda, IComplexNDArray B, int ldb, IComplexFloat beta, IComplexNDArray C,
-                    int ldc) {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    protected void csymm(char Order, char Side, char Uplo, int M, int N, IComplexFloat alpha, IComplexNDArray A,
-                    int lda, IComplexNDArray B, int ldb, IComplexFloat beta, IComplexNDArray C, int ldc) {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    protected void csyrk(char Order, char Uplo, char Trans, int N, int K, IComplexFloat alpha, IComplexNDArray A,
-                    int lda, IComplexFloat beta, IComplexNDArray C, int ldc) {
-        throw new UnsupportedOperationException();
-
-    }
-
-    @Override
-    protected void csyr2k(char Order, char Uplo, char Trans, int N, int K, IComplexFloat alpha, IComplexNDArray A,
-                    int lda, IComplexNDArray B, int ldb, IComplexFloat beta, IComplexNDArray C, int ldc) {
-        throw new UnsupportedOperationException();
-
-    }
-
-    @Override
-    protected void ctrmm(char Order, char Side, char Uplo, char TransA, char Diag, int M, int N, IComplexFloat alpha,
-                    IComplexNDArray A, int lda, IComplexNDArray B, int ldb, IComplexNDArray C, int ldc) {
-        throw new UnsupportedOperationException();
-
-    }
-
-    @Override
-    protected void ctrsm(char Order, char Side, char Uplo, char TransA, char Diag, int M, int N, IComplexFloat alpha,
-                    IComplexNDArray A, int lda, IComplexNDArray B, int ldb) {
-
-    }
-
-    @Override
-    protected void zgemm(char Order, char TransA, char TransB, int M, int N, int K, IComplexDouble alpha,
-                    IComplexNDArray A, int lda, IComplexNDArray B, int ldb, IComplexDouble beta, IComplexNDArray C,
-                    int ldc) {
-        throw new UnsupportedOperationException();
-
-    }
-
-    @Override
-    protected void zsymm(char Order, char Side, char Uplo, int M, int N, IComplexDouble alpha, IComplexNDArray A,
-                    int lda, IComplexNDArray B, int ldb, IComplexDouble beta, IComplexNDArray C, int ldc) {
-        throw new UnsupportedOperationException();
-
-    }
-
-    @Override
-    protected void zsyrk(char Order, char Uplo, char Trans, int N, int K, IComplexDouble alpha, IComplexNDArray A,
-                    int lda, IComplexDouble beta, IComplexNDArray C, int ldc) {
-        throw new UnsupportedOperationException();
-
-
-    }
-
-    @Override
-    protected void zsyr2k(char Order, char Uplo, char Trans, int N, int K, IComplexDouble alpha, IComplexNDArray A,
-                    int lda, IComplexNDArray B, int ldb, IComplexDouble beta, IComplexNDArray C, int ldc) {
-        throw new UnsupportedOperationException();
-
-    }
-
-    @Override
-    protected void ztrmm(char Order, char Side, char Uplo, char TransA, char Diag, int M, int N, IComplexDouble alpha,
-                    IComplexNDArray A, int lda, IComplexNDArray B, int ldb, IComplexNDArray C, int ldc) {
-        throw new UnsupportedOperationException();
-
-
-    }
-
-    @Override
-    protected void ztrsm(char Order, char Side, char Uplo, char TransA, char Diag, int M, int N, IComplexDouble alpha,
-                    IComplexNDArray A, int lda, IComplexNDArray B, int ldb) {
-        throw new UnsupportedOperationException();
-
-    }
-
-    @Override
-    protected void chemm(char Order, char Side, char Uplo, int M, int N, IComplexFloat alpha, IComplexNDArray A,
-                    int lda, IComplexNDArray B, int ldb, IComplexFloat beta, IComplexNDArray C, int ldc) {
-        throw new UnsupportedOperationException();
-
-    }
-
-    @Override
-    protected void cherk(char Order, char Uplo, char Trans, int N, int K, IComplexFloat alpha, IComplexNDArray A,
-                    int lda, IComplexFloat beta, IComplexNDArray C, int ldc) {
-        throw new UnsupportedOperationException();
-
-
-    }
-
-    @Override
-    protected void cher2k(char Order, char Uplo, char Trans, int N, int K, IComplexFloat alpha, IComplexNDArray A,
-                    int lda, IComplexNDArray B, int ldb, IComplexFloat beta, IComplexNDArray C, int ldc) {
-        throw new UnsupportedOperationException();
-
-
-
-    }
-
-    @Override
-    protected void zhemm(char Order, char Side, char Uplo, int M, int N, IComplexDouble alpha, IComplexNDArray A,
-                    int lda, IComplexNDArray B, int ldb, IComplexDouble beta, IComplexNDArray C, int ldc) {
-        throw new UnsupportedOperationException();
-
-
-    }
-
-    @Override
-    protected void zherk(char Order, char Uplo, char Trans, int N, int K, IComplexDouble alpha, IComplexNDArray A,
-                    int lda, IComplexDouble beta, IComplexNDArray C, int ldc) {
-        throw new UnsupportedOperationException();
-
-    }
-
-    @Override
-    protected void zher2k(char Order, char Uplo, char Trans, int N, int K, IComplexDouble alpha, IComplexNDArray A,
-                    int lda, IComplexNDArray B, int ldb, IComplexDouble beta, IComplexNDArray C, int ldc) {
-        throw new UnsupportedOperationException();
-
-
     }
 }

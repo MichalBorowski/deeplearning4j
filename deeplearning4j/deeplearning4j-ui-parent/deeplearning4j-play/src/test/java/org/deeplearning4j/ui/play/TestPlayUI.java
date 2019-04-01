@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.ui.play;
 
 import org.deeplearning4j.api.storage.StatsStorage;
@@ -17,6 +33,7 @@ import org.deeplearning4j.optimize.listeners.ScoreIterationListener;
 import org.deeplearning4j.ui.api.UIServer;
 import org.deeplearning4j.ui.stats.StatsListener;
 import org.deeplearning4j.ui.storage.InMemoryStatsStorage;
+import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
 import org.nd4j.linalg.activations.Activation;
@@ -25,12 +42,18 @@ import org.nd4j.linalg.learning.config.Sgd;
 import org.nd4j.linalg.lossfunctions.LossFunctions;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 /**
  * Created by Alex on 08/10/2016.
  */
 @Ignore
 public class TestPlayUI {
+    @Before
+    public void setUp() throws Exception {
+        UIServer.stopInstance();
+    }
 
     @Test
     @Ignore
@@ -55,7 +78,7 @@ public class TestPlayUI {
         //                .list()
         //                .layer(0, new DenseLayer.Builder().activation(Activation.TANH).nIn(4).nOut(4).build())
         //                .layer(1, new OutputLayer.Builder().lossFunction(LossFunctions.LossFunction.MCXENT).activation(Activation.SOFTMAX).nIn(4).nOut(3).build())
-        //                .pretrain(false).backprop(true).build();
+        //                .build();
         //
         //        MultiLayerNetwork net = new MultiLayerNetwork(conf);
         //        net.init();
@@ -99,7 +122,7 @@ public class TestPlayUI {
                                         .pzxActivationFunction(Activation.IDENTITY)
                                         .reconstructionDistribution(new GaussianReconstructionDistribution())
                                         .activation(Activation.LEAKYRELU).build())
-                        .layer(2, new OutputLayer.Builder().nIn(3).nOut(3).build()).pretrain(true).backprop(true)
+                        .layer(2, new OutputLayer.Builder().nIn(3).nOut(3).build())
                         .build();
 
         MultiLayerNetwork net = new MultiLayerNetwork(conf);
@@ -130,11 +153,11 @@ public class TestPlayUI {
             uiServer.attach(ss);
 
             MultiLayerConfiguration conf = new NeuralNetConfiguration.Builder()
-                            .optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT).list()
-                            .layer(0, new DenseLayer.Builder().activation(Activation.TANH).nIn(4).nOut(4).build())
-                            .layer(1, new OutputLayer.Builder().lossFunction(LossFunctions.LossFunction.MCXENT)
-                                            .activation(Activation.SOFTMAX).nIn(4).nOut(3).build())
-                            .pretrain(false).backprop(true).build();
+                    .optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT).list()
+                    .layer(0, new DenseLayer.Builder().activation(Activation.TANH).nIn(4).nOut(4).build())
+                    .layer(1, new OutputLayer.Builder().lossFunction(LossFunctions.LossFunction.MCXENT)
+                            .activation(Activation.SOFTMAX).nIn(4).nOut(3).build())
+                    .build();
 
             MultiLayerNetwork net = new MultiLayerNetwork(conf);
             net.init();
@@ -146,6 +169,52 @@ public class TestPlayUI {
                 net.fit(iter);
                 Thread.sleep(100);
             }
+        }
+
+
+        Thread.sleep(1000000);
+    }
+    
+    @Test
+    @Ignore
+    public void testUISequentialSessions() throws Exception {
+        UIServer uiServer = UIServer.getInstance();
+        StatsStorage ss = null;
+        for (int session = 0; session < 3; session++) {
+            
+            if (ss != null) {
+                uiServer.detach(ss);
+            }
+            ss = new InMemoryStatsStorage();
+            uiServer.attach(ss);
+
+            int numInputs = 4;
+            int outputNum = 3;
+            MultiLayerConfiguration conf = new NeuralNetConfiguration.Builder()
+                .activation(Activation.TANH)
+                .weightInit(WeightInit.XAVIER)
+                .updater(new Sgd(0.03))
+                .l2(1e-4)
+                .list()
+                .layer(0, new DenseLayer.Builder().nIn(numInputs).nOut(3)
+                        .build())
+                .layer(1, new DenseLayer.Builder().nIn(3).nOut(3)
+                        .build())
+                .layer(2, new OutputLayer.Builder(LossFunctions.LossFunction.NEGATIVELOGLIKELIHOOD)
+                        .activation(Activation.SOFTMAX)
+                        .nIn(3).nOut(outputNum).build())
+                .build();
+
+            MultiLayerNetwork net = new MultiLayerNetwork(conf);
+            net.init();
+            net.setListeners(new StatsListener(ss), new ScoreIterationListener(1));
+
+            DataSetIterator iter = new IrisDataSetIterator(150, 150);
+
+            for (int i = 0; i < 1000; i++) {
+                net.fit(iter);
+            }
+            Thread.sleep(5000);
         }
 
 
@@ -166,7 +235,7 @@ public class TestPlayUI {
                                         "in")
                         .addLayer("L1", new OutputLayer.Builder().lossFunction(LossFunctions.LossFunction.MCXENT)
                                         .activation(Activation.SOFTMAX).nIn(4).nOut(3).build(), "L0")
-                        .pretrain(false).backprop(true).setOutputs("L1").build();
+                        .setOutputs("L1").build();
 
         ComputationGraph net = new ComputationGraph(conf);
         net.init();
@@ -183,4 +252,23 @@ public class TestPlayUI {
         Thread.sleep(100000);
     }
 
+    @Test
+    public void testUIAttachDetach() throws Exception {
+        StatsStorage ss = new InMemoryStatsStorage();
+
+        UIServer uiServer = UIServer.getInstance();
+        uiServer.attach(ss);
+        assertFalse(uiServer.getStatsStorageInstances().isEmpty());
+        uiServer.detach(ss);
+        assertTrue(uiServer.getStatsStorageInstances().isEmpty());
+    }
+
+    @Test
+    public void testUIServerStop() {
+        UIServer uiServer = UIServer.getInstance(true, null);
+        assertTrue(uiServer.isMultiSession());
+        uiServer.stop();
+        uiServer = UIServer.getInstance(false, null);
+        assertFalse(uiServer.isMultiSession());
+    }
 }

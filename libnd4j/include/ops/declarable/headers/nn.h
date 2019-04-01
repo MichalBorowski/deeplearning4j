@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 //
 //  @author raver119@gmail.com
 //
@@ -89,8 +105,41 @@ namespace nd4j {
         * 0: epsilon
         */
         #if NOT_EXCLUDED(OP_batchnorm)
-        DECLARE_CUSTOM_OP(batchnorm, 5, 1, false, 1, 2);
+        DECLARE_CUSTOM_OP(batchnorm, 3, 1, false, 1, 2);
         #endif
+        #if NOT_EXCLUDED(OP_batchnorm)
+        DECLARE_CUSTOM_OP(batchnorm_new, 3, 1, false, 1, 2);
+        #endif
+
+        /**
+        * back prop in batch normalization
+        * 
+        * Expected arguments:
+        * input: input array (any number of dimensions)
+        * mean:
+        * variance:
+        * gamma: optional
+        * beta: optional
+        * dLdOut: next epsilon
+        * 
+        * Int args:
+        * 0: apply scale
+        * 1: apply offset 
+        * 
+        * T args:
+        * 0: epsilon
+        *
+        * output arrays:
+        * dL/dInput
+        * dL/dMean
+        * dL/dVariance
+        * dL/dGamma
+        * dL/dBeta
+        */
+        #if NOT_EXCLUDED(OP_batchnorm)
+        DECLARE_CUSTOM_OP(batchnorm_bp, 4, 3, false, 1, 2);
+        #endif
+
 
         /**
          * This operation updates parameters with provided gradients, wrt learning rate
@@ -117,7 +166,7 @@ namespace nd4j {
          * scale:  1D input array of scale factors, shape [iD]
          * offset: 1D input array of offsets (shifts), shape [iD]
          * mean: 1D input array of population mean used for inference, shape [iD], this array is required only if isTraining = false
-         * variance: 1D input array of population mean used for inference, shape [iD], this array is required only if isTraining = false         
+         * variance: 1D input array of population mean used for inference, shape [iD], this array is required only if isTraining = false
          * 
          * T input arguments:
          * 0: epsilon, it is optional argument, default value is 0.001, this is small number to be added to the variance of x
@@ -133,6 +182,24 @@ namespace nd4j {
         #if NOT_EXCLUDED(OP_log_softmax)
         DECLARE_CONFIGURABLE_OP(log_softmax, 1, 1, true, 0, 0);
         DECLARE_CONFIGURABLE_OP(log_softmax_bp, 2, 1, true, 0, 0);
+        #endif
+
+
+        /**
+         * relu_layer = relu(x*w + b)
+         */
+        DECLARE_CUSTOM_OP(relu_layer, 3, 1, false, 0, 0);
+
+        /**
+         * applies layer normalization to input
+         * y = g * standardize(x) + b
+         *
+         * see nd4j::ops::standardize
+         *
+         */
+        #if NOT_EXCLUDED(OP_layer_norm)
+                DECLARE_CONFIGURABLE_OP(layer_norm, 3, 1, true, 0, -2);
+                DECLARE_CUSTOM_OP(layer_norm_bp, 4, 1, false, 0, -2);
         #endif
 
     }

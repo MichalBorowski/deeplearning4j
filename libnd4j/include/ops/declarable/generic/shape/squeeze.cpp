@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 //
 //  @author raver119@gmail.com
 //
@@ -26,7 +42,7 @@ namespace nd4j {
             else if (block.width() > 1) {
                 auto a = INPUT_VARIABLE(1);
                 for (int e = 0; e < a->lengthOf(); e++) {
-                    int _a = (int) a->getScalar(e);
+                    int _a = a->e<int>(e);
                     
                     if (_a < 0)
                         _a += input->rankOf();
@@ -36,8 +52,8 @@ namespace nd4j {
             }
 
             if (input->rankOf() == 0 || (input->rankOf() == 1 && input->lengthOf() == 1)) {
-                output->assign(input->buffer()[0]);
-                return ND4J_STATUS_OK;
+                output->assign(input);
+                return Status::OK();
             }
 
             std::vector<Nd4jLong> shape;
@@ -62,7 +78,13 @@ namespace nd4j {
                 delete tmp;
             }
 
-            return ND4J_STATUS_OK;
+            return Status::OK();
+        }
+
+        DECLARE_TYPES(squeeze) {
+            getOpDescriptor()
+                    ->setAllowedInputTypes(nd4j::DataType::ANY)
+                    ->setSameMode(true);
         }
 
         DECLARE_SHAPE_FN(squeeze) {
@@ -79,7 +101,7 @@ namespace nd4j {
                 newShape[1] = 0;
                 newShape[2] = 1;
                 newShape[3] = 99;
-
+                ArrayOptions::setDataType(newShape, ArrayOptions::dataType(in));
                 shapeList->push_back(newShape);
                 return shapeList;
             }
@@ -97,7 +119,7 @@ namespace nd4j {
             else if (block.width() > 1) {
                 auto a = INPUT_VARIABLE(1);
                 for (int e = 0; e < a->lengthOf(); e++) {
-                    int _a = (int) a->getScalar(e);
+                    int _a = a->e<int>(e);
                     
                     if (_a < 0)
                         _a += rank;
@@ -131,15 +153,16 @@ namespace nd4j {
                 newShape[2] = 1;
                 newShape[3] = 99;
 
+                ArrayOptions::setDataType(newShape, ArrayOptions::dataType(in));
                 shapeList->push_back(newShape);
                 return shapeList;
             }
 
             ALLOCATE(newShape, block.getWorkspace(), shape::shapeInfoLength(shape.size()), Nd4jLong);
             if (order == 'c')
-                shape::shapeBuffer(shape.size(), shape.data(), newShape);
+                shape::shapeBuffer(shape.size(), ArrayOptions::dataType(in), shape.data(), newShape);
             else
-                shape::shapeBufferFortran(shape.size(), shape.data(), newShape);
+                shape::shapeBufferFortran(shape.size(), ArrayOptions::dataType(in), shape.data(), newShape);
 
             shapeList->push_back(newShape);
 

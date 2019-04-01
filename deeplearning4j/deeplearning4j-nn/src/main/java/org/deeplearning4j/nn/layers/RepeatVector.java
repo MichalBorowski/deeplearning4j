@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.nn.layers;
 
 
@@ -38,12 +54,7 @@ public class RepeatVector extends AbstractLayer<org.deeplearning4j.nn.conf.layer
     }
 
     @Override
-    public double calcL2(boolean backpropParamsOnly) {
-        return 0;
-    }
-
-    @Override
-    public double calcL1(boolean backpropParamsOnly) {
+    public double calcRegularizationScore(boolean backpropParamsOnly){
         return 0;
     }
 
@@ -57,7 +68,10 @@ public class RepeatVector extends AbstractLayer<org.deeplearning4j.nn.conf.layer
     public Pair<Gradient, INDArray> backpropGradient(INDArray epsilon, LayerWorkspaceMgr workspaceMgr) {
         assertInputSet(true);
 
-        INDArray outEpsilon = Nd4j.sum(epsilon,2);
+        INDArray outEpsilon;
+        try(MemoryWorkspace ws = workspaceMgr.notifyScopeBorrowed(ArrayType.ACTIVATION_GRAD)){
+            outEpsilon = Nd4j.sum(epsilon,2);
+        }
 
         Gradient gradient = new DefaultGradient();
         return new Pair<>(gradient, outEpsilon);
@@ -85,8 +99,9 @@ public class RepeatVector extends AbstractLayer<org.deeplearning4j.nn.conf.layer
         long miniBatch = input.shape()[0];
         long size = input.shape()[1];
         INDArray output = input.reshape(miniBatch, size, 1);
-
-        return output.repeat(2, (long) getN());
+        try(MemoryWorkspace ws = workspaceMgr.notifyScopeBorrowed(ArrayType.ACTIVATIONS)) {
+            return output.repeat(2, (long) getN());
+        }
     }
 
     @Override
@@ -97,7 +112,6 @@ public class RepeatVector extends AbstractLayer<org.deeplearning4j.nn.conf.layer
             cacheMode = CacheMode.NONE;
 
         INDArray z = preOutput(training, false, workspaceMgr);
-
         if (training && cacheMode != CacheMode.NONE && workspaceMgr.hasConfiguration(ArrayType.FF_CACHE)
                 && workspaceMgr.isWorkspaceOpen(ArrayType.FF_CACHE)) {
             try (MemoryWorkspace wsB = workspaceMgr.notifyScopeBorrowed(ArrayType.FF_CACHE)) {
@@ -105,16 +119,6 @@ public class RepeatVector extends AbstractLayer<org.deeplearning4j.nn.conf.layer
             }
         }
         return z;
-    }
-
-    @Override
-    public Layer transpose() {
-        throw new UnsupportedOperationException(layerId());
-    }
-
-    @Override
-    public Layer clone() {
-        return new RepeatVector(conf.clone());
     }
 
     @Override
@@ -138,7 +142,7 @@ public class RepeatVector extends AbstractLayer<org.deeplearning4j.nn.conf.layer
     }
 
     @Override
-    public int numParams() {
+    public long numParams() {
         return 0;
     }
 
@@ -151,12 +155,6 @@ public class RepeatVector extends AbstractLayer<org.deeplearning4j.nn.conf.layer
     public double score() {
         return 0;
     }
-
-    @Override
-    public void accumulateScore(double accum) {
-        throw new UnsupportedOperationException(layerId());
-    }
-
 
     @Override
     public void update(INDArray gradient, String paramType) {

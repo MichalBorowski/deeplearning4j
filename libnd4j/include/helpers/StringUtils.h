@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 //
 // Created by raver119 on 20/04/18.
 //
@@ -22,6 +38,21 @@ namespace nd4j {
             //convert the string stream into a string and return
             return os.str() ;
         };
+
+        /**
+         * This method just concatenates error message with a given graphId
+         * @param message
+         * @param graphId
+         * @return
+         */
+        static FORCEINLINE std::string buildGraphErrorMessage(const char *message, Nd4jLong graphId) {
+            std::string result(message);
+            result += " [";
+            result += valueToString<Nd4jLong>(graphId);
+            result += "]";
+
+            return result;
+        }
     };
 }
 

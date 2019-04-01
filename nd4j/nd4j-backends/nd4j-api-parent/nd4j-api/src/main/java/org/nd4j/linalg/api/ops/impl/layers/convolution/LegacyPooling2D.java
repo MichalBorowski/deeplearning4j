@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.linalg.api.ops.impl.layers.convolution;
 
 import lombok.Getter;
@@ -6,6 +22,7 @@ import org.nd4j.autodiff.samediff.SDVariable;
 import org.nd4j.imports.NoOpNameFoundException;
 import org.nd4j.linalg.api.buffer.DataBuffer;
 import org.nd4j.linalg.api.ndarray.INDArray;
+import org.nd4j.linalg.api.ops.BaseTransformFloatOp;
 import org.nd4j.linalg.api.ops.BaseTransformOp;
 import org.nd4j.linalg.convolution.Convolution;
 import org.nd4j.linalg.factory.Nd4j;
@@ -19,7 +36,7 @@ import java.util.List;
  */
 @Deprecated
 @Slf4j
-public class LegacyPooling2D extends BaseTransformOp {
+public class LegacyPooling2D extends BaseTransformFloatOp {
 
     public enum Pooling2DType {
         MAX, AVG, PNORM,
@@ -58,13 +75,8 @@ public class LegacyPooling2D extends BaseTransformOp {
     }
 
     @Override
-    public boolean isExecSpecial() {
-        return true;
-    }
-
-    @Override
     public int opNum() {
-        return 71;
+        return 2;
     }
 
     @Override
@@ -83,7 +95,7 @@ public class LegacyPooling2D extends BaseTransformOp {
         //number of channels (depth)
         long c = img.size(1);
 
-        return Nd4j.getShapeInfoProvider().createShapeInformation(new long[] {n, c,  kernelHeight, kernelWidth, outHeight, outWidth}, 'c').getFirst();
+        return Nd4j.getShapeInfoProvider().createShapeInformation(new long[] {n, c,  kernelHeight, kernelWidth, outHeight, outWidth}, 'c', img.dataType()).getFirst();
     }
 
     @Override

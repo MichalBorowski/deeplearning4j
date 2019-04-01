@@ -1,73 +1,131 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 //
-// @author raver119@gmail.com
+// Created by raver119 on 2018-09-16.
 //
 
-#ifndef LIBND4J_NDARRAYFACTORY_H
-#define LIBND4J_NDARRAYFACTORY_H
+#ifndef DEV_TESTS_NDARRAYFACTORY_H
+#define DEV_TESTS_NDARRAYFACTORY_H
 
-#include "NDArray.h"
-#include <array/ResultSet.h>
+#include <vector>
+#include <initializer_list>
+#include <NDArray.h>
+#include <memory/Workspace.h>
+#include <string>
+
 
 namespace nd4j {
-    template<typename T>
-    class NDArrayFactory {
-
+    class ND4J_EXPORT NDArrayFactory {
     private:
-        // helpers for helper 
-        // multiptication N-dimensions tensor on other N-dimensions one
-        static nd4j::NDArray<T>* mmulHelperNxN(nd4j::NDArray<T>* A, nd4j::NDArray<T>* B, nd4j::NDArray<T>* C, T alpha, T beta);
-        // multiptication Matrix to vector
-        static nd4j::NDArray<T>* mmulHelperMxV(nd4j::NDArray<T>* A, nd4j::NDArray<T>* B, nd4j::NDArray<T>* C, T alpha, T beta);
-        // multiptication Matrix to Matrix
-        static nd4j::NDArray<T>* mmulHelperMxM(nd4j::NDArray<T>* A, nd4j::NDArray<T>* B, nd4j::NDArray<T>* C, T alpha, T beta);
-
-
-
+        template <typename T>
+        static void memcpyFromVector(void *ptr, const std::vector<T> &vector);
     public:
-        static NDArray<T>* createUninitialized(NDArray<T>* other);
+        template <typename T>
+        static NDArray* empty_(nd4j::memory::Workspace* workspace = nullptr);
 
-        static ResultSet<T>* multipleTensorsAlongDimension(NDArray<T>* ndArray, std::vector<int> &indices, std::vector<int> &dimensions);
+        static NDArray* empty_(nd4j::DataType dataType, nd4j::memory::Workspace* workspace = nullptr);
 
-        static ResultSet<T>* allTensorsAlongDimension(const NDArray<T>* ndArray, const std::vector<int> &dimensions);
+        template <typename T>
+        static NDArray empty(nd4j::memory::Workspace* workspace = nullptr);
 
-        static ResultSet<T>* allExamples(NDArray<T>* ndArray);
+        static NDArray empty(nd4j::DataType dataType, nd4j::memory::Workspace* workspace = nullptr);
 
-        static ResultSet<T>* allTensorsAlongDimension(const NDArray<T>* ndArray, const std::initializer_list<int> dimensions);
+        template <typename T>
+        static NDArray* valueOf(const std::initializer_list<Nd4jLong>& shape, T value, char order = 'c',  nd4j::memory::Workspace* workspace = nullptr);
 
-        static NDArray<T>* tile(NDArray<T> *original, std::vector<int>& dimensions);
+        template <typename T>
+        static NDArray* valueOf(const std::vector<Nd4jLong>& shape, T value, char order = 'c',  nd4j::memory::Workspace* workspace = nullptr);
 
-        static NDArray<T>* repeat(NDArray<T> *original, std::vector<int>& repeats);
+        static NDArray* valueOf(const std::vector<Nd4jLong>& shape, const NDArray& value, char order = 'c',  nd4j::memory::Workspace* workspace = nullptr);
 
-        static nd4j::NDArray<T>* mmulHelper(nd4j::NDArray<T>* A, nd4j::NDArray<T>* B, nd4j::NDArray<T>* C = nullptr, T alpha = 1.0f, T beta = 0.0f);
+        template <typename T>
+        static NDArray* linspace(T from, T to, Nd4jLong numElements);
 
-        static nd4j::NDArray<T>* tensorDot(const nd4j::NDArray<T>* A, const nd4j::NDArray<T>* B, const std::initializer_list<int>& axesA, const std::initializer_list<int>& axesB = {});
 
-        static nd4j::NDArray<T>* tensorDot(const nd4j::NDArray<T>* A, const nd4j::NDArray<T>* B, const std::vector<int>& axesA, const std::vector<int>& axesB);
+        template <typename T>
+        static NDArray* create_(const T value, nd4j::memory::Workspace* workspace = nullptr);
 
-        static void tensorDot(const nd4j::NDArray<T>* a, const nd4j::NDArray<T>* b, nd4j::NDArray<T>* c, const std::vector<int>& axes_a, const std::vector<int>& axes_b, const std::vector<int>& permutForC = {});
+        template <typename T>
+        static NDArray create(const T value, nd4j::memory::Workspace* workspace = nullptr);
+        static NDArray create(nd4j::DataType dtype, nd4j::memory::Workspace* workspace = nullptr);
+        template <typename T>
+        static NDArray create(DataType type, const T scalar, nd4j::memory::Workspace* workspace = nullptr);
+
+
+        template <typename T>
+        static NDArray* vector(Nd4jLong length, T startingValue = (T) 0, nd4j::memory::Workspace *workspace = nullptr);
+
+        template <typename T>
+        static NDArray* create_(char order, const std::vector<Nd4jLong> &shape, nd4j::memory::Workspace* workspace = nullptr);
+
+        static NDArray* create_( char order, const std::vector<Nd4jLong> &shape, nd4j::DataType dataType, nd4j::memory::Workspace* workspace = nullptr);
+
+        template <typename T>
+        static NDArray* create_(char order, const std::vector<Nd4jLong> &shape, const std::vector<T> &data, nd4j::memory::Workspace* workspace = nullptr);
+
+        template <typename T>
+        static NDArray create(char order, const std::vector<Nd4jLong> &shape, const std::vector<T> &data, nd4j::memory::Workspace* workspace = nullptr);
+
+        template <typename T>
+        static NDArray create(char order, const std::vector<Nd4jLong> &shape, nd4j::memory::Workspace* workspace = nullptr);
+        static NDArray create(char order, const std::vector<Nd4jLong> &shape, nd4j::DataType dtype, nd4j::memory::Workspace* workspace = nullptr);
+
+        template <typename T>
+        static NDArray create(const std::vector<T> &values, nd4j::memory::Workspace* workspace = nullptr);
 
 #ifndef __JAVACPP_HACK__
+        // this method only available out of javacpp
         /**
-        *  modif - (can be empty) vector containing a subsequence of permutation/reshaping arrays (in any order), user must take care of correctness of such arrays by himself 
-        */
-        static void tensorDot(const nd4j::NDArray<T>* a, const nd4j::NDArray<T>* b, nd4j::NDArray<T>* c, const std::vector<std::vector<Nd4jLong>>& modifA, const std::vector<std::vector<Nd4jLong>>& modifB, const std::vector<std::vector<Nd4jLong>>& modifC);
-        static nd4j::NDArray<T>* tensorDot(const nd4j::NDArray<T>* a, const nd4j::NDArray<T>* b, const std::vector<std::vector<Nd4jLong>>& modifA, const std::vector<std::vector<Nd4jLong>>& modifB);
+         * This constructor creates vector of T
+         *
+         * @param values
+         */
+
+        template <typename T>
+        static NDArray create(char order, const std::initializer_list<Nd4jLong>& shape, nd4j::memory::Workspace* workspace = nullptr);
+
+        template <typename T>
+        static NDArray create(T* buffer, char order, const std::initializer_list<Nd4jLong>& shape, nd4j::memory::Workspace* workspace = nullptr);
+
+        template <typename T>
+        static NDArray create(char order, const std::vector<Nd4jLong> &shape, const std::initializer_list<T>& data, nd4j::memory::Workspace* workspace = nullptr);
+
+        static NDArray string(const char *string, nd4j::memory::Workspace* workspace = nullptr);
+
+        static NDArray* string_(const char *string, nd4j::memory::Workspace* workspace = nullptr);
+
+        static NDArray string(const std::string &string, nd4j::memory::Workspace* workspace = nullptr);
+
+        static NDArray* string_(const std::string &string, nd4j::memory::Workspace* workspace = nullptr);
+
+        static NDArray string(char order, const std::vector<Nd4jLong> &shape, const std::initializer_list<const char *> &strings, nd4j::memory::Workspace* workspace = nullptr);
+        static NDArray string(char order, const std::vector<Nd4jLong> &shape, const std::initializer_list<std::string> &string, nd4j::memory::Workspace* workspace = nullptr);
+
+        static NDArray string(char order, const std::vector<Nd4jLong> &shape, const std::vector<const char *> &strings, nd4j::memory::Workspace* workspace = nullptr);
+        static NDArray string(char order, const std::vector<Nd4jLong> &shape, const std::vector<std::string> &string, nd4j::memory::Workspace* workspace = nullptr);
+
+        static NDArray* string_(char order, const std::vector<Nd4jLong> &shape, const std::initializer_list<const char *> &strings, nd4j::memory::Workspace* workspace = nullptr);
+        static NDArray* string_(char order, const std::vector<Nd4jLong> &shape, const std::initializer_list<std::string> &string, nd4j::memory::Workspace* workspace = nullptr);
+
+        static NDArray* string_(char order, const std::vector<Nd4jLong> &shape, const std::vector<const char *> &strings, nd4j::memory::Workspace* workspace = nullptr);
+        static NDArray* string_(char order, const std::vector<Nd4jLong> &shape, const std::vector<std::string> &string, nd4j::memory::Workspace* workspace = nullptr);
+
 #endif
-
-        static NDArray<T>* linspace(T from, T to, Nd4jLong numElements);
-        
-        static void linspace(T from, NDArray<T>& arr, T step = 1.0f);
-
-        static NDArray<T>* scalar(T value);
-
-        static NDArray<T>* valueOf(std::initializer_list<Nd4jLong> shape, T value, char order = 'c');
-        static NDArray<T>* valueOf(std::vector<Nd4jLong>& shape, T value, char order = 'c');
-
-        static NDArray<T>* concat(const std::vector<NDArray<T> *>& vectors, int axis = 0, NDArray<T>* target = nullptr);
-
-        static NDArray<T>* simpleMMul(const nd4j::NDArray<T>* a, const nd4j::NDArray<T>* b, nd4j::NDArray<T>* c , const T alpha, const T beta);
     };
 }
 
-
-#endif //LIBND4J_NDARRAYFACTORY_H
+#endif //DEV_TESTS_NDARRAYFACTORY_H

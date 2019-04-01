@@ -1,20 +1,19 @@
-/*-
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
  *
- *  * Copyright 2017 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
  *
- */
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.nn.conf.layers;
 
 import lombok.*;
@@ -25,6 +24,7 @@ import org.deeplearning4j.nn.conf.memory.LayerMemoryReport;
 import org.deeplearning4j.nn.conf.memory.MemoryReport;
 import org.deeplearning4j.nn.conf.serde.legacyformat.LegacyIntArrayDeserializer;
 import org.deeplearning4j.optimize.api.TrainingListener;
+import org.deeplearning4j.util.ValidationUtils;
 import org.nd4j.base.Preconditions;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.shade.jackson.databind.annotation.JsonDeserialize;
@@ -33,7 +33,20 @@ import java.util.Collection;
 import java.util.Map;
 
 /**
- * Upsampling 2D layer
+ * Upsampling 2D layer<br> Repeats each value (or rather, set of depth values) in the height and width dimensions by
+ * size[0] and size[1] times respectively.<br> If input has shape {@code [minibatch, channels, height, width]} then
+ * output has shape {@code [minibatch, channels, height*size[0], width*size[1]]}<br> Example:
+ * <pre>
+ * Input (slice for one example and channel)
+ * [ A, B ]
+ * [ C, D ]
+ * Size = [2, 2]
+ * Output (slice for one example and channel)
+ * [ A, A, B, B ]
+ * [ A, A, B, B ]
+ * [ C, C, D, D ]
+ * [ C, C, D, D ]
+ * </pre>
  *
  * @author Max Pumperla
  */
@@ -44,7 +57,7 @@ import java.util.Map;
 @EqualsAndHashCode(callSuper = true)
 public class Upsampling2D extends BaseUpsamplingLayer {
 
-    @JsonDeserialize(using= LegacyIntArrayDeserializer.class)
+    @JsonDeserialize(using = LegacyIntArrayDeserializer.class)
     protected int[] size;
 
     protected Upsampling2D(UpsamplingBuilder builder) {
@@ -60,10 +73,10 @@ public class Upsampling2D extends BaseUpsamplingLayer {
 
     @Override
     public org.deeplearning4j.nn.api.Layer instantiate(NeuralNetConfiguration conf,
-                                                       Collection<TrainingListener> trainingListeners, int layerIndex, INDArray layerParamsView,
-                                                       boolean initializeParams) {
+                    Collection<TrainingListener> trainingListeners, int layerIndex, INDArray layerParamsView,
+                    boolean initializeParams) {
         org.deeplearning4j.nn.layers.convolution.upsampling.Upsampling2D ret =
-                new org.deeplearning4j.nn.layers.convolution.upsampling.Upsampling2D(conf);
+                        new org.deeplearning4j.nn.layers.convolution.upsampling.Upsampling2D(conf);
         ret.setListeners(trainingListeners);
         ret.setIndex(layerIndex);
         ret.setParamsViewArray(layerParamsView);
@@ -77,7 +90,7 @@ public class Upsampling2D extends BaseUpsamplingLayer {
     public InputType getOutputType(int layerIndex, InputType inputType) {
         if (inputType == null || inputType.getType() != InputType.Type.CNN) {
             throw new IllegalStateException("Invalid input for Upsampling 2D layer (layer name=\"" + getLayerName()
-                    + "\"): Expected CNN input, got " + inputType);
+                            + "\"): Expected CNN input, got " + inputType);
         }
         InputType.InputTypeConvolutional i = (InputType.InputTypeConvolutional) inputType;
         val inHeight = i.getHeight();
@@ -91,7 +104,7 @@ public class Upsampling2D extends BaseUpsamplingLayer {
     public InputPreProcessor getPreProcessorForInputType(InputType inputType) {
         if (inputType == null) {
             throw new IllegalStateException("Invalid input for Upsampling 2D layer (layer name=\"" + getLayerName()
-                    + "\"): input is null");
+                            + "\"): input is null");
         }
         return InputTypeUtil.getPreProcessorForInputTypeCnnLayers(inputType, getLayerName());
     }
@@ -102,8 +115,8 @@ public class Upsampling2D extends BaseUpsamplingLayer {
         InputType.InputTypeConvolutional outputType = (InputType.InputTypeConvolutional) getOutputType(-1, inputType);
 
         // During forward pass: im2col array + reduce. Reduce is counted as activations, so only im2col is working mem
-        val im2colSizePerEx = c.getChannels() * outputType.getHeight() * outputType.getWidth()
-                * size[0] * size[1] * size[2];
+        val im2colSizePerEx =
+                        c.getChannels() * outputType.getHeight() * outputType.getWidth() * size[0] * size[1] * size[2];
 
         // Current implementation does NOT cache im2col etc... which means: it's recalculated on each backward pass
         long trainingWorkingSizePerEx = im2colSizePerEx;
@@ -112,11 +125,10 @@ public class Upsampling2D extends BaseUpsamplingLayer {
             trainingWorkingSizePerEx += inputType.arrayElementsPerExample();
         }
 
-        return new LayerMemoryReport.Builder(layerName, Upsampling2D.class, inputType, outputType)
-                .standardMemory(0, 0) //No params
-                .workingMemory(0, im2colSizePerEx, 0, trainingWorkingSizePerEx)
-                .cacheMemory(MemoryReport.CACHE_MODE_ALL_ZEROS, MemoryReport.CACHE_MODE_ALL_ZEROS) //No caching
-                .build();
+        return new LayerMemoryReport.Builder(layerName, Upsampling2D.class, inputType, outputType).standardMemory(0, 0) //No params
+                        .workingMemory(0, im2colSizePerEx, 0, trainingWorkingSizePerEx)
+                        .cacheMemory(MemoryReport.CACHE_MODE_ALL_ZEROS, MemoryReport.CACHE_MODE_ALL_ZEROS) //No caching
+                        .build();
     }
 
 
@@ -124,7 +136,7 @@ public class Upsampling2D extends BaseUpsamplingLayer {
     public static class Builder extends UpsamplingBuilder<Builder> {
 
         public Builder(int size) {
-            super(new int[]{size, size});
+            super(new int[] {size, size});
         }
 
         /**
@@ -134,7 +146,7 @@ public class Upsampling2D extends BaseUpsamplingLayer {
          */
         public Builder size(int size) {
 
-            this.size = new int[]{size, size};
+            this.setSize(new int[] {size, size});
             return this;
         }
 
@@ -145,9 +157,7 @@ public class Upsampling2D extends BaseUpsamplingLayer {
          * @param size upsampling size in height and width dimensions
          */
         public Builder size(int[] size) {
-            Preconditions.checkArgument(size.length == 2);
-
-            this.size = size;
+            this.setSize(size);
             return this;
         }
 
@@ -155,6 +165,11 @@ public class Upsampling2D extends BaseUpsamplingLayer {
         @SuppressWarnings("unchecked")
         public Upsampling2D build() {
             return new Upsampling2D(this);
+        }
+
+        @Override
+        public void setSize(int... size) {
+            this.size = ValidationUtils.validate2NonNegative(size, false, "size");
         }
     }
 

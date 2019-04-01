@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.linalg.dataset;
 
 import org.apache.commons.io.FileUtils;
@@ -5,6 +21,7 @@ import org.nd4j.linalg.dataset.api.DataSetPreProcessor;
 import org.nd4j.linalg.dataset.api.iterator.DataSetIterator;
 import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.indexing.NDArrayIndex;
+import org.nd4j.linalg.util.ND4JFileUtils;
 
 import java.io.*;
 import java.util.ArrayList;
@@ -70,7 +87,7 @@ public class MiniBatchFileDataSetIterator implements DataSetIterator {
         totalBatches = baseData.numExamples() / batchSize;
         for (int i = 0; i < baseData.numExamples() / batchSize; i++) {
             paths.add(writeData(new DataSet(
-                            baseData.getFeatureMatrix().get(NDArrayIndex.interval(offset, offset + batchSize)),
+                            baseData.getFeatures().get(NDArrayIndex.interval(offset, offset + batchSize)),
                             baseData.getLabels().get(NDArrayIndex.interval(offset, offset + batchSize)))));
             offset += batchSize;
             if (offset >= totalExamples)
@@ -85,7 +102,7 @@ public class MiniBatchFileDataSetIterator implements DataSetIterator {
      * @throws IOException
      */
     public MiniBatchFileDataSetIterator(DataSet baseData, int batchSize, boolean delete) throws IOException {
-        this(baseData, batchSize, delete, new File(System.getProperty("java.io.tmpdir")));
+        this(baseData, batchSize, delete, ND4JFileUtils.getTempDir());
     }
 
     @Override
@@ -180,7 +197,7 @@ public class MiniBatchFileDataSetIterator implements DataSetIterator {
         BufferedOutputStream dataOut =
                         new BufferedOutputStream(new FileOutputStream(new File(rootDir, dataSetId + ".bin")));
         DataOutputStream dos = new DataOutputStream(dataOut);
-        Nd4j.write(write.getFeatureMatrix(), dos);
+        Nd4j.write(write.getFeatures(), dos);
         dos.flush();
         dos.close();
 

@@ -18,16 +18,16 @@ enum ByteOrder {
   ByteOrder_MAX = ByteOrder_BE
 };
 
-inline ByteOrder (&EnumValuesByteOrder())[2] {
-  static ByteOrder values[] = {
+inline const ByteOrder (&EnumValuesByteOrder())[2] {
+  static const ByteOrder values[] = {
     ByteOrder_LE,
     ByteOrder_BE
   };
   return values;
 }
 
-inline const char **EnumNamesByteOrder() {
-  static const char *names[] = {
+inline const char * const *EnumNamesByteOrder() {
+  static const char * const names[] = {
     "LE",
     "BE",
     nullptr
@@ -58,12 +58,14 @@ enum DataType {
   DataType_UINT64 = 14,
   DataType_QINT8 = 15,
   DataType_QINT16 = 16,
+  DataType_BFLOAT16 = 17,
+  DataType_UTF8 = 50,
   DataType_MIN = DataType_INHERIT,
-  DataType_MAX = DataType_QINT16
+  DataType_MAX = DataType_UTF8
 };
 
-inline DataType (&EnumValuesDataType())[17] {
-  static DataType values[] = {
+inline const DataType (&EnumValuesDataType())[19] {
+  static const DataType values[] = {
     DataType_INHERIT,
     DataType_BOOL,
     DataType_FLOAT8,
@@ -80,13 +82,15 @@ inline DataType (&EnumValuesDataType())[17] {
     DataType_UINT32,
     DataType_UINT64,
     DataType_QINT8,
-    DataType_QINT16
+    DataType_QINT16,
+    DataType_BFLOAT16,
+    DataType_UTF8
   };
   return values;
 }
 
-inline const char **EnumNamesDataType() {
-  static const char *names[] = {
+inline const char * const *EnumNamesDataType() {
+  static const char * const names[] = {
     "INHERIT",
     "BOOL",
     "FLOAT8",
@@ -104,6 +108,40 @@ inline const char **EnumNamesDataType() {
     "UINT64",
     "QINT8",
     "QINT16",
+    "BFLOAT16",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "UTF8",
     nullptr
   };
   return names;
@@ -136,9 +174,9 @@ struct FlatArray FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   bool Verify(flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
            VerifyOffset(verifier, VT_SHAPE) &&
-           verifier.Verify(shape()) &&
+           verifier.VerifyVector(shape()) &&
            VerifyOffset(verifier, VT_BUFFER) &&
-           verifier.Verify(buffer()) &&
+           verifier.VerifyVector(buffer()) &&
            VerifyField<int8_t>(verifier, VT_DTYPE) &&
            VerifyField<int8_t>(verifier, VT_BYTEORDER) &&
            verifier.EndTable();
@@ -204,15 +242,30 @@ inline const nd4j::graph::FlatArray *GetFlatArray(const void *buf) {
   return flatbuffers::GetRoot<nd4j::graph::FlatArray>(buf);
 }
 
+inline const nd4j::graph::FlatArray *GetSizePrefixedFlatArray(const void *buf) {
+  return flatbuffers::GetSizePrefixedRoot<nd4j::graph::FlatArray>(buf);
+}
+
 inline bool VerifyFlatArrayBuffer(
     flatbuffers::Verifier &verifier) {
   return verifier.VerifyBuffer<nd4j::graph::FlatArray>(nullptr);
+}
+
+inline bool VerifySizePrefixedFlatArrayBuffer(
+    flatbuffers::Verifier &verifier) {
+  return verifier.VerifySizePrefixedBuffer<nd4j::graph::FlatArray>(nullptr);
 }
 
 inline void FinishFlatArrayBuffer(
     flatbuffers::FlatBufferBuilder &fbb,
     flatbuffers::Offset<nd4j::graph::FlatArray> root) {
   fbb.Finish(root);
+}
+
+inline void FinishSizePrefixedFlatArrayBuffer(
+    flatbuffers::FlatBufferBuilder &fbb,
+    flatbuffers::Offset<nd4j::graph::FlatArray> root) {
+  fbb.FinishSizePrefixed(root);
 }
 
 }  // namespace graph

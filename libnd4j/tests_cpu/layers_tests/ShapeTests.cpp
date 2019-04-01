@@ -1,10 +1,25 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 //
 // @author raver119@gmail.com
 //
 
 #include <helpers/shape.h>
 #include "testlayers.h"
-#include <NDArrayFactory.h>
 #include <ops/declarable/headers/shape.h>
 
 using namespace nd4j;
@@ -205,8 +220,8 @@ TEST_F(ShapeTests, Test_Transpose_4) {
 }
 
 TEST_F(ShapeTests, Test_Edge_1) {
-    NDArray<float> x('f', {1, 4, 1, 4});
-    NDArrayFactory<float>::linspace(1, x);
+    auto x = NDArrayFactory::create<float>('f', {1, 4, 1, 4});
+    x.linspace(1);
 
     x.reshapei('c', {4, 4});
 
@@ -220,9 +235,9 @@ TEST_F(ShapeTests, Test_Edge_1) {
 }
 
 TEST_F(ShapeTests, Test_Edge_2) {
-    NDArray<float> x('c', {1, 4, 1, 3});
+    auto x = NDArrayFactory::create<float>('c', {1, 4, 1, 3});
 
-    x.reshapei('f', {3, 4});
+    x.reshapei('c', {3, 4});
 
     //x.printShapeInfo("reshape0");
 
@@ -290,17 +305,17 @@ TEST_F(ShapeTests, Test_Remove_Index_6) {
 }
 
 TEST_F(ShapeTests, Tests_Transpose_119_1) {
-    NDArray<float> x('c', {3, 2});
-    NDArray<float> y('c', {2}, {1.0f, 0.0f});
-    NDArray<float> z('c', {2, 3});
+    auto x = NDArrayFactory::create<float>('c', {3, 2});
+    auto y = NDArrayFactory::create<float>('c', {2}, {1.0f, 0.0f});
+    auto z = NDArrayFactory::create<float>('c', {2, 3});
 
-    NDArrayFactory<float>::linspace(1.0, x);
+    x.linspace(1.f);
 
     auto e = x.permute({1, 0});
     e->streamline('c');
 
-    nd4j::ops::transpose<float> op;
-    auto result = op.execute({&x, &y}, {&z}, {}, {});
+    nd4j::ops::transpose op;
+    auto result = op.execute({&x, &y}, {&z}, {}, {}, {});
 
     ASSERT_EQ(Status::OK(), result);
     ASSERT_TRUE(e->isSameShape(z));
@@ -310,12 +325,12 @@ TEST_F(ShapeTests, Tests_Transpose_119_1) {
 }
 
 TEST_F(ShapeTests, Tests_Transpose_119_2) {
-    NDArray<float> x('c', {3, 5});
-    NDArrayFactory<float>::linspace(1.0f, x);
+    auto x = NDArrayFactory::create<float>('c', {3, 5});
+    x.linspace(1.f);
 
     auto exp = x.transpose();
 
-    nd4j::ops::transpose<float> op;
+    nd4j::ops::transpose op;
     auto result = op.execute({&x},{}, {});
     ASSERT_EQ(Status::OK(), result->status());
 
@@ -329,15 +344,15 @@ TEST_F(ShapeTests, Tests_Transpose_119_2) {
 }
 
 TEST_F(ShapeTests, Tests_Transpose_119_3) {
-    NDArray<float> x('c', {3, 5});
-    NDArrayFactory<float>::linspace(1.0f, x);
+    auto x = NDArrayFactory::create<float>('c', {3, 5});
+    x.linspace(1.f);
 
-    NDArray<float> z('c', {5, 3});
+    auto z = NDArrayFactory::create<float>('c', {5, 3});
 
     auto exp = x.transpose();
 
-    nd4j::ops::transpose<float> op;
-    auto result = op.execute({&x}, {&z}, {}, {});
+    nd4j::ops::transpose op;
+    auto result = op.execute({&x}, {&z}, {}, {}, {});
     ASSERT_EQ(Status::OK(), result);
 
     ASSERT_TRUE(exp->isSameShape(z));

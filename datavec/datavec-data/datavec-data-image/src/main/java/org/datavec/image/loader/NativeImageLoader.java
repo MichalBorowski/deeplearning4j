@@ -1,18 +1,19 @@
-/*-
- *  * Copyright 2016 Skymind, Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
- */
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.datavec.image.loader;
 
 import org.apache.commons.io.IOUtils;
@@ -35,10 +36,13 @@ import org.nd4j.linalg.util.ArrayUtil;
 import java.io.*;
 import java.nio.ByteOrder;
 
-import static org.bytedeco.javacpp.lept.*;
-import static org.bytedeco.javacpp.opencv_core.*;
-import static org.bytedeco.javacpp.opencv_imgcodecs.*;
-import static org.bytedeco.javacpp.opencv_imgproc.*;
+import org.bytedeco.leptonica.*;
+import org.bytedeco.opencv.opencv_core.*;
+import org.bytedeco.opencv.opencv_imgproc.*;
+import static org.bytedeco.leptonica.global.lept.*;
+import static org.bytedeco.opencv.global.opencv_core.*;
+import static org.bytedeco.opencv.global.opencv_imgcodecs.*;
+import static org.bytedeco.opencv.global.opencv_imgproc.*;
 
 /**
  * Uses JavaCV to load images. Allowed formats: bmp, gif, jpg, jpeg, jp2, pbm, pgm, ppm, pnm, png, tif, tiff, exr, webp
@@ -142,6 +146,10 @@ public class NativeImageLoader extends BaseImageLoader {
         return ALLOWED_FORMATS;
     }
 
+    public INDArray asRowVector(String filename) throws IOException {
+        return asRowVector(new File(filename));
+    }
+
     /**
      * Convert a file to a row vector
      *
@@ -172,6 +180,10 @@ public class NativeImageLoader extends BaseImageLoader {
     }
 
     public INDArray asRowVector(Mat image) throws IOException {
+        return asMatrix(image).ravel();
+    }
+
+    public INDArray asRowVector(org.opencv.core.Mat image) throws IOException {
         return asMatrix(image).ravel();
     }
 
@@ -213,6 +225,9 @@ public class NativeImageLoader extends BaseImageLoader {
         return mat2;
     }
 
+    public INDArray asMatrix(String filename) throws IOException {
+        return asMatrix(new File(filename));
+    }
 
     @Override
     public INDArray asMatrix(File f) throws IOException {
@@ -228,7 +243,7 @@ public class NativeImageLoader extends BaseImageLoader {
         if (this.multiPageMode != null) {
              a = asMatrix(mat.data(), mat.cols());
         }else{
-            Mat image = imdecode(mat, CV_LOAD_IMAGE_ANYDEPTH | CV_LOAD_IMAGE_ANYCOLOR);
+            Mat image = imdecode(mat, IMREAD_ANYDEPTH | IMREAD_ANYCOLOR);
             if (image == null || image.empty()) {
                 PIX pix = pixReadMem(mat.data(), mat.cols());
                 if (pix == null) {
@@ -291,6 +306,10 @@ public class NativeImageLoader extends BaseImageLoader {
 
     }
 
+    public Image asImageMatrix(String filename) throws IOException {
+        return asImageMatrix(filename);
+    }
+
     @Override
     public Image asImageMatrix(File f) throws IOException {
         try (BufferedInputStream bis = new BufferedInputStream(new FileInputStream(f))) {
@@ -301,7 +320,7 @@ public class NativeImageLoader extends BaseImageLoader {
     @Override
     public Image asImageMatrix(InputStream is) throws IOException {
         Mat mat = streamToMat(is);
-        Mat image = imdecode(mat, CV_LOAD_IMAGE_ANYDEPTH | CV_LOAD_IMAGE_ANYCOLOR);
+        Mat image = imdecode(mat, IMREAD_ANYDEPTH | IMREAD_ANYCOLOR);
         if (image == null || image.empty()) {
             PIX pix = pixReadMem(mat.data(), mat.cols());
             if (pix == null) {
@@ -349,7 +368,7 @@ public class NativeImageLoader extends BaseImageLoader {
         long cols = image.cols();
         long channels = image.channels();
 
-        if (ret.lengthLong() != rows * cols * channels) {
+        if (ret.length() != rows * cols * channels) {
             throw new ND4JIllegalStateException("INDArray provided to store image not equal to image: {channels: "
                             + channels + ", rows: " + rows + ", columns: " + cols + "}");
         }
@@ -458,11 +477,14 @@ public class NativeImageLoader extends BaseImageLoader {
             for (long k = 0; k < channels; k++) {
                 for (long i = 0; i < rows; i++) {
                     for (long j = 0; j < cols; j++) {
-                        if (channels > 1) {
+                        if (ret.rank() == 3) {
                             ret.putScalar(k, i, j, idx.getDouble(i, j, k));
-                        } else {
+                        } else if (ret.rank() == 4) {
+                            ret.putScalar(1, k, i, j, idx.getDouble(i, j, k));
+                        } else if (ret.rank() == 2) {
                             ret.putScalar(i, j, idx.getDouble(i, j));
-                        }
+                        } else
+                            throw new ND4JIllegalStateException("NativeImageLoader expects 2D, 3D or 4D output array, but " + ret.rank() + "D array was given");
                     }
                 }
             }
@@ -475,7 +497,7 @@ public class NativeImageLoader extends BaseImageLoader {
 
     public void asMatrixView(InputStream is, INDArray view) throws IOException {
         Mat mat = streamToMat(is);
-        Mat image = imdecode(mat, CV_LOAD_IMAGE_ANYDEPTH | CV_LOAD_IMAGE_ANYCOLOR);
+        Mat image = imdecode(mat, IMREAD_ANYDEPTH | IMREAD_ANYCOLOR);
         if (image == null || image.empty()) {
             PIX pix = pixReadMem(mat.data(), mat.cols());
             if (pix == null) {
@@ -490,6 +512,10 @@ public class NativeImageLoader extends BaseImageLoader {
         image.deallocate();
     }
 
+    public void asMatrixView(String filename, INDArray view) throws IOException {
+        asMatrixView(new File(filename), view);
+    }
+
     public void asMatrixView(File f, INDArray view) throws IOException {
         try (BufferedInputStream bis = new BufferedInputStream(new FileInputStream(f))) {
             asMatrixView(bis, view);
@@ -500,14 +526,29 @@ public class NativeImageLoader extends BaseImageLoader {
         transformImage(image, view);
     }
 
+    public void asMatrixView(org.opencv.core.Mat image, INDArray view) throws IOException {
+        transformImage(image, view);
+    }
+
     public INDArray asMatrix(Frame image) throws IOException {
         return asMatrix(converter.convert(image));
+    }
+
+    public INDArray asMatrix(org.opencv.core.Mat image) throws IOException {
+        INDArray ret = transformImage(image, null);
+
+        return ret.reshape(ArrayUtil.combine(new long[] {1}, ret.shape()));
     }
 
     public INDArray asMatrix(Mat image) throws IOException {
         INDArray ret = transformImage(image, null);
 
         return ret.reshape(ArrayUtil.combine(new long[] {1}, ret.shape()));
+    }
+
+    protected INDArray transformImage(org.opencv.core.Mat image, INDArray ret) throws IOException {
+        Frame f = converter.convert(image);
+        return transformImage(converter.convert(f), ret);
     }
 
     protected INDArray transformImage(Mat image, INDArray ret) throws IOException {
@@ -628,6 +669,10 @@ public class NativeImageLoader extends BaseImageLoader {
     }
 
 
+    public ImageWritable asWritable(String filename) throws IOException {
+        return asWritable(new File(filename));
+    }
+
     /**
      * Convert a file to a INDArray
      *
@@ -638,7 +683,7 @@ public class NativeImageLoader extends BaseImageLoader {
     public ImageWritable asWritable(File f) throws IOException {
         try (BufferedInputStream bis = new BufferedInputStream(new FileInputStream(f))) {
             Mat mat = streamToMat(bis);
-            Mat image = imdecode(mat, CV_LOAD_IMAGE_ANYDEPTH | CV_LOAD_IMAGE_ANYCOLOR);
+            Mat image = imdecode(mat, IMREAD_ANYDEPTH | IMREAD_ANYCOLOR);
             if (image == null || image.empty()) {
                 PIX pix = pixReadMem(mat.data(), mat.cols());
                 if (pix == null) {

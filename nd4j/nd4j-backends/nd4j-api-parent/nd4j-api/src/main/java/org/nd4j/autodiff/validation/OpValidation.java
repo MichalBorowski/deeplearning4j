@@ -1,25 +1,50 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.autodiff.validation;
 
 import com.google.common.collect.ImmutableSet;
 import com.google.common.reflect.ClassPath;
 import lombok.extern.slf4j.Slf4j;
+import lombok.val;
 import org.nd4j.autodiff.functions.DifferentialFunction;
 import org.nd4j.autodiff.samediff.SDVariable;
 import org.nd4j.autodiff.samediff.SameDiff;
+import org.nd4j.autodiff.samediff.internal.SameDiffOp;
+import org.nd4j.autodiff.samediff.internal.Variable;
+import org.nd4j.base.Preconditions;
 import org.nd4j.imports.converters.DifferentialFunctionClassHolder;
+import org.nd4j.imports.descriptors.tensorflow.TensorflowDescriptorParser;
+import org.nd4j.linalg.api.iter.NdIndexIterator;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.api.ops.CustomOpDescriptor;
 import org.nd4j.linalg.api.ops.DefaultOpConverter;
 import org.nd4j.linalg.api.ops.DynamicCustomOp;
-import org.nd4j.linalg.api.ops.impl.accum.All;
-import org.nd4j.linalg.api.ops.impl.accum.Any;
-import org.nd4j.linalg.api.ops.impl.accum.EqualsWithEps;
-import org.nd4j.linalg.api.ops.impl.accum.NormalizeMoments;
-import org.nd4j.linalg.api.ops.impl.accum.bp.*;
+import org.nd4j.linalg.api.ops.impl.broadcast.bool.*;
+import org.nd4j.linalg.api.ops.impl.reduce.bool.All;
+import org.nd4j.linalg.api.ops.impl.reduce.bool.Any;
+import org.nd4j.linalg.api.ops.impl.reduce.longer.MatchCondition;
+import org.nd4j.linalg.api.ops.impl.reduce3.EqualsWithEps;
+import org.nd4j.linalg.api.ops.impl.reduce.NormalizeMoments;
+import org.nd4j.linalg.api.ops.impl.reduce.bp.*;
 import org.nd4j.linalg.api.ops.impl.broadcast.*;
 import org.nd4j.linalg.api.ops.impl.grid.FreeGridOp;
 import org.nd4j.linalg.api.ops.impl.indexaccum.*;
 import org.nd4j.linalg.api.ops.impl.layers.convolution.*;
+import org.nd4j.linalg.api.ops.impl.scalar.PowDerivative;
 import org.nd4j.linalg.api.ops.impl.scalar.ScalarRemainder;
 import org.nd4j.linalg.api.ops.impl.scalar.comparison.ScalarSetValue;
 import org.nd4j.linalg.api.ops.impl.shape.ConfusionMatrix;
@@ -29,23 +54,32 @@ import org.nd4j.linalg.api.ops.impl.shape.OneHot;
 import org.nd4j.linalg.api.ops.impl.shape.bp.ConcatBp;
 import org.nd4j.linalg.api.ops.impl.shape.bp.SliceBp;
 import org.nd4j.linalg.api.ops.impl.shape.bp.StridedSliceBp;
-import org.nd4j.linalg.api.ops.impl.transforms.*;
-import org.nd4j.linalg.api.ops.impl.transforms.arithmetic.bp.*;
+import org.nd4j.linalg.api.ops.impl.shape.bp.TileBp;
+import org.nd4j.linalg.api.ops.impl.transforms.custom.InvertPermutation;
+import org.nd4j.linalg.api.ops.impl.transforms.floating.Histogram;
+import org.nd4j.linalg.api.ops.impl.transforms.pairwise.BinaryMinimalRelativeError;
+import org.nd4j.linalg.api.ops.impl.transforms.pairwise.arithmetic.bp.*;
 import org.nd4j.linalg.api.ops.impl.transforms.gradient.*;
 import org.nd4j.linalg.api.ops.impl.transforms.gradient.SigmoidDerivative;
-import org.nd4j.linalg.api.ops.impl.transforms.gradient.SoftMaxDerivative;
 import org.nd4j.linalg.api.ops.impl.transforms.gradient.TanhDerivative;
+import org.nd4j.linalg.api.ops.impl.transforms.strict.SwishDerivative;
+import org.nd4j.linalg.api.ops.impl.transforms.strict.TanDerivative;
 import org.nd4j.linalg.api.ops.persistence.RestoreV2;
 import org.nd4j.linalg.api.ops.persistence.SaveV2;
 import org.nd4j.linalg.api.ops.random.compat.RandomStandardNormal;
 import org.nd4j.linalg.api.ops.random.custom.DistributionUniform;
 import org.nd4j.linalg.api.ops.random.impl.*;
+import org.nd4j.linalg.api.shape.LongShapeDescriptor;
 import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.function.Function;
+import org.nd4j.linalg.indexing.NDArrayIndex;
+import org.nd4j.linalg.indexing.conditions.Conditions;
 import org.nd4j.linalg.primitives.Pair;
+import org.tensorflow.framework.OpDef;
 
 import java.io.IOException;
 import java.lang.reflect.Modifier;
+import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.Set;
 
@@ -105,12 +139,18 @@ public class OpValidation {
         //First: collect coverage information
         collectCoverageInformation(testCase);
 
+        //Check serialization
+        ByteBuffer serializedBeforeExec = null;
+        if(testCase.testFlatBufferSerialization() == TestCase.TestSerialization.BEFORE_EXEC || testCase.testFlatBufferSerialization() == TestCase.TestSerialization.BOTH){
+            serializedBeforeExec = testCase.sameDiff().asFlatBuffers();
+            Preconditions.checkNotNull(serializedBeforeExec, "Serialization failed? Null output");
+        }
 
         //Check forward pass:
         if (testCase.fwdTestFns() != null && testCase.fwdTestFns().size() > 0) {
             SameDiff sd = testCase.sameDiff();
             try {
-                sd.exec();
+                sd.exec(null, sd.outputs());
             } catch (Exception e) {
                 throw new RuntimeException("Error during forward pass testing" + testCase.testNameErrMsg(), e);
             }
@@ -139,6 +179,17 @@ public class OpValidation {
                     return testCase.testNameErrMsg() + ": Variable " + e.getKey() + " failed: " + error;
                 }
             }
+
+            ByteBuffer serializedAfterExec = null;
+            if(testCase.testFlatBufferSerialization() == TestCase.TestSerialization.BEFORE_EXEC || testCase.testFlatBufferSerialization() == TestCase.TestSerialization.BOTH){
+                serializedAfterExec = testCase.sameDiff().asFlatBuffers();
+                Preconditions.checkNotNull(serializedAfterExec, "Serialization failed? Null output");
+            }
+
+            //Now: deserialize, and check the results
+            if(serializedBeforeExec != null){
+                checkDeserializedEquality(sd, serializedBeforeExec, testCase);
+            }
         }
 
         //Check gradients:
@@ -147,6 +198,7 @@ public class OpValidation {
             try {
                 ok = GradCheckUtil.checkGradients(testCase);
             } catch (Throwable t) {
+                t.printStackTrace();
                 throw new IllegalStateException("Exception encountered during gradient check" + testCase.testNameErrMsg(), t);
             }
 
@@ -156,6 +208,130 @@ public class OpValidation {
         }
 
         return null;    //OK - passed
+    }
+
+    public static void checkDeserializedEquality(SameDiff original, ByteBuffer bbSerialized, TestCase tc) {
+        SameDiff deserialized;
+        try{
+           deserialized = SameDiff.fromFlatBuffers(bbSerialized);
+        } catch (IOException e){
+            throw new RuntimeException("IOException deserializing from FlatBuffers", e);
+        }
+
+        //Check variables:
+        List<SDVariable> vars = original.variables();
+        List<SDVariable> varsDe = deserialized.variables();
+        Preconditions.checkState(vars.size() == varsDe.size(), "Number of variables differs: expected %s, got %s", vars.size(), varsDe.size());
+        for( int i=0; i<vars.size(); i++ ){
+            SDVariable vO = vars.get(i);
+            SDVariable vD = varsDe.get(i);
+            Preconditions.checkState(vO.getVarName().equals(vD.getVarName()), "Names should be equal for variable %s: expected %s vs %s",
+                    i, vO.getVarName(), vD.getVarName());
+        }
+
+        //Check ops:
+        Map<String,SameDiffOp> opsOrig = original.getOps();
+        Map<String,SameDiffOp> opsDeser = deserialized.getOps();
+        Preconditions.checkState(opsOrig.keySet().equals(opsDeser.keySet()), "Op names differs: %s vs. %s", opsOrig.keySet(), opsDeser.keySet());
+
+        for(String s : opsOrig.keySet()){
+            SameDiffOp orig = opsOrig.get(s);
+            SameDiffOp des = opsDeser.get(s);
+            Preconditions.checkState(orig.getName().equals(des.getName()), "Names differ: %s vs %s", orig.getName(), des.getName());
+            Preconditions.checkState((orig.getInputsToOp() == null) == (des.getInputsToOp() == null), "Inputs differ: %s vs. %s", orig.getInputsToOp(), des.getInputsToOp());
+            Preconditions.checkState(orig.getInputsToOp() == null || orig.getInputsToOp().equals(des.getInputsToOp()), "Inputs differ: %s vs. %s", orig.getInputsToOp(), des.getInputsToOp());
+
+            Preconditions.checkState((orig.getOutputsOfOp() == null) == (des.getOutputsOfOp() == null), "Outputs differ: %s vs. %s", orig.getOutputsOfOp(), des.getOutputsOfOp());
+            Preconditions.checkState(orig.getOutputsOfOp() == null || orig.getOutputsOfOp().equals(des.getOutputsOfOp()), "Outputs differ: %s vs. %s", orig.getOutputsOfOp(), des.getOutputsOfOp());
+
+            Preconditions.checkState((orig.getControlDeps() == null) == (des.getControlDeps() == null), "Control dependencies differ: %s vs. %s", orig.getControlDeps(), des.getControlDeps());
+            Preconditions.checkState(orig.getControlDeps() == null || orig.getControlDeps().equals(des.getControlDeps()), "Control dependencies differ: %s vs. %s", orig.getControlDeps(), des.getControlDeps());
+
+            Preconditions.checkState(orig.getOp().getClass() == des.getOp().getClass(), "Classes differ: %s v. %s", orig.getOp().getClass(), des.getOp().getClass());
+        }
+
+        //Check placeholders:
+        Set<String> phBefore = new HashSet<>();
+        Set<String> phAfter = new HashSet<>();
+
+        for(Variable v : original.getVariables().values()){
+            if(v.getVariable().isPlaceHolder())
+                phBefore.add(v.getName());
+        }
+        for(Variable v : deserialized.getVariables().values()){
+            if(v.getVariable().isPlaceHolder())
+                phAfter.add(v.getName());
+        }
+
+        if(phBefore == null){
+            Preconditions.checkState(phAfter == null || phAfter.size() == 0, "%s", phAfter);
+        } else {
+            Preconditions.checkState(phAfter != null, "Placeholders after deserialization was null");
+            Preconditions.checkState(phBefore.equals(phAfter), "Before: %s, after deserialization: %s", phBefore, phAfter);
+        }
+
+        Map<String,Variable> varsBefore = original.getVariables();
+        Map<String,Variable> varsAfter = deserialized.getVariables();
+        Preconditions.checkState(varsBefore.keySet().equals(varsAfter.keySet()), "Variable keysets do not match: %s vs %s", varsBefore.keySet(), varsAfter.keySet());
+        for(String s : varsBefore.keySet()){
+            Variable vB = varsBefore.get(s);
+            Variable vA = varsAfter.get(s);
+            Preconditions.checkState(vB.getName().equals(vA.getName()), "Variable names do not match: %s vs %s", vA.getName(), vB.getName());
+            Preconditions.checkState(vB.getVariable().getVariableType() == vA.getVariable().getVariableType(),
+                    "Variable types do not match: %s - %s vs %s", s, vB.getVariable().getVariableType(), vA.getVariable().getVariableType());
+
+            Preconditions.checkState((vB.getInputsForOp() == null) == (vA.getInputsForOp() == null), "Input to ops differ: %s vs. %s", vB.getInputsForOp(), vA.getInputsForOp());
+            Preconditions.checkState(vB.getInputsForOp() == null || vB.getInputsForOp().equals(vA.getInputsForOp()), "Inputs differ: %s vs. %s", vB.getInputsForOp(), vA.getInputsForOp());
+
+            Preconditions.checkState((vB.getOutputOfOp() == null && vA.getOutputOfOp() == null) || vB.getOutputOfOp().equals(vA.getOutputOfOp()), "Output of op differ: %s vs. %s", vB.getOutputOfOp(), vA.getOutputOfOp());
+
+            Preconditions.checkState((vB.getControlDeps() == null) == (vA.getControlDeps() == null), "Control dependencies differ: %s vs. %s", vB.getControlDeps(), vA.getControlDeps());
+            Preconditions.checkState(vB.getControlDeps() == null || vB.getControlDeps().equals(vA.getControlDeps()), "Control dependencies differ: %s vs. %s", vB.getControlDeps(), vA.getControlDeps());
+        }
+
+
+        //Finally: check execution/output
+        Map<String,INDArray> outOrig = original.execAll(tc.placeholderValues());
+        Map<String,INDArray> outDe = deserialized.execAll(tc.placeholderValues());
+        Preconditions.checkState(outOrig.keySet().equals(outDe.keySet()), "Keysets for execution after deserialization does not match key set for original model");
+
+        for(String s : outOrig.keySet()){
+            INDArray orig = outOrig.get(s);
+            INDArray deser = outDe.get(s);
+
+            Function<INDArray,String> f = tc.fwdTestFns().get(s);
+            String err = null;
+            if(f != null){
+                err = f.apply(deser);
+            } else {
+                if(!orig.equals(deser)){
+                    //Edge case: check for NaNs in original and deserialized... might be legitimate test (like replaceNaNs op)
+                    long count = Nd4j.getExecutioner().execAndReturn(new MatchCondition(orig, Conditions.isNan())).getFinalResult().longValue();
+                    if(count > 0 && orig.equalShapes(deser)){
+                        long count2 = Nd4j.getExecutioner().execAndReturn(new MatchCondition(deser, Conditions.isNan())).getFinalResult().longValue();
+                        if(count != count2){
+                            err = "INDArray equality failed";
+                        } else {
+                            //TODO is there a better way to do this?
+                            NdIndexIterator iter = new NdIndexIterator(orig.shape());
+                            while(iter.hasNext()){
+                                long[] i = iter.next();
+                                double d1 = orig.getDouble(i);
+                                double d2 = deser.getDouble(i);
+                                if((Double.isNaN(d1) != Double.isNaN(d2)) || (Double.isInfinite(d1) != Double.isInfinite(d2)) || Math.abs(d1 - d2) > 1e-5 ){
+                                    err = "INDArray equality failed";
+                                    break;
+                                }
+                            }
+                        }
+                    } else {
+                        err = "INDArray equality failed";
+                    }
+                }
+            }
+
+            Preconditions.checkState(err == null, "Variable result (%s) failed check - \"%ndSInfo\" vs \"%ndSInfo\" - %nd10 vs %nd10\nError:%s", s, orig, deser, orig, deser, err);
+        }
     }
 
     /**
@@ -168,7 +344,7 @@ public class OpValidation {
         collectCoverageInformation(testCase);
 
         //Check shape function:
-        List<long[]> outShapes;
+        List<LongShapeDescriptor> outShapes;
         try {
             outShapes = Nd4j.getExecutioner().calculateOutputShape(testCase.op());
         } catch (Throwable t) {
@@ -181,17 +357,16 @@ public class OpValidation {
         }
 
         for (int i = 0; i < outShapes.size(); i++) {
-            long[] act = outShapes.get(i);
-            long[] exp = testCase.expShapes().get(i);
-            if (!Arrays.equals(exp, act)) {
-                return "Shape function check failed for output " + i + ": expected shape " + Arrays.toString(exp) +
-                        ", actual shape " + Arrays.toString(act);
+            val act = outShapes.get(i);
+            val exp = testCase.expShapes().get(i);
+            if (!Objects.equals(exp, act)) {
+                return "Shape function check failed for output " + i + ": expected shape " + exp + ", actual shape " + act;
             }
         }
 
         //Check the outputs:
         try {
-            Nd4j.getExecutioner().exec(testCase.op());
+            Nd4j.getExecutioner().execAndReturn(testCase.op());
         } catch (Throwable t) {
             throw new IllegalStateException("Error during op execution", t);
         }
@@ -223,6 +398,8 @@ public class OpValidation {
     private static Map<Class, Integer> gradCheckCoverageCountPerClass = new LinkedHashMap<>();
     private static Map<Class, Integer> fwdPassCoverageCountPerClass = new LinkedHashMap<>();
     private static Map<Class, Integer> singleOpTestCountPerClass = new LinkedHashMap<>();
+    private static Map<Class, Integer> opsWithTFMappingTFImportCounts = new LinkedHashMap<>();
+    private static Map<String, Integer> tfMappedOpsImportTestCounts = new LinkedHashMap<>();
 
 
     private static void collectCoverageInformation(TestCase testCase) {
@@ -267,6 +444,37 @@ public class OpValidation {
         //TODO we're basically assuming subtypes of DynamicCustomOp here, for coverage... not DCO itself
         singleOpTestCountPerClass.put(testCase.op().getClass(),
                 singleOpTestCountPerClass.get(testCase.op().getClass()) + 1);
+    }
+
+
+    public static void collectTensorflowImportCoverage(SameDiff graph){
+        for(SameDiffOp op : graph.getOps().values()){
+            DifferentialFunction d = op.getOp();
+            String[] tfNames = null;
+            try{
+                tfNames = d.tensorflowNames();
+            } catch (Throwable t){
+                //Ignore
+                continue;
+            }
+
+            if(tfNames != null && tfNames.length > 0){
+                Integer currCount = opsWithTFMappingTFImportCounts.get(d.getClass());
+                if(currCount == null)
+                    currCount = 0;
+                currCount++;
+                opsWithTFMappingTFImportCounts.put(d.getClass(), currCount);
+
+                for(String s : tfNames){
+                    currCount = tfMappedOpsImportTestCounts.get(s);
+                    if(currCount == null)
+                        currCount = 0;
+                    currCount++;
+                    tfMappedOpsImportTestCounts.put(s, currCount);
+                }
+            }
+        }
+
     }
 
     //Collect coverage information
@@ -373,7 +581,8 @@ public class OpValidation {
      * @param logAdequatelyTested If true: log details of each op that has both forward and (if appropriate) backward tests
      * @param logInadequate       If false: log details of each op that does NOT have both forward and (if appropriate) backward tests
      */
-    public static void logCoverageInformation(boolean logAdequatelyTested, boolean logInadequate, boolean logUnmappedLibnd4jOps) {
+    public static void logCoverageInformation(boolean logAdequatelyTested, boolean logInadequate, boolean logUnmappedLibnd4jOps,
+                                              boolean logUntestedTFImport, boolean logUnmappedTFOps) {
         //Set of ops that we can't gradient check
         Set<Class> excludedFromBackpropCoverage = excludedFromGradientCheckCoverage();
         Set<Class> excludedFromAllTestCoverage = excludedFromAllTests();
@@ -445,6 +654,51 @@ public class OpValidation {
             }
         }
 
+        //Log info for TF import op coverage:
+        Map<String,DifferentialFunction> tfOpsMap = DifferentialFunctionClassHolder.getInstance().getTensorFlowNames();
+        int totalTFMappedOps = tfOpsMap.size();
+        int tfOpsWithImportTests = 0;
+        if(logUntestedTFImport)
+            log.info(" --- Ops with TF Mapping but No TF Import Tests ---");
+        List<String> tfOpsKeys = new ArrayList<>(tfOpsMap.keySet());
+        Collections.sort(tfOpsKeys);
+        Set<String> tfIgnored = excludeFromTfImportCoverage();
+        int tfImportIgnored = 0;
+        for(String s : tfOpsKeys){
+            Integer count = tfMappedOpsImportTestCounts.get(s);
+            if(count == null || count == 0){
+                if(tfIgnored.contains(s)){
+                    tfImportIgnored++;
+                } else if(logUntestedTFImport)
+                    log.info("TF mapped op with no import tests: {}", s);
+            } else {
+                tfOpsWithImportTests++;
+            }
+        }
+
+        if(logUnmappedTFOps){
+            Map<String,OpDef> allTFOps;
+            try{
+                allTFOps = TensorflowDescriptorParser.opDescs();
+            } catch (Throwable t){
+                throw new RuntimeException(t);
+            }
+
+            List<String> notMapped = new ArrayList<>();
+            for(String s : allTFOps.keySet()){
+                if(DifferentialFunctionClassHolder.getInstance().getOpWithTensorflowName(s) == null &&
+                        !tfIgnored.contains(s)){
+                    notMapped.add(s);
+                }
+            }
+
+            Collections.sort(notMapped);
+            int subsets = (int)Math.ceil(notMapped.size() / 10);
+            for( int i=0; i<subsets; i++ ){
+                log.info("TF ops not mapped for import: {}", notMapped.subList(10*i, Math.min(10*(i+1), notMapped.size())));
+            }
+        }
+
 
         int totalFwd = 0;
         for(Class c : allOps){
@@ -473,15 +727,17 @@ public class OpValidation {
         int countLibnd4jMapped = countTotalLibnd4jOps - nonMappedLibnd4jOps.size();
         String fracLibnd4j = String.format("%.2f", 100.0 * (countLibnd4jMapped / (double)countTotalLibnd4jOps));
 
+        String fracTFMappedTested = String.format("%.2f", 100.0 * tfOpsWithImportTests / (double)(totalTFMappedOps-tfImportIgnored));
 
         log.info("*****************************************************");
-        log.info("Op Validation:        {} of {} classes with adequate tests ({}% coverage)", countAdequate, totalFwd, pc);
-        log.info("Forward pass tests:   {} of {} classes ({}% coverage)", countAdequateFwd, totalFwd, pcFwd);
-        log.info("Gradient check tests: {} of {} classes ({}% coverage)", countAdequateBwd, totalBwd, pcBwd);
+        log.info("Op Validation:                        {} of {} classes with adequate tests ({}% coverage)", countAdequate, totalFwd, pc);
+        log.info("Forward pass tests:                   {} of {} classes ({}% coverage)", countAdequateFwd, totalFwd, pcFwd);
+        log.info("Gradient check tests:                 {} of {} classes ({}% coverage)", countAdequateBwd, totalBwd, pcBwd);
         log.info("({} ops excluded from gradient check coverage)", excludedFromBackpropCoverage.size());
         log.info("({} ops excluded from fwd+gradient tests)", excludedFromAllTestCoverage.size());
-        log.info("TF mapped ops:        {} of {} ({}%)", countTfMapped, countTf, fracTfStr);
-        log.info("Libnd4j mapped ops:   {} of {} ({}%)", countLibnd4jMapped, countTotalLibnd4jOps, fracLibnd4j);
+        log.info("TF mapped ops:                        {} of {} ({}%)", countTfMapped, countTf, fracTfStr);
+        log.info("SD ops with TF import mapping + test  {} of {} ({}%) - {} ignored for coverage", tfOpsWithImportTests, (totalTFMappedOps-tfImportIgnored), fracTFMappedTested, tfImportIgnored);
+        log.info("Libnd4j mapped ops:                   {} of {} ({}%)", countLibnd4jMapped, countTotalLibnd4jOps, fracLibnd4j);
         log.info("*****************************************************");
     }
 
@@ -538,6 +794,9 @@ public class OpValidation {
                 RSubBpOp.class,
                 SquaredDifferenceBpOp.class,
                 SubBpOp.class,
+                CumProdBp.class,
+                DotBp.class,
+                SquaredNormBp.class,
 
                 CubeDerivative.class,
                 ELUDerivative.class,
@@ -550,20 +809,19 @@ public class OpValidation {
                 Relu6Derivative.class,
                 SELUDerivative.class,
                 SigmoidDerivative.class,
-                org.nd4j.linalg.api.ops.impl.transforms.SigmoidDerivative.class,
-                SoftMaxDerivative.class,
-                org.nd4j.linalg.api.ops.impl.transforms.SoftMaxDerivative.class,
+                org.nd4j.linalg.api.ops.impl.transforms.strict.SigmoidDerivative.class,
+                org.nd4j.linalg.api.ops.impl.transforms.strict.SoftMaxDerivative.class,
                 SoftSignDerivative.class,
                 TanhDerivative.class,
-                LogSigmoidDerivative.class,
                 SwishDerivative.class,
                 TanDerivative.class,
                 TanhDerivative.class,
-                org.nd4j.linalg.api.ops.impl.transforms.TanhDerivative.class,
+                org.nd4j.linalg.api.ops.impl.transforms.strict.TanhDerivative.class,
                 PowDerivative.class,
 
                 BiasAddGrad.class,
                 ConcatBp.class,
+                TileBp.class,
 
                 BatchNormDerivative.class,
                 Conv2DDerivative.class,
@@ -625,8 +883,6 @@ public class OpValidation {
                 IMin.class,
                 LastIndex.class,
                 //Exclude Random ops
-                LegacyDropOut.class,
-                LegacyDropOutInverted.class,
                 RandomStandardNormal.class,
                 DistributionUniform.class,
                 AlphaDropOut.class,
@@ -659,6 +915,52 @@ public class OpValidation {
                 StandardDeviationBp.class,
                 SumBp.class,
                 VarianceBp.class
+        );
+
+        return new HashSet<>(list);
+    }
+
+    /**
+     * These ops are excluded from TF import test coverage, for various reasons
+     */
+    private static Set<String> excludeFromTfImportCoverage(){
+        List<String> list = Arrays.asList(
+                "Reverse",      //Can be excluded because "Reverse_v2" is synonym that TF uses with tf.reverse(...); ReverseV2 is also Java op that is synonym for same op
+                "LogSigmoid",    //Not in ops.proto. Have tests for tf.log_sigmoid, but can't test LogSigmoid op directly: tf.log_sigmoid actually just uses "y = -tf.nn.softplus(-x)" - i.e., 3 separate ops :/
+                "HardSigmoid",   //Also implemented as python, NOT a single native op
+                "SpaceToBatch", //Old name - SpaceToBatchNd is used in practice (inc. for tf.space_to_batch)
+                "BatchToSpace", //Old name - BatchToSpaceNd is used in practice
+                "Pad",          //As far as I can tell: Only PadV2 and MirrorPad are used in practice
+                "TopK",         //TopKV2 used
+                "InTopK",       //InTopKV2 used
+                "BatchMatrixDeterminant",   //Deprecated in favor of "MatrixDeterminant"
+                "BatchMatrixDiagPart",      //Deprecated in favor of "MatrixDiagPart"
+                "BatchMatrixDiag",          //Deprecated in favor of "MatrixDiag"
+                "BatchMatrixBandPart",      //Deprecated in favor of "MatrixBandPart"
+                "BatchMatrixInverse",       //Deprecated in favor of "MatrixInverse"
+                "BatchMatrixSetDiag",       //Deprecated in favor of "MatrixSetDiag"
+                "BatchMatrixSolve",         //Deprecated in favor of "MatrixSolve"
+                "BatchMatrixSolveLs",       //Deprecated in favor of "MatrixSolveLs"
+                "BatchMatrixTriangularSolve",   //Deprecated in favor of "MatrixTriangularSolve"
+                "BatchSelfAdjointEig",      //Deprecated in favor of "SelfAdjointEigV2"
+                "BatchSelfAdjointEigV2",    //Deprecated in favor of "SelfAdjointEigV2"
+                "BatchSvd",                 //Deprecated in favor of "Svd"
+
+                //All of the following ops - not available in TF (can't find them) - op mapping is wrong?
+                //TODO: Check these and remove the import mapping from the Java classes if they are indeed bad
+                "HardTanh",
+                "Swish",
+                "RDiv",
+                "DivScalar",
+                "LogX",
+                "RationalTanh",
+                "absargmax",
+                "absargmin",
+                "entropy_shannon",   //This is a thing, but quite different from our op: https://www.tensorflow.org/versions/r1.2/api_docs/python/tf/contrib/bayesflow/entropy/entropy_shannon
+                "count_zero"
+
+
+
         );
 
         return new HashSet<>(list);

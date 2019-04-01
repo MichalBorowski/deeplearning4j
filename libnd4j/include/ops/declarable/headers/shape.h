@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 //
 //  @author raver119@gmail.com
 //
@@ -34,11 +50,15 @@ namespace nd4j {
         #endif
 
         #if NOT_EXCLUDED(OP_expand_dims)
-        DECLARE_CUSTOM_OP(expand_dims, 1, 1, false, 0, 1);
+        DECLARE_CUSTOM_OP(expand_dims, 1, 1, false, 0, -2);
         #endif
 
         #if NOT_EXCLUDED(OP_reshape)
         DECLARE_CUSTOM_OP(reshape, 1, 1, true, 0, -2);
+        #endif
+
+        #if NOT_EXCLUDED(OP_size_at)
+        DECLARE_CUSTOM_OP(size_at, 1, 1, true, 0, 1);
         #endif
 
         /**
@@ -62,6 +82,22 @@ namespace nd4j {
         #if NOT_EXCLUDED(OP_tile_to_shape)
         DECLARE_CUSTOM_OP(tile_to_shape, 1, 1, true, 0, -1);
         DECLARE_CUSTOM_OP(tile_to_shape_bp, 2, 1, true, 0, -1);
+        #endif
+
+        /**
+         * This op broadcast given input up to given shape
+         *  
+         * inputs:
+         *  input array - array to be broadcasted to given shape
+         *  shape array - array containing shape be broadcasted to
+         */
+        #if NOT_EXCLUDED(OP_broadcast_to)
+        DECLARE_CUSTOM_OP(broadcast_to, 2, 1, false, 0, 0);        
+        #endif
+
+
+        #if NOT_EXCLUDED(OP_evaluate_reduction_shape)
+        DECLARE_CUSTOM_OP(evaluate_reduction_shape, 2, 1, false, 0, 0);
         #endif
     }
 }

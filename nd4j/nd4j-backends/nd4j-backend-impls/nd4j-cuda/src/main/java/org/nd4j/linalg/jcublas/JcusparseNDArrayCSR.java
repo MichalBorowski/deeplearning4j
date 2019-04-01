@@ -1,10 +1,28 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.linalg.jcublas;
 
 import com.google.flatbuffers.FlatBufferBuilder;
 import org.nd4j.linalg.api.blas.params.MMulTranspose;
 import org.nd4j.linalg.api.buffer.DataBuffer;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.ndarray.BaseSparseNDArrayCSR;
 import org.nd4j.linalg.api.ndarray.INDArray;
+import org.nd4j.linalg.api.shape.LongShapeDescriptor;
 
 /**
  * @author Audrey Loeffel
@@ -33,6 +51,11 @@ public class JcusparseNDArrayCSR extends BaseSparseNDArrayCSR {
 
     public JcusparseNDArrayCSR(DataBuffer data, int[] columnsPointers, int[] pointerB, int[] pointerE, long[] shape) {
         super(data, columnsPointers, pointerB, pointerE, shape);
+    }
+
+    @Override
+    public String getStringUnsafe(long index) {
+        return null;
     }
 
     @Override
@@ -69,7 +92,17 @@ public class JcusparseNDArrayCSR extends BaseSparseNDArrayCSR {
     }
 
     @Override
+    public long getLong(long index) {
+        return 0;
+    }
+
+    @Override
     public INDArray reshape(char order, int... newShape) {
+        return null;
+    }
+
+    @Override
+    public INDArray reshape(char order, boolean enforceView, long... newShape) {
         return null;
     }
 
@@ -78,25 +111,15 @@ public class JcusparseNDArrayCSR extends BaseSparseNDArrayCSR {
         return null;
     }
 
+    @Override
+    public LongShapeDescriptor shapeDescriptor() {
+        return null;
+    }
+
 
     @Override
     public int toFlatArray(FlatBufferBuilder builder) {
         throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public INDArray convertToHalfs() {
-        return null;
-    }
-
-    @Override
-    public INDArray convertToFloats() {
-        return null;
-    }
-
-    @Override
-    public INDArray convertToDoubles() {
-        return null;
     }
 
     /**
@@ -107,5 +130,55 @@ public class JcusparseNDArrayCSR extends BaseSparseNDArrayCSR {
     @Override
     public boolean isEmpty() {
         throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public boolean isR() {
+        return false;
+    }
+
+    @Override
+    public boolean isZ() {
+        return false;
+    }
+
+    @Override
+    public boolean isB() {
+        return false;
+    }
+
+    @Override
+    public boolean isS() {
+        return false;
+    }
+
+    @Override
+    public INDArray castTo(DataType dataType) {
+        return null;
+    }
+
+    @Override
+    public boolean all() {
+        return false;
+    }
+
+    @Override
+    public boolean any() {
+        return false;
+    }
+
+    @Override
+    public boolean none() {
+        return false;
+    }
+
+    @Override
+    public boolean closeable() {
+        return false;
+    }
+
+    @Override
+    public void close() {
+
     }
 }

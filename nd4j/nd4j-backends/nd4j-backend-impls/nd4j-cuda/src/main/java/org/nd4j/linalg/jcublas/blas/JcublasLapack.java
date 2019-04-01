@@ -1,7 +1,21 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.linalg.jcublas.blas;
 
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 import lombok.extern.slf4j.Slf4j;
 import org.bytedeco.javacpp.DoublePointer;
 import org.bytedeco.javacpp.FloatPointer;
@@ -14,6 +28,7 @@ import org.nd4j.jita.allocator.pointers.cuda.cusolverDnHandle_t;
 import org.nd4j.linalg.api.blas.BlasException;
 import org.nd4j.linalg.api.blas.impl.BaseLapack;
 import org.nd4j.linalg.api.buffer.DataBuffer;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.api.ops.executioner.GridExecutioner;
 import org.nd4j.linalg.factory.Nd4j;
@@ -24,10 +39,12 @@ import org.nd4j.linalg.jcublas.context.CudaContext;
 import org.nd4j.nativeblas.NativeOps;
 import org.nd4j.nativeblas.NativeOpsHolder;
 
-import static org.bytedeco.javacpp.cuda.CUstream_st;
-import static org.bytedeco.javacpp.cusolver.*;
-import static org.bytedeco.javacpp.cublas.* ;
-
+import org.bytedeco.cuda.cudart.*;
+import org.bytedeco.cuda.cublas.*;
+import org.bytedeco.cuda.cusolver.*;
+import static org.bytedeco.cuda.global.cudart.*;
+import static org.bytedeco.cuda.global.cublas.*;
+import static org.bytedeco.cuda.global.cusolver.*;
 
 /**
  * JCublas lapack
@@ -44,7 +61,7 @@ public class JcublasLapack extends BaseLapack {
     @Override
     public void sgetrf(int M, int N, INDArray A, INDArray IPIV, INDArray INFO) {
         INDArray a = A;
-        if (Nd4j.dataType() != DataBuffer.Type.FLOAT)
+        if (Nd4j.dataType() != DataType.FLOAT)
             log.warn("FLOAT getrf called in DOUBLE environment");
 
         if (A.ordering() == 'c')
@@ -112,7 +129,7 @@ public class JcublasLapack extends BaseLapack {
     public void dgetrf(int M, int N, INDArray A, INDArray IPIV, INDArray INFO) {
         INDArray a = A;
 
-        if (Nd4j.dataType() != DataBuffer.Type.DOUBLE)
+        if (Nd4j.dataType() != DataType.DOUBLE)
             log.warn("FLOAT getrf called in FLOAT environment");
 
         if (A.ordering() == 'c')
@@ -178,7 +195,7 @@ public class JcublasLapack extends BaseLapack {
         INDArray a = A;
         INDArray r = R;
 
-        if (Nd4j.dataType() != DataBuffer.Type.FLOAT)
+        if (Nd4j.dataType() != DataType.FLOAT)
             log.warn("FLOAT getrf called in DOUBLE environment");
 
         if (A.ordering() == 'c') 
@@ -187,7 +204,7 @@ public class JcublasLapack extends BaseLapack {
             r = R.dup('f');
 
         INDArray tau = Nd4j.createArrayFromShapeBuffer(Nd4j.getDataBufferFactory().createFloat(N),
-                Nd4j.getShapeInfoProvider().createShapeInformation(new int[] {1, N}).getFirst());
+                Nd4j.getShapeInfoProvider().createShapeInformation(new long[] {1, N}, A.dataType()).getFirst());
 
         if (Nd4j.getExecutioner() instanceof GridExecutioner)
             ((GridExecutioner) Nd4j.getExecutioner()).flushQueue();
@@ -293,7 +310,7 @@ public class JcublasLapack extends BaseLapack {
         INDArray a = A;
         INDArray r = R;
 
-        if (Nd4j.dataType() != DataBuffer.Type.DOUBLE)
+        if (Nd4j.dataType() != DataType.DOUBLE)
             log.warn("DOUBLE getrf called in FLOAT environment");
 
         if (A.ordering() == 'c')
@@ -302,7 +319,7 @@ public class JcublasLapack extends BaseLapack {
             r = R.dup('f');
 
         INDArray tau = Nd4j.createArrayFromShapeBuffer(Nd4j.getDataBufferFactory().createDouble(N),
-                Nd4j.getShapeInfoProvider().createShapeInformation(new int[] {1, N}));
+                Nd4j.getShapeInfoProvider().createShapeInformation(new long[] {1, N}, A.dataType()));
 
         if (Nd4j.getExecutioner() instanceof GridExecutioner)
             ((GridExecutioner) Nd4j.getExecutioner()).flushQueue();
@@ -406,8 +423,8 @@ public class JcublasLapack extends BaseLapack {
     public void spotrf(byte uplo, int N, INDArray A, INDArray INFO) {
         INDArray a = A;
 
-        if (Nd4j.dataType() != DataBuffer.Type.FLOAT)
-            log.warn("DOUBLE potrf called in FLOAT environment");
+        if (A.dataType() != DataType.FLOAT)
+            log.warn("FLOAT potrf called for " + A.dataType());
 
         if (A.ordering() == 'c')
             a = A.dup('f');
@@ -489,8 +506,8 @@ public class JcublasLapack extends BaseLapack {
     public void dpotrf(byte uplo, int N, INDArray A, INDArray INFO) {
         INDArray a = A;
 
-        if (Nd4j.dataType() != DataBuffer.Type.DOUBLE)
-            log.warn("FLOAT potrf called in DOUBLE environment");
+        if (A.dataType() != DataType.DOUBLE)
+            log.warn("DOUBLE potrf called for " + A.dataType());
 
         if (A.ordering() == 'c')
             a = A.dup('f');
@@ -528,7 +545,7 @@ public class JcublasLapack extends BaseLapack {
 
             int worksize = worksizeBuffer.getInt(0);
             // Now allocate memory for the workspace, the permutation matrix and a return code
-            Pointer workspace = new Workspace(worksize * Nd4j.sizeOfDataType());
+            Pointer workspace = new Workspace(worksize * Nd4j.sizeOfDataType(DataType.DOUBLE));
 
             // Do the actual decomp
             stat = cusolverDnDpotrf(solverDn, uplo, N, 
@@ -589,7 +606,7 @@ public class JcublasLapack extends BaseLapack {
     public void sgesvd(byte jobu, byte jobvt, int M, int N, INDArray A, INDArray S, INDArray U, INDArray VT,
                     INDArray INFO) {
 
-        if (Nd4j.dataType() != DataBuffer.Type.FLOAT)
+        if (Nd4j.dataType() != DataType.FLOAT)
             log.warn("FLOAT gesvd called in DOUBLE environment");
 
         INDArray a = A;
@@ -608,10 +625,13 @@ public class JcublasLapack extends BaseLapack {
 		int tmp1 = N ;
 		N = M ;
 		M = tmp1 ;
+        byte tmp2 = jobu;
+        jobu = jobvt;
+        jobvt = tmp2;
 
 		a = A.transpose().dup('f') ;
-		u = VT.dup('f') ;
-		vt = U.dup('f') ;
+		u = (VT == null) ? null : VT.transpose().dup('f');
+        vt = (U == null) ? null : U.transpose().dup('f');
 	} else {
 	        // cuda requires column ordering - we'll register a warning in case
        	 	if (A.ordering() == 'c')
@@ -659,8 +679,8 @@ public class JcublasLapack extends BaseLapack {
             // Do the actual decomp
             stat = cusolverDnSgesvd(solverDn, jobu, jobvt, M, N, (FloatPointer) xAPointer.getDevicePointer(), M,
                             new CudaPointer(allocator.getPointer(S, ctx)).asFloatPointer(),
-                            U == null ? null : new CudaPointer(allocator.getPointer(u, ctx)).asFloatPointer(), M,
-                            VT == null ? null : new CudaPointer(allocator.getPointer(vt, ctx)).asFloatPointer(), N,
+                            u == null ? null : new CudaPointer(allocator.getPointer(u, ctx)).asFloatPointer(), M,
+                            vt == null ? null : new CudaPointer(allocator.getPointer(vt, ctx)).asFloatPointer(), N,
                             new CudaPointer(workspace).asFloatPointer(), worksize,
                             new CudaPointer(allocator.getPointer(rwork, ctx)).asFloatPointer(),
                             new CudaPointer(allocator.getPointer(INFO, ctx)).asIntPointer());
@@ -671,21 +691,23 @@ public class JcublasLapack extends BaseLapack {
         allocator.registerAction(ctx, INFO);
         allocator.registerAction(ctx, S);
 
-	if (U != null)
-            	allocator.registerAction(ctx, u);
-	if (VT != null)
-		allocator.registerAction(ctx, vt);
+        if (u != null)
+            allocator.registerAction(ctx, u);
+        if (vt != null)
+            allocator.registerAction(ctx, vt);
 
-	// if we transposed A then swap & transpose U & V'
-	if( hadToTransposeA ) {
-		U.assign(vt.transpose());
-		VT.assign(u.transpose());
-	} else {
-		if (u != U)
-			U.assign(u);
-		if (vt != VT)
-			VT.assign(vt);
-	}
+        // if we transposed A then swap & transpose U & V'
+        if( hadToTransposeA ) {
+            if (vt != null)
+                U.assign(vt.transpose());
+            if (u != null)
+                VT.assign(u.transpose());
+        } else {
+            if (u != U)
+                U.assign(u);
+            if (vt != VT)
+                VT.assign(vt);
+        }
     }
 
 
@@ -709,10 +731,13 @@ public class JcublasLapack extends BaseLapack {
 		int tmp1 = N ;
 		N = M ;
 		M = tmp1 ;
+        byte tmp2 = jobu;
+        jobu = jobvt;
+        jobvt = tmp2;
 
 		a = A.transpose().dup('f') ;
-		u = VT.dup('f') ;
-		vt = U.dup('f') ;
+		u = (VT == null) ? null : VT.transpose().dup('f');
+        vt = (U == null) ? null : U.transpose().dup('f');
 	} else {
 	        // cuda requires column ordering - we'll register a warning in case
        	 	if (A.ordering() == 'c')
@@ -725,7 +750,7 @@ public class JcublasLapack extends BaseLapack {
 			vt = VT.dup('f');
 	}
 
-        if (Nd4j.dataType() != DataBuffer.Type.DOUBLE)
+        if (Nd4j.dataType() != DataType.DOUBLE)
             log.warn("DOUBLE gesvd called in FLOAT environment");
 
         if (Nd4j.getExecutioner() instanceof GridExecutioner)
@@ -765,8 +790,8 @@ public class JcublasLapack extends BaseLapack {
             // Do the actual decomp
             stat = cusolverDnDgesvd(solverDn, jobu, jobvt, M, N, (DoublePointer) xAPointer.getDevicePointer(), M,
                             new CudaPointer(allocator.getPointer(S, ctx)).asDoublePointer(),
-                            U == null ? null : new CudaPointer(allocator.getPointer(u, ctx)).asDoublePointer(), M,
-                            VT == null ? null : new CudaPointer(allocator.getPointer(vt, ctx)).asDoublePointer(), N,
+                            u == null ? null : new CudaPointer(allocator.getPointer(u, ctx)).asDoublePointer(), M,
+                            vt == null ? null : new CudaPointer(allocator.getPointer(vt, ctx)).asDoublePointer(), N,
                             new CudaPointer(workspace).asDoublePointer(), worksize,
                             new CudaPointer(allocator.getPointer(rwork, ctx)).asDoublePointer(),
                             new CudaPointer(allocator.getPointer(INFO, ctx)).asIntPointer());
@@ -779,22 +804,24 @@ public class JcublasLapack extends BaseLapack {
         allocator.registerAction(ctx, S);
         allocator.registerAction(ctx, a);
 
-        if (U != null)
+        if (u != null)
             allocator.registerAction(ctx, u);
 
-        if (VT != null)
+        if (vt != null)
             allocator.registerAction(ctx, vt);
 
-	// if we transposed A then swap & transpose U & V'
-	if( hadToTransposeA ) {
-		U.assign(vt.transpose());
-		VT.assign(u.transpose());
-	} else {
-		if (u != U)
-			U.assign(u);
-		if (vt != VT)
-			VT.assign(vt);
-	}
+        // if we transposed A then swap & transpose U & V'
+        if( hadToTransposeA ) {
+            if (vt != null)
+                U.assign(vt.transpose());
+            if (u != null)
+                VT.assign(u.transpose());
+        } else {
+            if (u != U)
+                U.assign(u);
+            if (vt != VT)
+                VT.assign(vt);
+        }
     }
 
     public int ssyev( char _jobz, char _uplo, int N, INDArray A, INDArray R ) {
@@ -804,7 +831,7 @@ public class JcublasLapack extends BaseLapack {
 	int jobz = _jobz == 'V' ? CUSOLVER_EIG_MODE_VECTOR : CUSOLVER_EIG_MODE_NOVECTOR ;
 	int uplo = _uplo == 'L' ? CUBLAS_FILL_MODE_LOWER : CUBLAS_FILL_MODE_UPPER ;
 
-        if (Nd4j.dataType() != DataBuffer.Type.FLOAT)
+        if (Nd4j.dataType() != DataType.FLOAT)
             log.warn("FLOAT ssyev called in DOUBLE environment");
 
         INDArray a = A;
@@ -848,7 +875,7 @@ public class JcublasLapack extends BaseLapack {
 			    Pointer workspace = new Workspace(worksize * Nd4j.sizeOfDataType());
 
 			    INDArray INFO = Nd4j.createArrayFromShapeBuffer(Nd4j.getDataBufferFactory().createInt(1),
-		  	    Nd4j.getShapeInfoProvider().createShapeInformation(new int[] {1, 1}));
+		  	    Nd4j.getShapeInfoProvider().createShapeInformation(new long[] {1, 1}, A.dataType()));
 
 
 			    // Do the actual decomp
@@ -881,7 +908,7 @@ public class JcublasLapack extends BaseLapack {
 	int jobz = _jobz == 'V' ? CUSOLVER_EIG_MODE_VECTOR : CUSOLVER_EIG_MODE_NOVECTOR ;
 	int uplo = _uplo == 'L' ? CUBLAS_FILL_MODE_LOWER : CUBLAS_FILL_MODE_UPPER ;
 
-        if (Nd4j.dataType() != DataBuffer.Type.DOUBLE)
+        if (Nd4j.dataType() != DataType.DOUBLE)
             log.warn("DOUBLE dsyev called in FLOAT environment");
 
         INDArray a = A;
@@ -925,7 +952,7 @@ public class JcublasLapack extends BaseLapack {
 			    Pointer workspace = new Workspace(worksize * Nd4j.sizeOfDataType());
 
 			    INDArray INFO = Nd4j.createArrayFromShapeBuffer(Nd4j.getDataBufferFactory().createInt(1),
-			    Nd4j.getShapeInfoProvider().createShapeInformation(new int[] {1, 1}));
+			    Nd4j.getShapeInfoProvider().createShapeInformation(new long[] {1, 1}, A.dataType()));
 
 
 			    // Do the actual decomp

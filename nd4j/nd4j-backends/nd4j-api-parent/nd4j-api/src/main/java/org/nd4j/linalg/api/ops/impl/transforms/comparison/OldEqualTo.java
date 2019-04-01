@@ -1,21 +1,18 @@
-/*-
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
  *
- *  * Copyright 2015 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
  *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
  *
- */
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.nd4j.linalg.api.ops.impl.transforms.comparison;
 
@@ -23,6 +20,7 @@ import org.nd4j.autodiff.samediff.SDVariable;
 import org.nd4j.autodiff.samediff.SameDiff;
 import org.nd4j.imports.NoOpNameFoundException;
 import org.nd4j.linalg.api.ndarray.INDArray;
+import org.nd4j.linalg.api.ops.BaseTransformBoolOp;
 import org.nd4j.linalg.api.ops.BaseTransformOp;
 
 import java.util.Arrays;
@@ -34,7 +32,7 @@ import java.util.List;
  *
  * @author Adam Gibson
  */
-public class OldEqualTo extends BaseTransformOp {
+public class OldEqualTo extends BaseTransformBoolOp {
 
 
 
@@ -50,14 +48,6 @@ public class OldEqualTo extends BaseTransformOp {
         super(sameDiff, i_v, inPlace);
     }
 
-    public OldEqualTo(SameDiff sameDiff, SDVariable i_v, int[] shape, boolean inPlace, Object[] extraArgs) {
-        super(sameDiff, i_v, shape, inPlace, extraArgs);
-    }
-
-    public OldEqualTo(SameDiff sameDiff, SDVariable i_v, Object[] extraArgs) {
-        super(sameDiff, i_v, extraArgs);
-    }
-
     public OldEqualTo(SameDiff sameDiff, SDVariable i_v1, SDVariable i_v2) {
         super(sameDiff, i_v1, i_v2);
     }
@@ -68,25 +58,17 @@ public class OldEqualTo extends BaseTransformOp {
 
     public OldEqualTo() {}
 
-    public OldEqualTo(INDArray x, INDArray y, INDArray z, long n) {
-        super(x, y, z, n);
+    public OldEqualTo(INDArray x, INDArray y, INDArray z) {
+        super(x, y, z);
     }
 
-    public OldEqualTo(INDArray x) {
-        super(x);
-    }
-
-    public OldEqualTo(INDArray x, INDArray z) {
-        super(x, z);
-    }
-
-    public OldEqualTo(INDArray x, INDArray z, long n) {
-        super(x, z, n);
+    public OldEqualTo(INDArray x, INDArray y) {
+        super(x, y, null);
     }
 
     @Override
     public int opNum() {
-        return 3;
+        return 0;
     }
 
     @Override
@@ -101,14 +83,13 @@ public class OldEqualTo extends BaseTransformOp {
 
     @Override
     public String tensorflowName() {
-        return "Equal";
+        throw new NoOpNameFoundException("No Tensorflow op opName found for " +  opName());
     }
-
-
 
     @Override
     public List<SDVariable> doDiff(List<SDVariable> f1) {
-        return Arrays.asList(outputVariables()[0]);
+        //Equals op: 2 inputs, not continuously differentiable but 0s almost everywhere
+        return Arrays.asList(sameDiff.zerosLike(args()[0]), sameDiff.zerosLike(args()[1]));
     }
 
 }

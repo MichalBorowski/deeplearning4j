@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.nn.layers.convolution;
 
 import org.deeplearning4j.exception.DL4JInvalidInputException;
@@ -63,7 +79,7 @@ public class Convolution3DLayer extends ConvolutionLayer {
         int inH = (int) (isNCDHW ? input.size(3) : input.size(2));
         int inW = (int) (isNCDHW ? input.size(4) : input.size(3));
 
-        int outEpsChannels = (int) (isNCDHW ? weights.size(1) : weights.size(3));
+        int outEpsChannels = (int) layerConf().getNIn();
 
         int[] dilation = layerConfig.getDilation();
         int[] kernel = layerConfig.getKernelSize();
@@ -108,16 +124,21 @@ public class Convolution3DLayer extends ConvolutionLayer {
         INDArray bias;
         INDArray biasGradView = null;
 
+        //DL4J conv3d weights: val weightsShape = new long[]{outputDepth, inputDepth, kernel[0], kernel[1], kernel[2]};
+        //libnd4j conv3d weights: [kD, kH, kW, iC, oC]
+        weights = weights.permute(2, 3, 4, 1, 0);
+        INDArray opWeightGradView = weightGradView.permute(2, 3, 4, 1, 0);
+
         INDArray[] inputs;
         INDArray[] outputs;
         if (layerConfig.hasBias()) {
             biasGradView = gradientViews.get(Convolution3DParamInitializer.BIAS_KEY);
             bias = getParamWithNoise(Convolution3DParamInitializer.BIAS_KEY, true, workspaceMgr);
             inputs = new INDArray[]{input, weights, bias, delta};
-            outputs = new INDArray[]{outEpsilon, weightGradView, biasGradView};
+            outputs = new INDArray[]{outEpsilon, opWeightGradView, biasGradView};
         } else {
             inputs = new INDArray[]{input, weights, delta};
-            outputs = new INDArray[]{outEpsilon, weightGradView};
+            outputs = new INDArray[]{outEpsilon, opWeightGradView};
         }
 
         CustomOp op = DynamicCustomOp.builder("conv3dnew_bp")
@@ -161,7 +182,7 @@ public class Convolution3DLayer extends ConvolutionLayer {
             throw new DL4JInvalidInputException("Got rank " + input.rank()
                     + " array as input to Convolution3DLayer (layer name = " + layerName + ", layer index = "
                     + index + ") with shape " + Arrays.toString(input.shape()) + ". "
-                    + "Expected rank 5 array with shape [minibatchSize, numChannels, inputHeight,"
+                    + "Expected rank 5 array with shape [minibatchSize, numChannels, inputHeight, "
                     + "inputWidth, inputDepth]."
                     + (input.rank() == 2
                     ? " (Wrong input type (see InputType.convolutionalFlat()) or wrong data type?)"
@@ -176,19 +197,26 @@ public class Convolution3DLayer extends ConvolutionLayer {
         int inH = (int) (isNCDHW ? input.size(3) : input.size(2));
         int inW = (int) (isNCDHW ? input.size(4) : input.size(3));
 
-        int outWeightChannels = (int) (isNCDHW ? weights.size(0) : weights.size(4));
-        int inWeightChannels = (int) (isNCDHW ? weights.size(1) : weights.size(3));
+        int outWeightChannels = (int)layerConf().getNOut();
+        int inWeightChannels = (int)layerConf().getNIn();
 
         if (inputChannels != inWeightChannels) {
             String layerName = conf.getLayer().getLayerName();
             if (layerName == null)
                 layerName = "(not named)";
+            long dataInCh = isNCDHW ? input.size(1) : input.size(4);
+            String df;
+            if(isNCDHW){
+                df = ", dataFormat=NCDHW, [minibatch, inputChannels, depth, height, width]=";
+            } else {
+                df = ", dataFormat=NDHWC, [minibatch, depth, height, width, inputChannels]=";
+            }
             throw new DL4JInvalidInputException("Cannot do forward pass in Convolution3D layer (layer name = "
                     + layerName
                     + ", layer index = " + index + "): number of input array channels does not match " +
                     "CNN layer configuration"
-                    + " (data input channels = " + input.size(1)
-                    + ", [minibatch, inputChannels, depth, height, width]="
+                    + " (data input channels = " + dataInCh
+                    + df
                     + Arrays.toString(input.shape()) + "; expected" + " input channels = " + inWeightChannels + ") "
                     + layerId());
         }
@@ -229,6 +257,10 @@ public class Convolution3DLayer extends ConvolutionLayer {
                 mode == ConvolutionMode.Same ? 1 : 0,
                 isNCDHW ? 0 : 1
         };
+
+        //DL4J conv3d weights: val weightsShape = new long[]{outputDepth, inputDepth, kernel[0], kernel[1], kernel[2]};
+        //libnd4j conv3d weights: [kD, kH, kW, iC, oC]
+        weights = weights.permute(2, 3, 4, 1, 0);
 
         INDArray[] inputs;
         if (layerConfig.hasBias()) {

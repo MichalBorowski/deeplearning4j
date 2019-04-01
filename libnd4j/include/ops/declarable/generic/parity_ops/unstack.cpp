@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 //
 // @author raver119@gmail.com
 //
@@ -6,6 +22,7 @@
 #if NOT_EXCLUDED(OP_unstack)
 
 #include <ops/declarable/CustomOperations.h>
+#include <helpers/ConstantTadHelper.h>
 
 namespace nd4j {
     namespace ops {
@@ -24,8 +41,14 @@ namespace nd4j {
             for (int e = 0; e < input->rankOf(); e++)
                 if (e != dim)
                     dims.emplace_back(e);
+            if (dims.size() == 0 && input->rankOf() == 1) { // split vector into lenthOf scalars
+                for (Nd4jLong e = 0; e < input->lengthOf(); e++) {
+                    auto outE = OUTPUT_VARIABLE(e);
+                    outE->assign(input->e(e));
+                }
+            }
 
-            auto tads = NDArrayFactory<T>::allTensorsAlongDimension(input, dims);
+            auto tads = input->allTensorsAlongDimension(dims);
             //nd4j_printf("Tad size: %d\n",tads->size());
             for (int e = 0; e < tads->size(); e++) {
                 //nd4j_printf("Calling assign at index %d\n",e);
@@ -39,7 +62,7 @@ namespace nd4j {
 
             delete tads;
 
-            return ND4J_STATUS_OK;
+            return Status::OK();
         }
         DECLARE_SYN(unpack, unstack);
         
@@ -57,14 +80,20 @@ namespace nd4j {
             for (int e = 0; e < shape::rank(inShape); e++)
                 if (e != dim)
                     dims.emplace_back(e);
+            if (dims.size() == 0 && shape::rank(inShape) == 1) { // split vector into lenthOf scalars
+                //
+                auto result = SHAPELIST();
+                for (Nd4jLong e = 0; e < shape::length(inShape); e++)
+                    result->push_back(ShapeBuilders::createScalarShapeInfo(ArrayOptions::dataType(inShape), block.workspace()));
+                return result;
+            }
 
-            shape::TAD tad(inShape, dims.data(), (int) dims.size());
-            tad.createTadOnlyShapeInfo();
-            Nd4jLong numTads = shape::length(inShape) / shape::tadLength(inShape, dims.data(), (int) dims.size());
-            
-            std::vector<Nd4jLong> shape(shape::rank(tad.tadOnlyShapeInfo));
-            for (int e = 0; e < shape::rank(tad.tadOnlyShapeInfo); e++)
-                shape[e] = shape::shapeOf(tad.tadOnlyShapeInfo)[e];
+            auto tadPack = nd4j::ConstantTadHelper::getInstance()->tadForDimensions(inShape, dims);
+            auto numTads = tadPack.numberOfTads();
+
+            std::vector<Nd4jLong> shape(shape::rank(tadPack.primaryShapeInfo()));
+            for (int e = 0; e < shape::rank(tadPack.primaryShapeInfo()); e++)
+                shape[e] = shape::shapeOf(tadPack.primaryShapeInfo())[e];
 
             // remove leading and trailing 1
             if (inShape[0] == 2 && shape.size() == 2) {
@@ -74,19 +103,24 @@ namespace nd4j {
                     shape.erase(shape.end());
                 }
             }
-            
+
             auto result = SHAPELIST();
             for (int e = 0; e < numTads; e++) {
                 Nd4jLong *newShape;
                 ALLOCATE(newShape, block.getWorkspace(), shape::shapeInfoLength(shape.size()), Nd4jLong);
                 if (shape::order(inShape) == 'c')
-                    shape::shapeBuffer(shape.size(), shape.data(), newShape);
+                    shape::shapeBuffer(shape.size(), ArrayOptions::dataType(inShape), shape.data(), newShape);
                 else
-                    shape::shapeBufferFortran(shape.size(), shape.data(), newShape);
+                    shape::shapeBufferFortran(shape.size(), ArrayOptions::dataType(inShape), shape.data(), newShape);
                 result->push_back(newShape);
             }
-
             return result;
+        }
+
+        DECLARE_TYPES(unstack) {
+            getOpDescriptor()
+                    ->setAllowedInputTypes({ALL_FLOATS, ALL_INTS})
+                    ->setSameMode(true);
         }
     }
 }

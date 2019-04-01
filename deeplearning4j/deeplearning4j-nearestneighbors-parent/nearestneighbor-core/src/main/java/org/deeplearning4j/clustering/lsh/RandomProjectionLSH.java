@@ -1,14 +1,28 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.clustering.lsh;
 
 import lombok.Getter;
 import lombok.val;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.ndarray.INDArray;
-import org.nd4j.linalg.api.ops.impl.broadcast.BroadcastDivOp;
-import org.nd4j.linalg.api.ops.impl.broadcast.BroadcastEqualTo;
-import org.nd4j.linalg.api.ops.impl.transforms.Sign;
-
+import org.nd4j.linalg.api.ops.impl.broadcast.bool.BroadcastEqualTo;
+import org.nd4j.linalg.api.ops.impl.transforms.same.Sign;
 import org.nd4j.linalg.api.ops.random.impl.GaussianDistribution;
-import org.nd4j.linalg.api.ops.random.impl.UniformDistribution;
 import org.nd4j.linalg.api.rng.Random;
 import org.nd4j.linalg.exception.ND4JIllegalStateException;
 import org.nd4j.linalg.factory.Nd4j;
@@ -26,19 +40,19 @@ import java.util.Arrays;
  *
  * _Entropy based nearest neighbor search in high dimensions_
  * R Panigrahy - SIAM 2006
- * https://arxiv.org/pdf/cs/0510019.pdf
+ * <a href="https://arxiv.org/pdf/cs/0510019.pdf">https://arxiv.org/pdf/cs/0510019.pdf</a>
  *
  * To read more about LSH, in particular for the Cosine distance, see
  * chapter 3 of :
  * _Mining Massive Datasets_, Anand Rajaraman and Jeffrey Ullman
- * http://www.mmds.org/
+ * <a href="http://www.mmds.org/">http://www.mmds.org/</a>
  *
  * The original development of LSH for the cosine distance is from
  * Similarity estimation techniques from rounding algorithms
  * MS Charikar - STOCS, 2002
  *
  * Note for high-precision or distributed settings, you should not
- * use this and rather extend this to layered LSH ( https://arxiv.org/abs/1210.7057 )
+ * use this and rather extend this to layered LSH ( <a href="https://arxiv.org/abs/1210.7057">https://arxiv.org/abs/1210.7057</a> )
  *
  */
 public class RandomProjectionLSH implements LSH {
@@ -131,7 +145,7 @@ public class RandomProjectionLSH implements LSH {
                             Arrays.toString(data.shape()), inDimension));
         }
         INDArray projected = data.mmul(randomProjection);
-        INDArray res = Nd4j.getExecutioner().execAndReturn(new Sign(projected));
+        INDArray res = Nd4j.getExecutioner().exec(new Sign(projected));
         return res;
     }
 
@@ -149,9 +163,9 @@ public class RandomProjectionLSH implements LSH {
     INDArray rawBucketOf(INDArray query){
         INDArray pattern = hash(query);
 
-        INDArray res = Nd4j.zeros(index.shape());
+        INDArray res = Nd4j.zeros(DataType.BOOL, index.shape());
         Nd4j.getExecutioner().exec(new BroadcastEqualTo(index, pattern, res, -1));
-        return res.min(-1);
+        return res.castTo(Nd4j.defaultFloatingPointType()).min(-1);
     }
 
     @Override

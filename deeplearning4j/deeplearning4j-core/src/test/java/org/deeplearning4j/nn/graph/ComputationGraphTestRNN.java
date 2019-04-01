@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.nn.graph;
 
 import lombok.val;
@@ -12,13 +28,14 @@ import org.deeplearning4j.nn.conf.NeuralNetConfiguration;
 import org.deeplearning4j.nn.conf.WorkspaceMode;
 import org.deeplearning4j.nn.conf.distribution.NormalDistribution;
 import org.deeplearning4j.nn.conf.layers.DenseLayer;
+import org.deeplearning4j.nn.conf.layers.GlobalPoolingLayer;
+import org.deeplearning4j.nn.conf.layers.OutputLayer;
 import org.deeplearning4j.nn.conf.layers.RnnOutputLayer;
 import org.deeplearning4j.nn.conf.preprocessor.FeedForwardToRnnPreProcessor;
 import org.deeplearning4j.nn.conf.preprocessor.RnnToFeedForwardPreProcessor;
 import org.deeplearning4j.nn.gradient.Gradient;
 import org.deeplearning4j.nn.layers.recurrent.BaseRecurrentLayer;
 import org.deeplearning4j.nn.layers.recurrent.GravesLSTM;
-import org.deeplearning4j.nn.weights.WeightInit;
 import org.junit.Test;
 import org.nd4j.linalg.activations.Activation;
 import org.nd4j.linalg.api.ndarray.INDArray;
@@ -47,22 +64,22 @@ public class ComputationGraphTestRNN extends BaseDL4JTest {
         ComputationGraphConfiguration conf = new NeuralNetConfiguration.Builder().seed(12345).graphBuilder()
                         .addInputs("in")
                         .addLayer("0", new org.deeplearning4j.nn.conf.layers.GravesLSTM.Builder().nIn(5).nOut(7)
-                                        .activation(Activation.TANH).weightInit(WeightInit.DISTRIBUTION)
+                                        .activation(Activation.TANH)
                                         .dist(new NormalDistribution(0, 0.5)).build(), "in")
                         .addLayer("1", new org.deeplearning4j.nn.conf.layers.GravesLSTM.Builder().nIn(7).nOut(8)
-                                        .activation(Activation.TANH).weightInit(WeightInit.DISTRIBUTION)
+                                        .activation(Activation.TANH)
                                         .dist(new NormalDistribution(0, 0.5)).build(), "0")
                         .addLayer("2", new DenseLayer.Builder().nIn(8).nOut(9).activation(Activation.TANH)
-                                        .weightInit(WeightInit.DISTRIBUTION)
+
                                         .dist(new NormalDistribution(0,
                                                         0.5))
                                         .build(), "1")
                         .addLayer("3", new RnnOutputLayer.Builder(LossFunctions.LossFunction.MCXENT)
-                                        .weightInit(WeightInit.DISTRIBUTION).nIn(9).nOut(4)
-                                        .activation(Activation.SOFTMAX).weightInit(WeightInit.DISTRIBUTION)
+                                        .nIn(9).nOut(4)
+                                        .activation(Activation.SOFTMAX)
                                         .dist(new NormalDistribution(0, 0.5)).build(), "2")
                         .setOutputs("3").inputPreProcessor("2", new RnnToFeedForwardPreProcessor())
-                        .inputPreProcessor("3", new FeedForwardToRnnPreProcessor()).pretrain(false).backprop(true)
+                        .inputPreProcessor("3", new FeedForwardToRnnPreProcessor())
                         .build();
         ComputationGraph graph = new ComputationGraph(conf);
         graph.init();
@@ -136,16 +153,16 @@ public class ComputationGraphTestRNN extends BaseDL4JTest {
 
         ComputationGraphConfiguration conf = new NeuralNetConfiguration.Builder().graphBuilder().addInputs("in")
                         .addLayer("0", new org.deeplearning4j.nn.conf.layers.GravesLSTM.Builder().nIn(5).nOut(7)
-                                        .activation(Activation.TANH).weightInit(WeightInit.DISTRIBUTION)
+                                        .activation(Activation.TANH)
                                         .dist(new NormalDistribution(0, 0.5)).build(), "in")
                         .addLayer("1", new org.deeplearning4j.nn.conf.layers.GravesLSTM.Builder().nIn(7).nOut(8)
-                                        .activation(Activation.TANH).weightInit(WeightInit.DISTRIBUTION)
+                                        .activation(Activation.TANH)
                                         .dist(new NormalDistribution(0,
                                                         0.5))
                                         .build(), "0")
                         .addLayer("2", new RnnOutputLayer.Builder(LossFunctions.LossFunction.MCXENT)
-                                        .weightInit(WeightInit.DISTRIBUTION).nIn(8).nOut(4)
-                                        .activation(Activation.SOFTMAX).weightInit(WeightInit.DISTRIBUTION)
+                                        .nIn(8).nOut(4)
+                                        .activation(Activation.SOFTMAX)
                                         .dist(new NormalDistribution(0, 0.5)).build(), "1")
                         .setOutputs("2").build();
         ComputationGraph graph = new ComputationGraph(conf);
@@ -193,32 +210,32 @@ public class ComputationGraphTestRNN extends BaseDL4JTest {
                         .addInputs("in0", "in1")
                         .addLayer("lstm0",
                                         new org.deeplearning4j.nn.conf.layers.GravesLSTM.Builder().nIn(5).nOut(6)
-                                                        .activation(Activation.TANH).weightInit(WeightInit.DISTRIBUTION)
+                                                        .activation(Activation.TANH)
                                                         .dist(new NormalDistribution(0, 0.5)).build(),
                                         "in0")
                         .addLayer("lstm1",
                                         new org.deeplearning4j.nn.conf.layers.GravesLSTM.Builder().nIn(4).nOut(5)
-                                                        .activation(Activation.TANH).weightInit(WeightInit.DISTRIBUTION)
+                                                        .activation(Activation.TANH)
                                                         .dist(new NormalDistribution(0, 0.5)).build(),
                                         "in1")
                         .addLayer("dense", new DenseLayer.Builder().nIn(6 + 5).nOut(9).activation(Activation.TANH)
-                                        .weightInit(WeightInit.DISTRIBUTION)
+
                                         .dist(new NormalDistribution(0,
                                                         0.5))
                                         .build(), "lstm0", "lstm1")
                         .addLayer("out0", new RnnOutputLayer.Builder(LossFunctions.LossFunction.MCXENT)
-                                        .weightInit(WeightInit.DISTRIBUTION).nIn(9).nOut(3)
-                                        .activation(Activation.SOFTMAX).weightInit(WeightInit.DISTRIBUTION)
+                                        .nIn(9).nOut(3)
+                                        .activation(Activation.SOFTMAX)
                                         .dist(new NormalDistribution(0,
                                                         0.5))
                                         .build(), "dense")
                         .addLayer("out1", new RnnOutputLayer.Builder(LossFunctions.LossFunction.MCXENT)
-                                        .weightInit(WeightInit.DISTRIBUTION).nIn(9).nOut(4)
-                                        .activation(Activation.SOFTMAX).weightInit(WeightInit.DISTRIBUTION)
+                                        .nIn(9).nOut(4)
+                                        .activation(Activation.SOFTMAX)
                                         .dist(new NormalDistribution(0, 0.5)).build(), "dense")
                         .setOutputs("out0", "out1").inputPreProcessor("dense", new RnnToFeedForwardPreProcessor())
                         .inputPreProcessor("out0", new FeedForwardToRnnPreProcessor())
-                        .inputPreProcessor("out1", new FeedForwardToRnnPreProcessor()).pretrain(false).backprop(true)
+                        .inputPreProcessor("out1", new FeedForwardToRnnPreProcessor())
                         .build();
         ComputationGraph graph = new ComputationGraph(conf);
         graph.init();
@@ -323,18 +340,18 @@ public class ComputationGraphTestRNN extends BaseDL4JTest {
                 .graphBuilder()
                         .addInputs("in")
                         .addLayer("0", new org.deeplearning4j.nn.conf.layers.GravesLSTM.Builder().nIn(nIn).nOut(7)
-                                        .activation(Activation.TANH).weightInit(WeightInit.DISTRIBUTION)
+                                        .activation(Activation.TANH)
                                         .dist(new NormalDistribution(0, 0.5)).build(), "in")
                         .addLayer("1", new org.deeplearning4j.nn.conf.layers.GravesLSTM.Builder().nIn(7).nOut(8)
-                                        .activation(Activation.TANH).weightInit(WeightInit.DISTRIBUTION)
+                                        .activation(Activation.TANH)
                                         .dist(new NormalDistribution(0,
                                                         0.5))
                                         .build(), "0")
                         .addLayer("out", new RnnOutputLayer.Builder(LossFunctions.LossFunction.MCXENT)
-                                        .weightInit(WeightInit.DISTRIBUTION).nIn(8).nOut(nOut)
-                                        .activation(Activation.SOFTMAX).weightInit(WeightInit.DISTRIBUTION)
+                                        .nIn(8).nOut(nOut)
+                                        .activation(Activation.SOFTMAX)
                                         .dist(new NormalDistribution(0, 0.5)).build(), "1")
-                        .setOutputs("out").backprop(true).build();
+                        .setOutputs("out").build();
         assertEquals(BackpropType.Standard, conf.getBackpropType());
 
         ComputationGraphConfiguration confTBPTT = new NeuralNetConfiguration.Builder().seed(12345)
@@ -342,18 +359,18 @@ public class ComputationGraphTestRNN extends BaseDL4JTest {
                 .graphBuilder()
                         .addInputs("in")
                         .addLayer("0", new org.deeplearning4j.nn.conf.layers.GravesLSTM.Builder().nIn(nIn).nOut(7)
-                                        .activation(Activation.TANH).weightInit(WeightInit.DISTRIBUTION)
+                                        .activation(Activation.TANH)
                                         .dist(new NormalDistribution(0, 0.5)).build(), "in")
                         .addLayer("1", new org.deeplearning4j.nn.conf.layers.GravesLSTM.Builder().nIn(7).nOut(8)
-                                        .activation(Activation.TANH).weightInit(WeightInit.DISTRIBUTION)
+                                        .activation(Activation.TANH)
                                         .dist(new NormalDistribution(0,
                                                         0.5))
                                         .build(), "0")
                         .addLayer("out", new RnnOutputLayer.Builder(LossFunctions.LossFunction.MCXENT)
-                                        .weightInit(WeightInit.DISTRIBUTION).nIn(8).nOut(nOut)
-                                        .activation(Activation.SOFTMAX).weightInit(WeightInit.DISTRIBUTION)
+                                        .nIn(8).nOut(nOut)
+                                        .activation(Activation.SOFTMAX)
                                         .dist(new NormalDistribution(0, 0.5)).build(), "1")
-                        .setOutputs("out").backprop(true).backpropType(BackpropType.TruncatedBPTT)
+                        .setOutputs("out").backpropType(BackpropType.TruncatedBPTT)
                         .tBPTTForwardLength(timeSeriesLength).tBPTTBackwardLength(timeSeriesLength).build();
         assertEquals(BackpropType.TruncatedBPTT, confTBPTT.getBackpropType());
 
@@ -386,7 +403,7 @@ public class ComputationGraphTestRNN extends BaseDL4JTest {
         Pair<Gradient, Double> graphTbpttPair = graphTBPTT.gradientAndScore();
 
         assertEquals(graphPair.getFirst().gradientForVariable(), graphTbpttPair.getFirst().gradientForVariable());
-        assertEquals(graphPair.getSecond(), graphTbpttPair.getSecond());
+        assertEquals(graphPair.getSecond(), graphTbpttPair.getSecond(), 1e-8);
 
         //Check states: expect stateMap to be empty but tBpttStateMap to not be
         Map<String, INDArray> l0StateMLN = graph.rnnGetPreviousState(0);
@@ -435,18 +452,18 @@ public class ComputationGraphTestRNN extends BaseDL4JTest {
                         .optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT).graphBuilder()
                         .addInputs("in")
                         .addLayer("0", new org.deeplearning4j.nn.conf.layers.GravesLSTM.Builder().nIn(nIn).nOut(7)
-                                        .activation(Activation.TANH).weightInit(WeightInit.DISTRIBUTION)
+                                        .activation(Activation.TANH)
                                         .dist(new NormalDistribution(0, 0.5)).build(), "in")
                         .addLayer("1", new org.deeplearning4j.nn.conf.layers.GravesLSTM.Builder().nIn(7).nOut(8)
-                                        .activation(Activation.TANH).weightInit(WeightInit.DISTRIBUTION)
+                                        .activation(Activation.TANH)
                                         .dist(new NormalDistribution(0,
                                                         0.5))
                                         .build(), "0")
                         .addLayer("out", new RnnOutputLayer.Builder(LossFunctions.LossFunction.MCXENT)
-                                        .weightInit(WeightInit.DISTRIBUTION).nIn(8).nOut(nOut)
-                                        .activation(Activation.SOFTMAX).weightInit(WeightInit.DISTRIBUTION)
+                                        .nIn(8).nOut(nOut)
+                                        .activation(Activation.SOFTMAX)
                                         .dist(new NormalDistribution(0, 0.5)).build(), "1")
-                        .setOutputs("out").pretrain(false).backprop(true).backpropType(BackpropType.TruncatedBPTT)
+                        .setOutputs("out").backpropType(BackpropType.TruncatedBPTT)
                         .tBPTTBackwardLength(timeSeriesLength).tBPTTForwardLength(timeSeriesLength).build();
 
         Nd4j.getRandom().setSeed(12345);
@@ -471,18 +488,18 @@ public class ComputationGraphTestRNN extends BaseDL4JTest {
                         .optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT).graphBuilder()
                         .addInputs("in")
                         .addLayer("0", new org.deeplearning4j.nn.conf.layers.GravesLSTM.Builder().nIn(nIn).nOut(7)
-                                        .activation(Activation.TANH).weightInit(WeightInit.DISTRIBUTION)
+                                        .activation(Activation.TANH)
                                         .dist(new NormalDistribution(0, 0.5)).build(), "in")
                         .addLayer("1", new org.deeplearning4j.nn.conf.layers.GravesLSTM.Builder().nIn(7).nOut(8)
-                                        .activation(Activation.TANH).weightInit(WeightInit.DISTRIBUTION)
+                                        .activation(Activation.TANH)
                                         .dist(new NormalDistribution(0,
                                                         0.5))
                                         .build(), "0")
                         .addLayer("out", new RnnOutputLayer.Builder(LossFunctions.LossFunction.MCXENT)
-                                        .weightInit(WeightInit.DISTRIBUTION).nIn(8).nOut(nOut)
-                                        .activation(Activation.SOFTMAX).weightInit(WeightInit.DISTRIBUTION)
+                                        .nIn(8).nOut(nOut)
+                                        .activation(Activation.SOFTMAX)
                                         .dist(new NormalDistribution(0, 0.5)).build(), "1")
-                        .setOutputs("out").pretrain(false).backprop(true).backpropType(BackpropType.TruncatedBPTT)
+                        .setOutputs("out").backpropType(BackpropType.TruncatedBPTT)
                         .tBPTTBackwardLength(tbpttLength).tBPTTForwardLength(tbpttLength).build();
 
         Nd4j.getRandom().setSeed(12345);
@@ -512,9 +529,9 @@ public class ComputationGraphTestRNN extends BaseDL4JTest {
         ComputationGraph net = new ComputationGraph(conf);
         net.init();
 
-        MultiDataSet data = new MultiDataSet(new INDArray[] {Nd4j.linspace(1, 10, 10).reshape(1, 1, 10)},
-                        new INDArray[] {Nd4j.linspace(2, 20, 10).reshape(1, 1, 10)}, null,
-                        new INDArray[] {Nd4j.ones(10)});
+        MultiDataSet data = new MultiDataSet(new INDArray[] {Nd4j.linspace(1, 10, 10, Nd4j.dataType()).reshape(1, 1, 10)},
+                        new INDArray[] {Nd4j.linspace(2, 20, 10, Nd4j.dataType()).reshape(1, 1, 10)}, null,
+                        new INDArray[] {Nd4j.ones(1, 10)});
 
         net.fit(data);
     }
@@ -534,9 +551,9 @@ public class ComputationGraphTestRNN extends BaseDL4JTest {
             ComputationGraph net = new ComputationGraph(conf);
             net.init();
 
-            MultiDataSet data = new MultiDataSet(new INDArray[] {Nd4j.linspace(1, 10, 10).reshape(1, 1, 10)},
-                            new INDArray[] {Nd4j.linspace(2, 20, 10).reshape(1, 1, 10)}, new INDArray[] {Nd4j.ones(10)},
-                            new INDArray[] {Nd4j.ones(10)});
+            MultiDataSet data = new MultiDataSet(new INDArray[] {Nd4j.linspace(1, 10, 10, Nd4j.dataType()).reshape(1, 1, 10)},
+                            new INDArray[] {Nd4j.linspace(2, 20, 10, Nd4j.dataType()).reshape(1, 1, 10)}, new INDArray[] {Nd4j.ones(1, 10)},
+                            new INDArray[] {Nd4j.ones(1, 10)});
 
             net.fit(data);
             assertNull(net.getInputMaskArrays());
@@ -577,6 +594,31 @@ public class ComputationGraphTestRNN extends BaseDL4JTest {
             for (Layer l : net.getLayers()) {
                 assertNull(l.getMaskArray());
             }
+        }
+    }
+
+    @Test
+    public void testInvalidTPBTT() {
+        int nIn = 8;
+        int nOut = 25;
+        int nHiddenUnits = 17;
+
+        try {
+            new NeuralNetConfiguration.Builder()
+                    .graphBuilder()
+                    .addInputs("in")
+                    .layer("0", new org.deeplearning4j.nn.conf.layers.LSTM.Builder().nIn(nIn).nOut(nHiddenUnits).build(), "in")
+                    .layer("1", new GlobalPoolingLayer(), "0")
+                    .layer("2", new OutputLayer.Builder(LossFunctions.LossFunction.MSE).nIn(nHiddenUnits)
+                            .nOut(nOut)
+                            .activation(Activation.TANH).build(), "1")
+                    .setOutputs("2")
+                    .backpropType(BackpropType.TruncatedBPTT)
+                    .build();
+            fail("Exception expected");
+        } catch (IllegalStateException e){
+//            e.printStackTrace();
+            assertTrue(e.getMessage().contains("TBPTT") && e.getMessage().contains("validateTbpttConfig"));
         }
     }
 

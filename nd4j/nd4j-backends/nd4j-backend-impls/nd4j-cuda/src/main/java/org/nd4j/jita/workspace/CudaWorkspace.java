@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.jita.workspace;
 
 import lombok.NonNull;
@@ -7,6 +23,8 @@ import org.bytedeco.javacpp.Pointer;
 import org.nd4j.jita.allocator.impl.AllocationShape;
 import org.nd4j.jita.allocator.impl.AtomicAllocator;
 import org.nd4j.linalg.api.buffer.DataBuffer;
+import org.nd4j.linalg.api.buffer.DataType;
+import org.nd4j.linalg.api.memory.AllocationsTracker;
 import org.nd4j.linalg.api.memory.conf.WorkspaceConfiguration;
 import org.nd4j.linalg.api.memory.enums.*;
 import org.nd4j.linalg.api.memory.pointers.PagedPointer;
@@ -68,22 +86,24 @@ public class CudaWorkspace extends Nd4jWorkspace {
 
             workspace.setHostPointer(new PagedPointer(ptr));
 
-            if (workspaceConfiguration.getPolicyMirroring() != MirroringPolicy.HOST_ONLY)
+            if (workspaceConfiguration.getPolicyMirroring() != MirroringPolicy.HOST_ONLY) {
                 workspace.setDevicePointer(new PagedPointer(memoryManager.allocate((bytes + SAFETY_OFFSET), MemoryKind.DEVICE, false)));
+                AllocationsTracker.getInstance().markAllocated(AllocationKind.GENERAL, Nd4j.getAffinityManager().getDeviceForCurrentThread(), bytes + SAFETY_OFFSET);
+            }
 
             //log.info("Workspace [{}] initialized successfully", id);
         }
     }
 
     @Override
-    public PagedPointer alloc(long requiredMemory, DataBuffer.Type type, boolean initialize) {
+    public PagedPointer alloc(long requiredMemory, DataType type, boolean initialize) {
         return this.alloc(requiredMemory, MemoryKind.DEVICE, type, initialize);
     }
 
 
     @Override
     public synchronized void destroyWorkspace(boolean extended) {
-        currentSize.set(0);
+        val size = currentSize.getAndSet(0);
         reset();
 
         if (extended)
@@ -94,8 +114,10 @@ public class CudaWorkspace extends Nd4jWorkspace {
         if (workspace.getHostPointer() != null)
             NativeOpsHolder.getInstance().getDeviceNativeOps().freeHost(workspace.getHostPointer());
 
-        if (workspace.getDevicePointer() != null)
+        if (workspace.getDevicePointer() != null) {
             NativeOpsHolder.getInstance().getDeviceNativeOps().freeDevice(workspace.getDevicePointer(), null);
+            AllocationsTracker.getInstance().markReleased(AllocationKind.GENERAL, Nd4j.getAffinityManager().getDeviceForCurrentThread(), size + SAFETY_OFFSET);
+        }
 
         workspace.setDevicePointer(null);
         workspace.setHostPointer(null);
@@ -104,8 +126,11 @@ public class CudaWorkspace extends Nd4jWorkspace {
 
 
     @Override
-    public PagedPointer alloc(long requiredMemory, MemoryKind kind, DataBuffer.Type type, boolean initialize) {
+    public PagedPointer alloc(long requiredMemory, MemoryKind kind, DataType type, boolean initialize) {
         long numElements = requiredMemory / Nd4j.sizeOfDataType(type);
+
+        if (requiredMemory % 8 != 0)
+            requiredMemory += 8 - (requiredMemory % 8);
 
         if (!isUsed.get()) {
             if (disabledCounter.incrementAndGet() % 10 == 0)
@@ -124,11 +149,6 @@ public class CudaWorkspace extends Nd4jWorkspace {
 
         }
 
-
-        long div = requiredMemory % 8;
-        if (div!= 0)
-            requiredMemory += div;
-
         boolean trimmer = (workspaceConfiguration.getPolicyReset() == ResetPolicy.ENDOFBUFFER_REACHED && requiredMemory + cycleAllocations.get() > initialBlockSize.get() && initialBlockSize.get() > 0 && kind == MemoryKind.DEVICE) || trimmedMode.get();
 
         if (trimmer && workspaceConfiguration.getPolicySpill() == SpillPolicy.REALLOCATE && !trimmedMode.get()) {
@@ -137,7 +157,7 @@ public class CudaWorkspace extends Nd4jWorkspace {
         }
 
         if (kind == MemoryKind.DEVICE) {
-            if (deviceOffset.get() + requiredMemory <= currentSize.get() && !trimmer) {
+            if (deviceOffset.get() + requiredMemory <= currentSize.get() && !trimmer && Nd4j.getWorkspaceManager().getDebugMode() != DebugMode.SPILL_EVERYTHING) {
                 cycleAllocations.addAndGet(requiredMemory);
                 long prevOffset = deviceOffset.getAndAdd(requiredMemory);
 
@@ -163,7 +183,7 @@ public class CudaWorkspace extends Nd4jWorkspace {
             } else {
 
                 // spill
-                if (workspaceConfiguration.getPolicyReset() == ResetPolicy.ENDOFBUFFER_REACHED && currentSize.get() > 0 && !trimmer) {
+                if (workspaceConfiguration.getPolicyReset() == ResetPolicy.ENDOFBUFFER_REACHED && currentSize.get() > 0 && !trimmer && Nd4j.getWorkspaceManager().getDebugMode() != DebugMode.SPILL_EVERYTHING) {
                     //log.info("End of space reached. Current offset: {}; requiredMemory: {}", deviceOffset.get(), requiredMemory);
                     reset();
                     resetPlanned.set(true);
@@ -198,7 +218,9 @@ public class CudaWorkspace extends Nd4jWorkspace {
                             //pointer.setLeaked(true);
                             pointer.isLeaked();
 
-                            externalAllocations.add(new PointersPair(null, pointer));
+                            val pp = new PointersPair(null, pointer);
+                            pp.setRequiredMemory(requiredMemory);
+                            externalAllocations.add(pp);
 
                             return pointer;
                         } else {
@@ -219,7 +241,7 @@ public class CudaWorkspace extends Nd4jWorkspace {
                 }
             }
         } else if (kind == MemoryKind.HOST) {
-            if (hostOffset.get() + requiredMemory <= currentSize.get() && !trimmer) {
+            if (hostOffset.get() + requiredMemory <= currentSize.get() && !trimmer && Nd4j.getWorkspaceManager().getDebugMode() != DebugMode.SPILL_EVERYTHING) {
 
                 long prevOffset = hostOffset.getAndAdd(requiredMemory);
 
@@ -302,7 +324,9 @@ public class CudaWorkspace extends Nd4jWorkspace {
                         log.info("deleting external host allocation ");
                 }
 
-                pinnedAllocationsSize.addAndGet(pair.getRequiredMemory() * -1);
+                val sizez = pair.getRequiredMemory() * -1;
+                pinnedAllocationsSize.addAndGet(sizez);
+                //AllocationsTracker.getInstance().markReleased(AllocationKind.GENERAL, Nd4j.getAffinityManager().getDeviceForCurrentThread(), sizez);
             } else {
                 break;
             }
@@ -330,6 +354,10 @@ public class CudaWorkspace extends Nd4jWorkspace {
 
                     if (isDebug.get())
                         log.info("deleting external device allocation... ");
+
+                    val sizez = pair.getRequiredMemory();
+                    if (sizez != null)
+                        AllocationsTracker.getInstance().markReleased(AllocationKind.GENERAL, Nd4j.getAffinityManager().getDeviceForCurrentThread(), sizez);
                 }
             }
         } catch (Exception e) {

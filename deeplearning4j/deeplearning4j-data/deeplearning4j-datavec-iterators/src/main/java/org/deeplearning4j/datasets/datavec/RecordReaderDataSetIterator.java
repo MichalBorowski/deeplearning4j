@@ -1,20 +1,18 @@
-/*-
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
  *
- *  * Copyright 2015 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
  *
- */
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.deeplearning4j.datasets.datavec;
 
@@ -32,6 +30,7 @@ import org.datavec.api.records.reader.SequenceRecordReader;
 import org.datavec.api.records.reader.impl.ConcatenatingRecordReader;
 import org.datavec.api.records.reader.impl.collection.CollectionRecordReader;
 import org.datavec.api.writable.Writable;
+import org.nd4j.base.Preconditions;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.dataset.DataSet;
 import org.nd4j.linalg.dataset.api.DataSetPreProcessor;
@@ -51,7 +50,7 @@ import java.util.List;
  * Record reader dataset iterator. Takes a DataVec {@link RecordReader} as input, and handles the conversion to ND4J
  * DataSet objects as well as producing minibatches from individual records.<br>
  * <br>
- * Multiple constructors are available, though a {@link Builder} class is also available.<br>
+ * Multiple constructors are available, and a {@link Builder} class is also available.<br>
  * <br>
  * Example 1: Image classification, batch size 32, 10 classes<br>
  * <pre>
@@ -150,7 +149,8 @@ public class RecordReaderDataSetIterator implements DataSetIterator {
     }
 
     /**
-     * Main constructor for multi-label regression (i.e., regression with multiple outputs)
+     * Main constructor for multi-label regression (i.e., regression with multiple outputs). Can also be used for single
+     * output regression with labelIndexFrom == labelIndexTo
      *
      * @param recordReader      RecordReader to get data from
      * @param labelIndexFrom    Index of the first regression target
@@ -278,6 +278,12 @@ public class RecordReaderDataSetIterator implements DataSetIterator {
 
             underlyingIsDisjoint = false;
         } else if (labelIndex >= 0) {
+            Preconditions.checkState(labelIndex < next.getRecord().size(),
+                    "Invalid label (from) index: index must be in range 0 to first record size of (0 to %s inclusive), got %s", next.getRecord().size()-1, labelIndex);
+            Preconditions.checkState(labelIndexTo < next.getRecord().size(),
+                    "Invalid label (to) index: index must be in range 0 to first record size of (0 to %s inclusive), got %s", next.getRecord().size()-1, labelIndexTo);
+
+
             //Multiple inputs
             int firstFrom = 0;
             int firstTo = labelIndex - 1;

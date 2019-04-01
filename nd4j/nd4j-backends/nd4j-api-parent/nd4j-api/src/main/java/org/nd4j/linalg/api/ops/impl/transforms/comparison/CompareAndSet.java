@@ -1,21 +1,18 @@
-/*-
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
  *
- *  * Copyright 2015 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
  *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
  *
- */
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.nd4j.linalg.api.ops.impl.transforms.comparison;
 
@@ -24,6 +21,7 @@ import org.nd4j.autodiff.samediff.SameDiff;
 import org.nd4j.imports.NoOpNameFoundException;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.api.ops.BaseTransformOp;
+import org.nd4j.linalg.api.ops.BaseTransformSameOp;
 import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.indexing.conditions.Condition;
 
@@ -39,7 +37,7 @@ import java.util.Map;
  *
  * @author raver119@gmail.com
  */
-public class CompareAndSet extends BaseTransformOp {
+public class CompareAndSet extends BaseTransformSameOp {
 
     private Condition condition;
     private double compare;
@@ -75,7 +73,7 @@ public class CompareAndSet extends BaseTransformOp {
         else
             this.mode = condition.condtionNum();
 
-        init(x, null, x, x.length());
+        this.extraArgs = new Object[]{compare, set, eps, (double) mode};
     }
 
 
@@ -108,12 +106,12 @@ public class CompareAndSet extends BaseTransformOp {
      * @param condition
      */
     public CompareAndSet(INDArray x, INDArray z, double set, Condition condition) {
-        super(x, null, z, x.lengthLong());
+        super(x, null, z);
         this.compare = condition.getValue();
         this.set = set;
         this.eps = condition.epsThreshold();
         this.mode = condition.condtionNum();
-        init(x, null, z, x.lengthLong());
+        this.extraArgs = new Object[]{compare, set, eps, (double) mode};
     }
 
     /**
@@ -145,12 +143,12 @@ public class CompareAndSet extends BaseTransformOp {
      * @param condition
      */
     public CompareAndSet(INDArray x, INDArray y, INDArray z, Condition condition) {
-        super(x, y, z, x.lengthLong());
+        super(x, y, z);
         this.compare = condition.getValue();
         this.set = 0;
         this.eps = condition.epsThreshold();
         this.mode = condition.condtionNum();
-        init(x, y, z, x.lengthLong());
+        this.extraArgs = new Object[]{compare, set, eps, (double) mode};
     }
 
     /**
@@ -168,25 +166,7 @@ public class CompareAndSet extends BaseTransformOp {
         this.set = set;
         this.eps = eps;
         this.mode = 0;
-        init(x, null, z, x.length());
-    }
-
-    /**
-     * This constructor is shortcut to epsEquals.
-     *
-     * @param x
-     * @param z
-     * @param compare
-     * @param set
-     * @param eps
-     */
-    public CompareAndSet(INDArray x, INDArray z, double compare, double set, double eps, long n) {
-        super(x, z, n);
-        this.compare = compare;
-        this.set = set;
-        this.eps = eps;
-        this.mode = 0;
-        init(x, null, x, n);
+        this.extraArgs = new Object[]{compare, set, eps, (double) mode};
     }
 
     @Override
@@ -202,7 +182,11 @@ public class CompareAndSet extends BaseTransformOp {
 
     @Override
     public int opNum() {
-        return 45;
+        if (y() == null) {
+            return 13;
+        } else {
+            return 12;
+        }
     }
 
     @Override
@@ -221,15 +205,9 @@ public class CompareAndSet extends BaseTransformOp {
     }
 
     @Override
-    public void init(INDArray x, INDArray y, INDArray z, long n) {
-        super.init(x, y, z, n);
-        this.extraArgs = new Object[]{compare, set, eps, (double) mode};
-    }
-
-    @Override
     public List<SDVariable> doDiff(List<SDVariable> gradient) {
         //Pass through gradient where condition is NOT matched (condition matched: output replaced by scalar)
-        SDVariable maskNotMatched = sameDiff.matchCondition(arg(), condition).rsub(1.0);
+        SDVariable maskNotMatched = sameDiff.matchCondition(arg(), condition).castTo(arg().dataType()).rsub(1.0);
         SDVariable gradAtIn = gradient.get(0).mul(maskNotMatched);
         return Collections.singletonList(gradAtIn);
     }

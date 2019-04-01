@@ -1,9 +1,26 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.parallelism;
 
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 import lombok.val;
 import org.deeplearning4j.exception.DL4JInvalidInputException;
+import org.deeplearning4j.nn.api.Model;
 import org.deeplearning4j.nn.conf.ComputationGraphConfiguration;
 import org.deeplearning4j.nn.conf.ConvolutionMode;
 import org.deeplearning4j.nn.conf.MultiLayerConfiguration;
@@ -77,15 +94,15 @@ public class ParallelInferenceTest {
 
 
             log.info("Features shape: {}",
-                    Arrays.toString(iterator.next().getFeatureMatrix().shapeInfoDataBuffer().asInt()));
+                    Arrays.toString(iterator.next().getFeatures().shapeInfoDataBuffer().asInt()));
 
-            INDArray array1 = inf.output(iterator.next().getFeatureMatrix());
-            INDArray array2 = inf.output(iterator.next().getFeatureMatrix());
+            INDArray array1 = inf.output(iterator.next().getFeatures());
+            INDArray array2 = inf.output(iterator.next().getFeatures());
 
             assertFalse(array1.isAttached());
             assertFalse(array2.isAttached());
 
-            INDArray array3 = inf.output(iterator.next().getFeatureMatrix());
+            INDArray array3 = inf.output(iterator.next().getFeatures());
             assertFalse(array3.isAttached());
 
             iterator.reset();
@@ -117,15 +134,15 @@ public class ParallelInferenceTest {
 
 
             log.info("Features shape: {}",
-                    Arrays.toString(iterator.next().getFeatureMatrix().shapeInfoDataBuffer().asInt()));
+                    Arrays.toString(iterator.next().getFeatures().shapeInfoDataBuffer().asInt()));
 
-            INDArray array1 = inf.output(iterator.next().getFeatureMatrix());
-            INDArray array2 = inf.output(iterator.next().getFeatureMatrix());
+            INDArray array1 = inf.output(iterator.next().getFeatures());
+            INDArray array2 = inf.output(iterator.next().getFeatures());
 
             assertFalse(array1.isAttached());
             assertFalse(array2.isAttached());
 
-            INDArray array3 = inf.output(iterator.next().getFeatureMatrix());
+            INDArray array3 = inf.output(iterator.next().getFeatures());
             assertFalse(array3.isAttached());
 
             iterator.reset();
@@ -158,15 +175,15 @@ public class ParallelInferenceTest {
 
 
             log.info("Features shape: {}",
-                    Arrays.toString(iterator.next().getFeatureMatrix().shapeInfoDataBuffer().asInt()));
+                    Arrays.toString(iterator.next().getFeatures().shapeInfoDataBuffer().asInt()));
 
-            INDArray array1 = inf.output(iterator.next().getFeatureMatrix());
-            INDArray array2 = inf.output(iterator.next().getFeatureMatrix());
+            INDArray array1 = inf.output(iterator.next().getFeatures());
+            INDArray array2 = inf.output(iterator.next().getFeatures());
 
             assertFalse(array1.isAttached());
             assertFalse(array2.isAttached());
 
-            INDArray array3 = inf.output(iterator.next().getFeatureMatrix());
+            INDArray array3 = inf.output(iterator.next().getFeatures());
             assertFalse(array3.isAttached());
 
             iterator.reset();
@@ -191,8 +208,8 @@ public class ParallelInferenceTest {
         ParallelInference.ObservablesProvider provider =
                         new ParallelInference.ObservablesProvider(10000000L, 100, queue);
 
-        InferenceObservable observable1 = provider.setInput(observer, Nd4j.create(100));
-        InferenceObservable observable2 = provider.setInput(observer, Nd4j.create(100));
+        InferenceObservable observable1 = provider.setInput(observer, Nd4j.create(1,100));
+        InferenceObservable observable2 = provider.setInput(observer, Nd4j.create(1,100));
 
         assertNotEquals(null, observable1);
 
@@ -206,8 +223,8 @@ public class ParallelInferenceTest {
         ParallelInference.ObservablesProvider provider =
                         new ParallelInference.ObservablesProvider(10000000L, 100, queue);
 
-        InferenceObservable observable1 = provider.setInput(observer, Nd4j.create(100).assign(1.0));
-        InferenceObservable observable2 = provider.setInput(observer, Nd4j.create(100).assign(2.0));
+        InferenceObservable observable1 = provider.setInput(observer, Nd4j.create(1,100).assign(1.0));
+        InferenceObservable observable2 = provider.setInput(observer, Nd4j.create(1,100).assign(2.0));
 
         assertNotEquals(null, observable1);
 
@@ -230,10 +247,10 @@ public class ParallelInferenceTest {
         BasicInferenceObserver observer = new BasicInferenceObserver();
         ParallelInference.ObservablesProvider provider = new ParallelInference.ObservablesProvider(10000000L, 2, queue);
 
-        InferenceObservable observable1 = provider.setInput(observer, Nd4j.create(100).assign(1.0));
-        InferenceObservable observable2 = provider.setInput(observer, Nd4j.create(100).assign(2.0));
+        InferenceObservable observable1 = provider.setInput(observer, Nd4j.create(1,100).assign(1.0));
+        InferenceObservable observable2 = provider.setInput(observer, Nd4j.create(1,100).assign(2.0));
 
-        InferenceObservable observable3 = provider.setInput(observer, Nd4j.create(100).assign(3.0));
+        InferenceObservable observable3 = provider.setInput(observer, Nd4j.create(1,100).assign(3.0));
 
 
         assertNotEquals(null, observable1);
@@ -265,11 +282,11 @@ public class ParallelInferenceTest {
         ParallelInference.ObservablesProvider provider = new ParallelInference.ObservablesProvider(10000000L, 4, queue);
 
         BatchedInferenceObservable observable1 =
-                        (BatchedInferenceObservable) provider.setInput(observer, Nd4j.create(100).assign(1.0));
+                        (BatchedInferenceObservable) provider.setInput(observer, Nd4j.create(1,100).assign(1.0));
         BatchedInferenceObservable observable2 =
-                        (BatchedInferenceObservable) provider.setInput(observer, Nd4j.create(100).assign(2.0));
+                        (BatchedInferenceObservable) provider.setInput(observer, Nd4j.create(1,100).assign(2.0));
         BatchedInferenceObservable observable3 =
-                        (BatchedInferenceObservable) provider.setInput(observer, Nd4j.create(100).assign(3.0));
+                        (BatchedInferenceObservable) provider.setInput(observer, Nd4j.create(1,100).assign(3.0));
 
         INDArray bigOutput = Nd4j.create(3, 10);
         for (int i = 0; i < bigOutput.rows(); i++)
@@ -316,7 +333,7 @@ public class ParallelInferenceTest {
         int count = 0;
         while (iterator.hasNext() && (count++ < 100)) {
             ds = iterator.next();
-            INDArray output = inf.output(ds.getFeatureMatrix());
+            INDArray output = inf.output(ds.getFeatures());
             eval.eval(ds.getLabels(), output);
         }
         log.info(eval.stats());
@@ -382,7 +399,7 @@ public class ParallelInferenceTest {
                 .seed(12345)
                 .list()
                 .layer(new LSTM.Builder().nIn(nIn).nOut(5).build())
-                .layer(new RnnOutputLayer.Builder().nIn(5).nOut(5).build())
+                .layer(new RnnOutputLayer.Builder().nIn(5).nOut(5).activation(Activation.SOFTMAX).build())
                 .build();
 
         MultiLayerNetwork net = new MultiLayerNetwork(conf);
@@ -425,7 +442,7 @@ public class ParallelInferenceTest {
                 .seed(12345)
                 .list()
                 .layer(new LSTM.Builder().nIn(nIn).nOut(5).build())
-                .layer(new RnnOutputLayer.Builder().nIn(5).nOut(5).build())
+                .layer(new RnnOutputLayer.Builder().nIn(5).nOut(5).activation(Activation.SOFTMAX).build())
                 .build();
 
         MultiLayerNetwork net = new MultiLayerNetwork(conf);
@@ -490,7 +507,7 @@ public class ParallelInferenceTest {
                 .seed(12345)
                 .list()
                 .layer(new ConvolutionLayer.Builder().nIn(nIn).nOut(5).build())
-                .layer(new CnnLossLayer())
+                .layer(new CnnLossLayer.Builder().activation(Activation.SOFTMAX).build())
                 .build();
 
         MultiLayerNetwork net = new MultiLayerNetwork(conf);
@@ -539,7 +556,7 @@ public class ParallelInferenceTest {
                 .convolutionMode(ConvolutionMode.Same)
                 .list()
                 .layer(new ConvolutionLayer.Builder().nIn(nIn).nOut(5).build())
-                .layer(new CnnLossLayer())
+                .layer(new CnnLossLayer.Builder().activation(Activation.SOFTMAX).build())
                 .build();
 
         MultiLayerNetwork net = new MultiLayerNetwork(conf);
@@ -587,7 +604,7 @@ public class ParallelInferenceTest {
                 .seed(12345)
                 .list()
                 .layer(new DenseLayer.Builder().nIn(nIn).nOut(5).build())
-                .layer(new OutputLayer.Builder().nIn(5).nOut(5).build())
+                .layer(new OutputLayer.Builder().nIn(5).nOut(5).activation(Activation.SOFTMAX).build())
                 .build();
 
         MultiLayerNetwork net = new MultiLayerNetwork(conf);
@@ -600,6 +617,7 @@ public class ParallelInferenceTest {
 
         for( InferenceMode m : InferenceMode.values()) {
             for (int w : new int[]{1, 2}) {
+                log.info("Starting: m={}, w={}", m, w);
 
                 final ParallelInference inf =
                         new ParallelInference.Builder(net)
@@ -632,7 +650,7 @@ public class ParallelInferenceTest {
 
     @Test
     public void testInputMaskingCyclic() throws Exception {
-        for (int e = 0; e < 1000; e++) {
+        for (int e = 0; e < 3; e++) {
             testInputMasking();
             log.info("Iteration: {} finished", e);
             System.gc();
@@ -652,7 +670,7 @@ public class ParallelInferenceTest {
                 .list()
                 .layer(new LSTM.Builder().nIn(nIn).nOut(5).build())
                 .layer(new GlobalPoolingLayer(PoolingType.AVG))
-                .layer(new OutputLayer.Builder().nIn(5).nOut(5).build())
+                .layer(new OutputLayer.Builder().nIn(5).nOut(5).activation(Activation.SOFTMAX).build())
                 .build();
 
         MultiLayerNetwork net = new MultiLayerNetwork(conf);
@@ -706,6 +724,78 @@ public class ParallelInferenceTest {
         }
     }
 
+    @Test(timeout = 20000L)
+    public void testModelUpdate_1() throws Exception {
+        int nIn = 5;
+
+        val conf = new NeuralNetConfiguration.Builder()
+                .graphBuilder()
+                .addInputs("in")
+                .layer("out0", new OutputLayer.Builder().nIn(nIn).nOut(4).activation(Activation.SOFTMAX).build(), "in")
+                .layer("out1", new OutputLayer.Builder().nIn(nIn).nOut(6).activation(Activation.SOFTMAX).build(), "in")
+                .setOutputs("out0", "out1")
+                .build();
+
+        ComputationGraph net = new ComputationGraph(conf);
+        net.init();
+
+        val inf = new ParallelInference.Builder(net)
+                        .inferenceMode(InferenceMode.SEQUENTIAL)
+                        .batchLimit(5)
+                        .queueLimit(64)
+                        .workers(4)
+                        .build();
+
+        // imitating use of the original model
+        for (int e = 0; e < 10; e++) {
+            val output = inf.output(new INDArray[]{Nd4j.createUninitialized(1, 5)});
+            assertNotNull(output);
+            assertNotEquals(0, output.length);
+        }
+
+        Model[] modelsBefore = inf.getCurrentModelsFromWorkers();
+        assertEquals(4, modelsBefore.length);
+
+        boolean passed = false;
+        int cnt0 = 0;
+        for (Model m : modelsBefore) {
+            // model can be null for some of the workers yet, due to race condition
+            if (m != null) {
+                Thread.sleep(500);
+                assertEquals("Failed at model [" + cnt0 + "]", net.params(), m.params());
+                passed = true;
+            }
+            cnt0++;
+        }
+        assertTrue(passed);
+
+
+        val conf2 = new NeuralNetConfiguration.Builder()
+                .graphBuilder()
+                .addInputs("in")
+                .layer("out0", new OutputLayer.Builder().nIn(nIn).nOut(4).build(), "in")
+                .layer("out1", new OutputLayer.Builder().nIn(nIn).nOut(6).build(), "in")
+                .layer("out2", new OutputLayer.Builder().nIn(nIn).nOut(8).build(), "in")
+                .setOutputs("out0", "out1", "out2")
+                .build();
+
+        val net2 = new ComputationGraph(conf2);
+        net2.init();
+
+        inf.updateModel(net2);
+
+        val modelsAfter = inf.getCurrentModelsFromWorkers();
+        assertEquals(4, modelsAfter.length);
+
+        cnt0 = 0;
+        for (val m:modelsAfter) {
+            assertNotNull("Failed at model [" + cnt0 + "]", m);
+            assertEquals("Failed at model [" + cnt0++ + "]", net2.params(), m.params());
+        }
+
+        inf.shutdown();
+    }
+
     @Test(timeout = 60000L)
     public void testMultiOutputNet() throws Exception {
 
@@ -714,8 +804,8 @@ public class ParallelInferenceTest {
         ComputationGraphConfiguration conf = new NeuralNetConfiguration.Builder()
                 .graphBuilder()
                 .addInputs("in")
-                .layer("out0", new OutputLayer.Builder().nIn(nIn).nOut(4).build(), "in")
-                .layer("out1", new OutputLayer.Builder().nIn(nIn).nOut(6).build(), "in")
+                .layer("out0", new OutputLayer.Builder().nIn(nIn).nOut(4).activation(Activation.SOFTMAX).build(), "in")
+                .layer("out1", new OutputLayer.Builder().nIn(nIn).nOut(6).activation(Activation.SOFTMAX).build(), "in")
                 .setOutputs("out0", "out1")
                 .build();
 

@@ -1,11 +1,25 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.optimize.listeners;
 
 import lombok.Getter;
 import lombok.NonNull;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
-import org.deeplearning4j.eval.Evaluation;
-import org.deeplearning4j.eval.IEvaluation;
 import org.deeplearning4j.exception.DL4JInvalidInputException;
 import org.deeplearning4j.nn.api.Model;
 import org.deeplearning4j.nn.graph.ComputationGraph;
@@ -13,6 +27,8 @@ import org.deeplearning4j.nn.multilayer.MultiLayerNetwork;
 import org.deeplearning4j.optimize.api.BaseTrainingListener;
 import org.deeplearning4j.optimize.api.InvocationType;
 import org.deeplearning4j.optimize.listeners.callbacks.EvaluationCallback;
+import org.nd4j.evaluation.IEvaluation;
+import org.nd4j.evaluation.classification.Evaluation;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.dataset.DataSet;
 import org.nd4j.linalg.dataset.MultiDataSet;
@@ -56,27 +72,37 @@ public class EvaluativeListener extends BaseTrainingListener {
     protected transient EvaluationCallback callback;
 
     /**
-     * Evaluation will be launched after each *frequency* iteration
-     * @param iterator
-     * @param frequency
+     * Evaluation will be launched after each *frequency* iterations, with {@link Evaluation} datatype
+     * @param iterator  Iterator to provide data for evaluation
+     * @param frequency Frequency (in number of iterations) to perform evaluation
      */
     public EvaluativeListener(@NonNull DataSetIterator iterator, int frequency) {
         this(iterator, frequency, InvocationType.ITERATION_END, new Evaluation());
     }
 
+    /**
+     * @param iterator  Iterator to provide data for evaluation
+     * @param frequency Frequency (in number of iterations/epochs according to the invocation type) to perform evaluation
+     * @param type      Type of value for 'frequency' - iteration end, epoch end, etc
+     */
     public EvaluativeListener(@NonNull DataSetIterator iterator, int frequency, @NonNull InvocationType type) {
         this(iterator, frequency, type, new Evaluation());
     }
 
     /**
-     * Evaluation will be launched after each *frequency* iteration
-     * @param iterator
-     * @param frequency
+     * Evaluation will be launched after each *frequency* iterations, with {@link Evaluation} datatype
+     * @param iterator  Iterator to provide data for evaluation
+     * @param frequency Frequency (in number of iterations) to perform evaluation
      */
     public EvaluativeListener(@NonNull MultiDataSetIterator iterator, int frequency) {
         this(iterator, frequency, InvocationType.ITERATION_END, new Evaluation());
     }
 
+    /**
+     * @param iterator  Iterator to provide data for evaluation
+     * @param frequency Frequency (in number of iterations/epochs according to the invocation type) to perform evaluation
+     * @param type      Type of value for 'frequency' - iteration end, epoch end, etc
+     */
     public EvaluativeListener(@NonNull MultiDataSetIterator iterator, int frequency, @NonNull InvocationType type) {
         this(iterator, frequency, type, new Evaluation());
     }
@@ -84,13 +110,22 @@ public class EvaluativeListener extends BaseTrainingListener {
     /**
      * Evaluation will be launched after each *frequency* iteration
      *
-     * @param iterator
-     * @param frequency
+     * @param iterator    Iterator to provide data for evaluation
+     * @param frequency   Frequency (in number of iterations) to perform evaluation
+     * @param evaluations Type of evalutions to perform
      */
     public EvaluativeListener(@NonNull DataSetIterator iterator, int frequency, IEvaluation... evaluations) {
         this(iterator, frequency, InvocationType.ITERATION_END, evaluations);
     }
 
+    /**
+     * Evaluation will be launched after each *frequency* iteration
+     *
+     * @param iterator    Iterator to provide data for evaluation
+     * @param frequency   Frequency (in number of iterations/epochs according to the invocation type) to perform evaluation
+     * @param type        Type of value for 'frequency' - iteration end, epoch end, etc
+     * @param evaluations Type of evalutions to perform
+     */
     public EvaluativeListener(@NonNull DataSetIterator iterator, int frequency, @NonNull InvocationType type,
                     IEvaluation... evaluations) {
         this.dsIterator = iterator;
@@ -102,13 +137,23 @@ public class EvaluativeListener extends BaseTrainingListener {
 
     /**
      * Evaluation will be launched after each *frequency* iteration
-     * @param iterator
-     * @param frequency
+     *
+     * @param iterator    Iterator to provide data for evaluation
+     * @param frequency   Frequency (in number of iterations) to perform evaluation
+     * @param evaluations Type of evalutions to perform
      */
     public EvaluativeListener(@NonNull MultiDataSetIterator iterator, int frequency, IEvaluation... evaluations) {
         this(iterator, frequency, InvocationType.ITERATION_END, evaluations);
     }
 
+    /**
+     * Evaluation will be launched after each *frequency* iteration
+     *
+     * @param iterator    Iterator to provide data for evaluation
+     * @param frequency   Frequency (in number of iterations/epochs according to the invocation type) to perform evaluation
+     * @param type        Type of value for 'frequency' - iteration end, epoch end, etc
+     * @param evaluations Type of evalutions to perform
+     */
     public EvaluativeListener(@NonNull MultiDataSetIterator iterator, int frequency, @NonNull InvocationType type,
                     IEvaluation... evaluations) {
         this.mdsIterator = iterator;
@@ -191,7 +236,7 @@ public class EvaluativeListener extends BaseTrainingListener {
                 ((MultiLayerNetwork) model).doEvaluation(dsIterator, evaluations);
             } else if (ds != null) {
                 for (IEvaluation evaluation : evaluations)
-                    evaluation.eval(ds.getLabels(), ((MultiLayerNetwork) model).output(ds.getFeatureMatrix()));
+                    evaluation.eval(ds.getLabels(), ((MultiLayerNetwork) model).output(ds.getFeatures()));
             }
         } else if (model instanceof ComputationGraph) {
             if (dsIterator != null) {
@@ -201,7 +246,7 @@ public class EvaluativeListener extends BaseTrainingListener {
             } else if (ds != null) {
                 for (IEvaluation evaluation : evaluations)
                     evalAtIndex(evaluation, new INDArray[] {ds.getLabels()},
-                                    ((ComputationGraph) model).output(ds.getFeatureMatrix()), 0);
+                                    ((ComputationGraph) model).output(ds.getFeatures()), 0);
             } else if (mds != null) {
                 for (IEvaluation evaluation : evaluations)
                     evalAtIndex(evaluation, mds.getLabels(), ((ComputationGraph) model).output(mds.getFeatures()), 0);

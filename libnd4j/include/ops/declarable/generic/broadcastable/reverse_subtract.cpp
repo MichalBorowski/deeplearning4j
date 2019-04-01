@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 //
 //  @author raver119@gmail.com
 //
@@ -10,56 +26,29 @@
 
 namespace nd4j {
     namespace ops {
-        CUSTOM_OP_IMPL(reversesubtract, 2, 1, true, 0, 0) {
-            NDArray<T> *x = INPUT_VARIABLE(0);
-            NDArray<T> *y = INPUT_VARIABLE(1);
-            NDArray<T> *z = this->getZ(block);
+        BROADCASTABLE_OP_IMPL(reversesubtract, 0, 0) {
+            auto x = INPUT_VARIABLE(0);
+            auto y = INPUT_VARIABLE(1);
+            auto z = OUTPUT_VARIABLE(0);
 
-            auto tZ = BroadcastHelper<T>::template broadcast_apply<simdOps::ReverseSubtract<T>>(x, y, z);
+            BROADCAST_CHECK_EMPTY(x,y,z);
+
+            auto tZ = BroadcastHelper::broadcastApply(BROADCAST(ReverseSubtract), x, y, z);
             if (tZ == nullptr)
                 return ND4J_STATUS_KERNEL_FAILURE;
             else if (tZ != z) {
                 OVERWRITE_RESULT(tZ);
             }
 
-			return ND4J_STATUS_OK;
+			return Status::OK();
         }
         DECLARE_SYN(RSub, reversesubtract);
 
-        DECLARE_SHAPE_FN(reversesubtract) {
-            auto shapeList = SHAPELIST();
-            auto x = inputShape->at(0);
-            auto y = inputShape->at(1);
-
-            if (shape::equalsSoft(x, y)) {
-                Nd4jLong *newshape;
-                COPY_SHAPE(x, newshape);
-
-                shapeList->push_back(newshape);
-            } else if (shape::isScalar(x) && !shape::isScalar(y)) {
-                Nd4jLong *newshape;
-                COPY_SHAPE(y, newshape);
-
-                shapeList->push_back(newshape);
-            } else if (!shape::isScalar(x) && shape::isScalar(y)) {
-                Nd4jLong *newshape;
-                COPY_SHAPE(x, newshape);
-
-                shapeList->push_back(newshape);
-            } else if (ShapeUtils<T>::areShapesBroadcastable(x, y)) {
-                Nd4jLong *newshape = nullptr;
-                ShapeUtils<T>::evalBroadcastShapeInfo(x, y, true, newshape, block.workspace());
-
-                shapeList->push_back(newshape);
-            } else {
-                // in this case we'll throw exception later
-                Nd4jLong *newshape;
-                COPY_SHAPE(x, newshape);
-
-                shapeList->push_back(newshape);
-            }
-
-            return shapeList;
+        DECLARE_TYPES(reversesubtract) {
+            getOpDescriptor()
+                    ->setAllowedInputTypes(0, DataType::ANY)
+                    ->setAllowedInputTypes(1, DataType::ANY)
+                    ->setAllowedOutputTypes(0, DataType::INHERIT);
         }
 
         CUSTOM_OP_IMPL(reversesubtract_bp, 3, 2, false, 0, 0) {
@@ -72,28 +61,28 @@ namespace nd4j {
 
             if (x->isSameShape(y)) {
                 // PWT case case
-                epsNext->template applyTransform<simdOps::Neg<T>>(gradX, nullptr);
+                epsNext->applyTransform(transform::Neg, gradX, nullptr);
                 gradY->assign(epsNext);
             } else if (y->isScalar()) {
                 // scalar case
-                auto tmp = epsNext->template reduceNumber<simdOps::Sum<T>>();
+                auto tmp = epsNext->reduceNumber(reduce::Sum);
                 gradY->assign(tmp);
-                epsNext->template applyTransform<simdOps::Neg<T>>(gradX, nullptr);
+                epsNext->applyTransform(transform::Neg, gradX, nullptr);
             } else {
                 // broadcastable
-                auto axisX = ShapeUtils<T>::evalBroadcastBackwardAxis(x->shapeInfo(), epsNext->shapeInfo());
-                auto axisY = ShapeUtils<T>::evalBroadcastBackwardAxis(y->shapeInfo(), epsNext->shapeInfo());
+                auto axisX = ShapeUtils::evalBroadcastBackwardAxis(x->shapeInfo(), epsNext->shapeInfo());
+                auto axisY = ShapeUtils::evalBroadcastBackwardAxis(y->shapeInfo(), epsNext->shapeInfo());
 
                 if (axisX.size() > 0) {
-                    auto sum = epsNext->template reduceAlongDimension<simdOps::Sum<T>>(axisX);
-                    sum->template applyTransform<simdOps::Neg<T>>(gradX);
+                    auto sum = epsNext->reduceAlongDimension(reduce::Sum, axisX);
+                    sum->applyTransform(transform::Neg, gradX);
                     delete sum;
                 } else {
-                    epsNext->template applyTransform<simdOps::Neg<T>>(gradX, nullptr);
+                    epsNext->applyTransform(transform::Neg, gradX, nullptr);
                 }
 
                 if (axisY.size() > 0) {
-                    auto sum = epsNext->template reduceAlongDimension<simdOps::Sum<T>>(axisY);
+                    auto sum = epsNext->reduceAlongDimension(reduce::Sum, axisY);
                     gradY->assign(sum);
                     delete sum;
                 } else {
@@ -121,6 +110,12 @@ namespace nd4j {
             auto shapeList = SHAPELIST(shapeE, shapeG);
 
             return shapeList;
+        }
+
+        DECLARE_TYPES(reversesubtract_bp) {
+            getOpDescriptor()
+                    ->setAllowedInputTypes(DataType::ANY)
+                    ->setAllowedOutputTypes({ALL_FLOATS});
         }
     }
 }

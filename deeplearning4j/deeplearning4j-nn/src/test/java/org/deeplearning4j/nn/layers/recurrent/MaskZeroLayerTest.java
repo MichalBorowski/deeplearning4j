@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.nn.layers.recurrent;
 
 import org.deeplearning4j.nn.api.Layer;
@@ -46,7 +62,9 @@ public class MaskZeroLayerTest {
           params.putScalar(i, 1.0);
       }
       Layer lstm = underlying.instantiate(conf, Collections.<TrainingListener>emptyList(), 0, params, false);
-      MaskZeroLayer l = new MaskZeroLayer(lstm);
+      double maskingValue = 0.0;
+
+      MaskZeroLayer l = new MaskZeroLayer(lstm, maskingValue);
       INDArray input = Nd4j.create( Arrays.asList(ex1, ex2), new int[] {2, 2, 3});
       //WHEN
       INDArray out = l.activate(input, true, LayerWorkspaceMgr.noWorkspaces());

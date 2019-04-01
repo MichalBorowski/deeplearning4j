@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 //
 // @author raver119@gmail.com
 //
@@ -30,9 +46,6 @@
 #ifdef __GNUC__
 #include <inttypes.h>
 #endif
-
-
-#define MAX_UINT 18446744073709551615LLU
 
 
 namespace nd4j {
@@ -218,7 +231,7 @@ namespace nd4j {
 
             uint64_t _CUDA_HD next64(uint64_t shiftedSeed) {
                 const auto s0 = static_cast<uint64_t>(shiftedSeed);
-                auto s1 = static_cast<uint64_t>(shiftedSeed) % MAX_INT + 11;
+                auto s1 = static_cast<uint64_t>(shiftedSeed) % nd4j::DataTypeUtils::max<int>() + 11;
                 uint64_t r0, r1;
 
                 s1 ^= s0;
@@ -233,7 +246,7 @@ namespace nd4j {
             }
 
             uint64_t static _CUDA_HD inline safeShift(uint64_t x, uint64_t y) {
-                if (y != 0 && x > MAX_UINT / y) {
+                if (y != 0 && x > nd4j::DataTypeUtils::max<uint64_t>() / y) {
                     return x / y + 11;
                 } else return (x * y) + 11;
             }

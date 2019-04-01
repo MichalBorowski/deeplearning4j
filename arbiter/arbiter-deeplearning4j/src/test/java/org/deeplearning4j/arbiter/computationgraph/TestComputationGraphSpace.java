@@ -1,23 +1,23 @@
-/*-
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
  *
- *  * Copyright 2016 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
  *
- */
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.arbiter.computationgraph;
 
 import org.deeplearning4j.arbiter.ComputationGraphSpace;
+import org.deeplearning4j.arbiter.TestUtils;
 import org.deeplearning4j.arbiter.conf.updater.SgdSpace;
 import org.deeplearning4j.arbiter.layers.DenseLayerSpace;
 import org.deeplearning4j.arbiter.layers.OutputLayerSpace;
@@ -55,19 +55,21 @@ public class TestComputationGraphSpace {
                         .graphBuilder().addInputs("in")
                         .addLayer("0", new DenseLayer.Builder().nIn(10).nOut(10).build(), "in")
                         .addLayer("1", new DenseLayer.Builder().nIn(10).nOut(10).build(), "0").addLayer("2",
-                                        new OutputLayer.Builder().lossFunction(LossFunction.MCXENT).nIn(10).nOut(5)
+                                        new OutputLayer.Builder().lossFunction(LossFunction.MCXENT)
+                                                .activation(Activation.SOFTMAX)
+                                                .nIn(10).nOut(5)
                                                         .build(),
                                         "1")
-                        .setOutputs("2").backprop(true).pretrain(false).build();
+                        .setOutputs("2").build();
 
         ComputationGraphSpace cgs = new ComputationGraphSpace.Builder()
                         .updater(new Sgd(0.005))
                         .seed(12345).addInputs("in")
                         .addLayer("0", new DenseLayerSpace.Builder().nIn(10).nOut(10).build(), "in")
                         .addLayer("1", new DenseLayerSpace.Builder().nIn(10).nOut(10).build(), "0")
-                        .addLayer("2", new OutputLayerSpace.Builder().lossFunction(LossFunction.MCXENT).nIn(10).nOut(5)
+                        .addLayer("2", new OutputLayerSpace.Builder().lossFunction(LossFunction.MCXENT).activation(Activation.SOFTMAX).nIn(10).nOut(5)
                                         .build(), "1")
-                        .setOutputs("2").backprop(true).pretrain(false).setInputTypes(InputType.feedForward(10))
+                        .setOutputs("2").setInputTypes(InputType.feedForward(10))
                         .build();
 
         int nParams = cgs.numParameters();
@@ -92,8 +94,7 @@ public class TestComputationGraphSpace {
                                         "in")
                         .addLayer("1", new OutputLayerSpace.Builder().nIn(10).nOut(10).activation(Activation.SOFTMAX)
                                         .build(), "0")
-                        .setOutputs("1").setInputTypes(InputType.feedForward(10)).pretrain(false).backprop(true)
-                        .build();
+                        .setOutputs("1").setInputTypes(InputType.feedForward(10)).build();
 
         int nParams = mls.numParameters();
         assertEquals(3, nParams);
@@ -128,8 +129,6 @@ public class TestComputationGraphSpace {
 
 
             ComputationGraphConfiguration conf = mls.getValue(rvs).getConfiguration();
-            assertEquals(false, conf.isPretrain());
-            assertEquals(true, conf.isBackprop());
 
             int nLayers = conf.getVertexInputs().size();
             assertEquals(2, nLayers);
@@ -140,7 +139,7 @@ public class TestComputationGraphSpace {
 
                 double lr = ((Sgd)((BaseLayer) layerConf.getLayer()).getIUpdater()).getLearningRate();
                 assertTrue(lr >= 0.0001 && lr <= 0.1);
-                double l2 = ((BaseLayer) layerConf.getLayer()).getL2();
+                double l2 = TestUtils.getL2(((BaseLayer) layerConf.getLayer()));
                 assertTrue(l2 >= 0.2 && l2 <= 0.5);
 
                 if (j == nLayers - 1) { //Output layer

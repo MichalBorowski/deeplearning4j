@@ -1,11 +1,24 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.linalg.factory;
 
 import org.nd4j.linalg.api.blas.*;
 import org.nd4j.linalg.api.buffer.DataBuffer;
-import org.nd4j.linalg.api.complex.IComplexDouble;
-import org.nd4j.linalg.api.complex.IComplexFloat;
-import org.nd4j.linalg.api.complex.IComplexNDArray;
-import org.nd4j.linalg.api.complex.IComplexNumber;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.util.LinAlgExceptions;
 
@@ -54,13 +67,6 @@ public abstract class BaseBlasWrapper implements BlasWrapper {
     }
 
     @Override
-    public IComplexNDArray scal(IComplexNumber alpha, IComplexNDArray x) {
-        LinAlgExceptions.assertVector(x);
-        level1().scal(x.length(), alpha, x);
-        return x;
-    }
-
-    @Override
     public INDArray gemv(Number alpha, INDArray a, INDArray x, double beta, INDArray y) {
         LinAlgExceptions.assertVector(x, y);
         LinAlgExceptions.assertMatrix(a);
@@ -72,21 +78,6 @@ public abstract class BaseBlasWrapper implements BlasWrapper {
     @Override
     public INDArray ger(Number alpha, INDArray x, INDArray y, INDArray a) {
         level2().ger(BlasBufferUtil.getCharForTranspose(x), alpha.doubleValue(), x, y, a);
-        return a;
-    }
-
-    @Override
-    public IComplexNDArray gemv(IComplexNumber alpha, IComplexNDArray a, IComplexNDArray x, IComplexNumber beta,
-                    IComplexNDArray y) {
-        LinAlgExceptions.assertVector(x, y);
-        LinAlgExceptions.assertMatrix(a);
-        level2().gemv('N', 'N', alpha, a, x, beta, y);
-        return y;
-    }
-
-    @Override
-    public IComplexNDArray geru(IComplexNumber alpha, IComplexNDArray x, IComplexNDArray y, IComplexNDArray a) {
-        level2().geru('N', alpha, x, y, a);
         return a;
     }
 
@@ -107,7 +98,7 @@ public abstract class BaseBlasWrapper implements BlasWrapper {
     public INDArray scal(double alpha, INDArray x) {
         LinAlgExceptions.assertVector(x);
 
-        if (x.data().dataType() == DataBuffer.Type.FLOAT)
+        if (x.data().dataType() == DataType.FLOAT)
             return scal((float) alpha, x);
         level1().scal(x.length(), alpha, x);
         return x;
@@ -117,28 +108,8 @@ public abstract class BaseBlasWrapper implements BlasWrapper {
     public INDArray scal(float alpha, INDArray x) {
         LinAlgExceptions.assertVector(x);
 
-        if (x.data().dataType() == DataBuffer.Type.DOUBLE)
+        if (x.data().dataType() == DataType.DOUBLE)
             return scal((double) alpha, x);
-        level1().scal(x.length(), alpha, x);
-        return x;
-    }
-
-    @Override
-    public IComplexNDArray scal(IComplexFloat alpha, IComplexNDArray x) {
-        LinAlgExceptions.assertVector(x);
-
-        if (x.data().dataType() == DataBuffer.Type.DOUBLE)
-            return scal(alpha.asDouble(), x);
-        level1().scal(x.length(), alpha, x);
-        return x;
-    }
-
-    @Override
-    public IComplexNDArray scal(IComplexDouble alpha, IComplexNDArray x) {
-        LinAlgExceptions.assertVector(x);
-
-        if (x.data().dataType() == DataBuffer.Type.FLOAT)
-            return scal(alpha.asDouble(), x);
         level1().scal(x.length(), alpha, x);
         return x;
     }
@@ -151,17 +122,10 @@ public abstract class BaseBlasWrapper implements BlasWrapper {
     }
 
     @Override
-    public IComplexNDArray copy(IComplexNDArray x, IComplexNDArray y) {
-        LinAlgExceptions.assertVector(x, y);
-        level1().copy(x, y);
-        return y;
-    }
-
-    @Override
     public INDArray axpy(double da, INDArray dx, INDArray dy) {
         LinAlgExceptions.assertVector(dx, dy);
 
-        if (dx.data().dataType() == DataBuffer.Type.FLOAT)
+        if (dx.data().dataType() == DataType.FLOAT)
             return axpy((float) da, dx, dy);
         level1().axpy(dx.length(), da, dx, dy);
         return dy;
@@ -171,7 +135,7 @@ public abstract class BaseBlasWrapper implements BlasWrapper {
     public INDArray axpy(float da, INDArray dx, INDArray dy) {
         LinAlgExceptions.assertVector(dx, dy);
 
-        if (dx.data().dataType() == DataBuffer.Type.DOUBLE)
+        if (dx.data().dataType() == DataType.DOUBLE)
             return axpy((double) da, dx, dy);
 
         level1().axpy(dx.length(), da, dx, dy);
@@ -179,29 +143,8 @@ public abstract class BaseBlasWrapper implements BlasWrapper {
     }
 
     @Override
-    public IComplexNDArray axpy(IComplexNumber da, IComplexNDArray dx, IComplexNDArray dy) {
-        LinAlgExceptions.assertVector(dx, dy);
-
-        if (dx.data().dataType() == DataBuffer.Type.DOUBLE)
-            return axpy(da.asDouble(), dx, dy);
-        return axpy(da.asFloat(), dx, dy);
-    }
-
-    @Override
     public double dot(INDArray x, INDArray y) {
         return level1().dot(x.length(), 1, x, y);
-    }
-
-    @Override
-    public IComplexNumber dotc(IComplexNDArray x, IComplexNDArray y) {
-        LinAlgExceptions.assertVector(x, y);
-        return level1().dot(x.length(), Nd4j.UNIT, x, y);
-    }
-
-    @Override
-    public IComplexNumber dotu(IComplexNDArray x, IComplexNDArray y) {
-        LinAlgExceptions.assertVector(x, y);
-        return level1().dot(x.length(), Nd4j.UNIT, x, y);
     }
 
     @Override
@@ -211,23 +154,9 @@ public abstract class BaseBlasWrapper implements BlasWrapper {
     }
 
     @Override
-    public IComplexNumber nrm2(IComplexNDArray x) {
-        LinAlgExceptions.assertVector(x);
-        return level1().nrm2(x);
-
-    }
-
-    @Override
     public double asum(INDArray x) {
         LinAlgExceptions.assertVector(x);
         return level1().asum(x);
-    }
-
-    @Override
-    public IComplexNumber asum(IComplexNDArray x) {
-        LinAlgExceptions.assertVector(x);
-        return level1().asum(x);
-
     }
 
     @Override
@@ -236,18 +165,12 @@ public abstract class BaseBlasWrapper implements BlasWrapper {
     }
 
     @Override
-    public int iamax(IComplexNDArray x) {
-        LinAlgExceptions.assertVector(x);
-        return level1().iamax(x);
-    }
-
-    @Override
     public INDArray gemv(double alpha, INDArray a, INDArray x, double beta, INDArray y) {
         LinAlgExceptions.assertVector(x, y);
         LinAlgExceptions.assertMatrix(a);
 
-        if (a.data().dataType() == DataBuffer.Type.FLOAT) {
-            //            DefaultOpExecutioner.validateDataType(DataBuffer.Type.FLOAT, a, x, y);
+        if (a.data().dataType() == DataType.FLOAT) {
+            //            DefaultOpExecutioner.validateDataType(DataType.FLOAT, a, x, y);
             return gemv((float) alpha, a, x, (float) beta, y);
         } else {
             level2().gemv('N', 'N', alpha, a, x, beta, y);
@@ -260,7 +183,7 @@ public abstract class BaseBlasWrapper implements BlasWrapper {
         LinAlgExceptions.assertVector(x, y);
         LinAlgExceptions.assertMatrix(a);
 
-        if (a.data().dataType() == DataBuffer.Type.DOUBLE) {
+        if (a.data().dataType() == DataType.DOUBLE) {
             return gemv((double) alpha, a, x, (double) beta, y);
         }
         level2().gemv('N', 'N', alpha, a, x, beta, y);
@@ -272,7 +195,7 @@ public abstract class BaseBlasWrapper implements BlasWrapper {
         LinAlgExceptions.assertVector(x, y);
         LinAlgExceptions.assertMatrix(a);
 
-        if (x.data().dataType() == DataBuffer.Type.FLOAT) {
+        if (x.data().dataType() == DataType.FLOAT) {
             return ger((float) alpha, x, y, a);
         }
 
@@ -286,7 +209,7 @@ public abstract class BaseBlasWrapper implements BlasWrapper {
         LinAlgExceptions.assertMatrix(a);
 
 
-        if (x.data().dataType() == DataBuffer.Type.DOUBLE) {
+        if (x.data().dataType() == DataType.DOUBLE) {
             return ger((double) alpha, x, y, a);
         }
 
@@ -295,81 +218,10 @@ public abstract class BaseBlasWrapper implements BlasWrapper {
     }
 
     @Override
-    public IComplexNDArray gemv(IComplexDouble alpha, IComplexNDArray a, IComplexNDArray x, IComplexDouble beta,
-                    IComplexNDArray y) {
-        LinAlgExceptions.assertVector(x, y);
-        LinAlgExceptions.assertMatrix(a);
-
-        if (x.data().dataType() == DataBuffer.Type.FLOAT) {
-            return gemv(alpha.asFloat(), a, x, beta.asFloat(), y);
-        }
-
-        level2().gemv('N', 'N', alpha, a, x, beta, y);
-        return y;
-    }
-
-    @Override
-    public IComplexNDArray gemv(IComplexFloat alpha, IComplexNDArray a, IComplexNDArray x, IComplexFloat beta,
-                    IComplexNDArray y) {
-        LinAlgExceptions.assertVector(x, y);
-        LinAlgExceptions.assertMatrix(a);
-
-
-        if (x.data().dataType() == DataBuffer.Type.DOUBLE) {
-            return gemv(alpha.asDouble(), a, x, beta.asDouble(), y);
-        }
-
-        level2().gemv('N', 'N', alpha, a, x, beta, y);
-        return y;
-    }
-
-    @Override
-    public IComplexNDArray geru(IComplexDouble alpha, IComplexNDArray x, IComplexNDArray y, IComplexNDArray a) {
-        LinAlgExceptions.assertVector(x, y);
-        LinAlgExceptions.assertMatrix(a);
-
-        if (x.data().dataType() == DataBuffer.Type.FLOAT) {
-            return geru(alpha.asFloat(), x, y, a);
-        }
-        level2().geru('N', alpha, x, y, a);
-        return a;
-    }
-
-    @Override
-    public IComplexNDArray geru(IComplexFloat alpha, IComplexNDArray x, IComplexNDArray y, IComplexNDArray a) {
-        LinAlgExceptions.assertVector(x, y);
-        LinAlgExceptions.assertMatrix(a);
-
-        if (x.data().dataType() == DataBuffer.Type.DOUBLE) {
-            return geru(alpha.asDouble(), x, y, a);
-        }
-        level2().geru('N', alpha, x, y, a);
-        return a;
-    }
-
-    @Override
-    public IComplexNDArray gerc(IComplexFloat alpha, IComplexNDArray x, IComplexNDArray y, IComplexNDArray a) {
-        if (x.data().dataType() == DataBuffer.Type.DOUBLE) {
-            return gerc(alpha.asDouble(), x, y, a);
-        }
-        gerc(alpha, x, y, a);
-        return a;
-    }
-
-    @Override
-    public IComplexNDArray gerc(IComplexDouble alpha, IComplexNDArray x, IComplexNDArray y, IComplexNDArray a) {
-        if (x.data().dataType() == DataBuffer.Type.FLOAT) {
-            return gerc(alpha.asFloat(), x, y, a);
-        }
-        gerc(alpha, x, y, a);
-        return a;
-    }
-
-    @Override
     public INDArray gemm(double alpha, INDArray a, INDArray b, double beta, INDArray c) {
         LinAlgExceptions.assertMatrix(a, b, c);
 
-        if (a.data().dataType() == DataBuffer.Type.FLOAT) {
+        if (a.data().dataType() == DataType.FLOAT) {
             return gemm((float) alpha, a, b, (float) beta, c);
         }
 
@@ -384,19 +236,9 @@ public abstract class BaseBlasWrapper implements BlasWrapper {
         LinAlgExceptions.assertMatrix(a, b, c);
 
 
-        if (a.data().dataType() == DataBuffer.Type.DOUBLE) {
+        if (a.data().dataType() == DataType.DOUBLE) {
             return gemm((double) alpha, a, b, (double) beta, c);
         }
-
-        level3().gemm(BlasBufferUtil.getCharForTranspose(a), BlasBufferUtil.getCharForTranspose(b),
-                        BlasBufferUtil.getCharForTranspose(c), alpha, a, b, beta, c);
-        return c;
-    }
-
-    @Override
-    public IComplexNDArray gemm(IComplexNumber alpha, IComplexNDArray a, IComplexNDArray b, IComplexNumber beta,
-                    IComplexNDArray c) {
-        LinAlgExceptions.assertMatrix(a, b, c);
 
         level3().gemm(BlasBufferUtil.getCharForTranspose(a), BlasBufferUtil.getCharForTranspose(b),
                         BlasBufferUtil.getCharForTranspose(c), alpha, a, b, beta, c);

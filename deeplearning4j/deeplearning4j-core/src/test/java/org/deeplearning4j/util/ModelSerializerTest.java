@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.util;
 
 import lombok.val;
@@ -122,9 +138,9 @@ public class ModelSerializerTest extends BaseDL4JTest {
                         .graphBuilder().addInputs("in")
                         .addLayer("dense", new DenseLayer.Builder().nIn(4).nOut(2).build(), "in").addLayer("out",
                                         new OutputLayer.Builder(LossFunctions.LossFunction.MCXENT).nIn(2).nOut(3)
-                                                        .build(),
+                                                .activation(Activation.SOFTMAX).build(),
                                         "dense")
-                        .setOutputs("out").pretrain(false).backprop(true).build();
+                        .setOutputs("out").build();
 
         ComputationGraph cg = new ComputationGraph(config);
         cg.init();
@@ -147,9 +163,9 @@ public class ModelSerializerTest extends BaseDL4JTest {
                         .graphBuilder().addInputs("in")
                         .addLayer("dense", new DenseLayer.Builder().nIn(4).nOut(2).build(), "in").addLayer("out",
                                         new OutputLayer.Builder(LossFunctions.LossFunction.MCXENT).nIn(2).nOut(3)
-                                                        .build(),
+                                                .activation(Activation.SOFTMAX).build(),
                                         "dense")
-                        .setOutputs("out").pretrain(false).backprop(true).build();
+                        .setOutputs("out").build();
 
         ComputationGraph cg = new ComputationGraph(config);
         cg.init();
@@ -178,9 +194,9 @@ public class ModelSerializerTest extends BaseDL4JTest {
                         .graphBuilder().addInputs("in")
                         .addLayer("dense", new DenseLayer.Builder().nIn(4).nOut(2).build(), "in").addLayer("out",
                                         new OutputLayer.Builder(LossFunctions.LossFunction.MCXENT).nIn(2).nOut(3)
-                                                        .build(),
+                                                .activation(Activation.SOFTMAX).build(),
                                         "dense")
-                        .setOutputs("out").pretrain(false).backprop(true).build();
+                        .setOutputs("out").build();
 
         return new ComputationGraph(config);
     }
@@ -240,9 +256,10 @@ public class ModelSerializerTest extends BaseDL4JTest {
         ComputationGraphConfiguration config = new NeuralNetConfiguration.Builder()
                 .graphBuilder().addInputs("in")
                 .addLayer("dense", new DenseLayer.Builder().nIn(4).nOut(2).build(), "in")
-                .addLayer("out",new OutputLayer.Builder(LossFunctions.LossFunction.MCXENT).nIn(2).nOut(3).build(),
+                .addLayer("out",new OutputLayer.Builder(LossFunctions.LossFunction.MCXENT)
+                                .activation(Activation.SOFTMAX).nIn(2).nOut(3).build(),
                         "dense")
-                .setOutputs("out").pretrain(false).backprop(true).build();
+                .setOutputs("out").build();
 
         ComputationGraph cg = new ComputationGraph(config);
         cg.init();
@@ -295,7 +312,7 @@ public class ModelSerializerTest extends BaseDL4JTest {
 
         MultiLayerConfiguration conf = new NeuralNetConfiguration.Builder().seed(12345).l1(0.01)
                 .list()
-                .layer(new OutputLayer.Builder().nIn(nIn).nOut(nOut).build())
+                .layer(new OutputLayer.Builder().nIn(nIn).nOut(nOut).activation(Activation.SOFTMAX).build())
                 .build();
 
         MultiLayerNetwork net = new MultiLayerNetwork(conf);
@@ -343,7 +360,7 @@ public class ModelSerializerTest extends BaseDL4JTest {
         ComputationGraphConfiguration conf = new NeuralNetConfiguration.Builder().seed(12345).l1(0.01)
                 .graphBuilder()
                 .addInputs("in")
-                .layer("0", new OutputLayer.Builder().nIn(nIn).nOut(nOut).build(), "in")
+                .layer("0", new OutputLayer.Builder().nIn(nIn).nOut(nOut).activation(Activation.SOFTMAX).build(), "in")
                 .setOutputs("0")
                 .build();
 
@@ -394,6 +411,7 @@ public class ModelSerializerTest extends BaseDL4JTest {
                 .addInputs("in")
                 .layer("0", new OutputLayer.Builder().nIn(nIn).nOut(nOut).build(), "in")
                 .setOutputs("0")
+                .validateOutputLayerConfig(false)
                 .build();
 
         ComputationGraph net = new ComputationGraph(conf);
@@ -417,7 +435,7 @@ public class ModelSerializerTest extends BaseDL4JTest {
 
         MultiLayerConfiguration conf = new NeuralNetConfiguration.Builder().seed(12345).l1(0.01)
                 .list()
-                .layer(0, new OutputLayer.Builder().nIn(nIn).nOut(nOut).build())
+                .layer(0, new OutputLayer.Builder().nIn(nIn).nOut(nOut).activation(Activation.SOFTMAX).build())
                 .build();
 
         MultiLayerNetwork net = new MultiLayerNetwork(conf);
@@ -443,7 +461,7 @@ public class ModelSerializerTest extends BaseDL4JTest {
         ComputationGraphConfiguration conf = new NeuralNetConfiguration.Builder().seed(12345).l1(0.01)
                 .graphBuilder()
                 .addInputs("in")
-                .layer("0", new OutputLayer.Builder().nIn(nIn).nOut(nOut).build(), "in")
+                .layer("0", new OutputLayer.Builder().nIn(nIn).nOut(nOut).activation(Activation.SOFTMAX).build(), "in")
                 .setOutputs("0")
                 .build();
 
@@ -462,7 +480,7 @@ public class ModelSerializerTest extends BaseDL4JTest {
 
         Map<String,Object> someOtherData = new HashMap<>();
         someOtherData.put("x", new float[]{0,1,2});
-        someOtherData.put("y",Nd4j.linspace(1,10,10));
+        someOtherData.put("y",Nd4j.linspace(1,10,10, Nd4j.dataType()));
 
         ModelSerializer.addObjectToFile(tempFile, "otherData.bin", someOtherData);
 

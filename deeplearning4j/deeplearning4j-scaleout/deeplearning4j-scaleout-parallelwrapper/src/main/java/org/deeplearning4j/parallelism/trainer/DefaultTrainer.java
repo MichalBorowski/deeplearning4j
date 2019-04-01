@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.parallelism.trainer;
 
 import lombok.*;
@@ -28,6 +44,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.LockSupport;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  * Trains datasets using a standard in memory
@@ -77,6 +94,7 @@ public class DefaultTrainer extends Thread implements Trainer {
     protected int threadId;
     protected Model originalModel;
 
+    protected final ReentrantReadWriteLock modelLock = new ReentrantReadWriteLock();
 
     @Override
     public void feedMultiDataSet(@NonNull MultiDataSet dataSet, long etlTime) {
@@ -127,37 +145,44 @@ public class DefaultTrainer extends Thread implements Trainer {
     @Override
     public void updateModel(@NonNull Model model) {
         this.shouldUpdate.set(true);
-        if (replicatedModel instanceof MultiLayerNetwork) {
-            replicatedModel.setParams(model.params().dup());
+        try {
+            modelLock.writeLock().lock();
+            if (replicatedModel instanceof MultiLayerNetwork) {
 
-            Updater updater = ((MultiLayerNetwork) model).getUpdater();
-            INDArray view = updater.getStateViewArray();
 
-            if (view != null) {
-                updater = ((MultiLayerNetwork) replicatedModel).getUpdater();
-                INDArray viewD = view.dup();
+                replicatedModel.setParams(model.params().unsafeDuplication(true));
 
-                Nd4j.getExecutioner().commit();
+                Updater updater = ((MultiLayerNetwork) model).getUpdater();
+                INDArray view = updater.getStateViewArray();
 
-                updater.setStateViewArray((MultiLayerNetwork) replicatedModel, viewD, false);
+                if (view != null) {
+                    updater = ((MultiLayerNetwork) replicatedModel).getUpdater();
+                    INDArray viewD = view.dup();
+
+                    Nd4j.getExecutioner().commit();
+
+                    updater.setStateViewArray((MultiLayerNetwork) replicatedModel, viewD, false);
+                }
+            } else if (replicatedModel instanceof ComputationGraph) {
+                replicatedModel.setParams(model.params().unsafeDuplication(true));
+
+                ComputationGraphUpdater updater = ((ComputationGraph) model).getUpdater();
+                INDArray view = updater.getStateViewArray();
+
+                if (view != null) {
+                    INDArray viewD = view.dup();
+
+                    Nd4j.getExecutioner().commit();
+
+                    updater = ((ComputationGraph) replicatedModel).getUpdater();
+                    updater.setStateViewArray(viewD);
+                }
             }
-        } else if (replicatedModel instanceof ComputationGraph) {
-            replicatedModel.setParams(model.params().dup());
 
-            ComputationGraphUpdater updater = ((ComputationGraph) model).getUpdater();
-            INDArray view = updater.getStateViewArray();
-
-            if (view != null) {
-                INDArray viewD = view.dup();
-
-                Nd4j.getExecutioner().commit();
-
-                updater = ((ComputationGraph) replicatedModel).getUpdater();
-                updater.setStateViewArray(viewD);
-            }
+            Nd4j.getExecutioner().commit();
+        } finally {
+            modelLock.writeLock().unlock();
         }
-
-        Nd4j.getExecutioner().commit();
     }
 
 
@@ -204,13 +229,27 @@ public class DefaultTrainer extends Thread implements Trainer {
                 lastEtlTime = new AtomicLong(0);
 
             ((MultiLayerNetwork) replicatedModel).setLastEtlTime(lastEtlTime.get());
-            ((MultiLayerNetwork) replicatedModel).fit(dataSet);
+
+            // we want this model locked out for possible updates
+            try {
+                modelLock.readLock().lock();
+                ((MultiLayerNetwork) replicatedModel).fit(dataSet);
+            } finally {
+                modelLock.readLock().unlock();
+            }
         } else if (replicatedModel instanceof ComputationGraph) {
             if (lastEtlTime == null)
                 lastEtlTime = new AtomicLong(0);
 
             ((ComputationGraph) replicatedModel).setLastEtlTime(lastEtlTime.get());
-            ((ComputationGraph) replicatedModel).fit(dataSet);
+
+            // we want this model locked out for possible updates
+            try {
+                modelLock.readLock().lock();
+                ((ComputationGraph) replicatedModel).fit(dataSet);
+            } finally {
+                modelLock.readLock().unlock();
+            }
         }
     }
 
@@ -219,7 +258,14 @@ public class DefaultTrainer extends Thread implements Trainer {
             lastEtlTime = new AtomicLong(0);
 
         ((ComputationGraph) replicatedModel).setLastEtlTime(lastEtlTime.get());
-        ((ComputationGraph) replicatedModel).fit(dataSet);
+
+        // we want this model locked out for possible updates
+        try {
+            modelLock.readLock().lock();
+            ((ComputationGraph) replicatedModel).fit(dataSet);
+        } finally {
+            modelLock.readLock().unlock();
+        }
     }
 
     /**
@@ -260,7 +306,8 @@ public class DefaultTrainer extends Thread implements Trainer {
                     replicatedModel.init();
 
                     // we replicate original model params & updater state, just in case it's pre-trained model
-                    synchronized (originalModel) {
+                    try {
+                        modelLock.writeLock().lock();
                         replicatedModel.setParams(originalModel.params().unsafeDuplication(true));
 
                         Updater updaterReplica = ((MultiLayerNetwork) replicatedModel).getUpdater();
@@ -268,9 +315,11 @@ public class DefaultTrainer extends Thread implements Trainer {
 
                         if (updaterOrigina != null && updaterOrigina.getStateViewArray() != null)
                             updaterReplica.setStateViewArray((MultiLayerNetwork) replicatedModel,
-                                            updaterOrigina.getStateViewArray().unsafeDuplication(true), false);
+                                    updaterOrigina.getStateViewArray().unsafeDuplication(true), false);
 
                         Nd4j.getExecutioner().commit();
+                    } finally {
+                        modelLock.writeLock().unlock();
                     }
                 } else {
                     this.replicatedModel = originalModel;
@@ -290,7 +339,8 @@ public class DefaultTrainer extends Thread implements Trainer {
                     this.replicatedModel.init();
 
                     // we replicate original model params & updater state, just in case it's pre-trained model
-                    synchronized (originalModel) {
+                    try {
+                        modelLock.writeLock().lock();
                         replicatedModel.setParams(originalModel.params().unsafeDuplication(true));
 
                         ComputationGraphUpdater updaterReplica = ((ComputationGraph) replicatedModel).getUpdater();
@@ -298,9 +348,11 @@ public class DefaultTrainer extends Thread implements Trainer {
 
                         if (updaterOrigina != null && updaterOrigina.getStateViewArray() != null)
                             updaterReplica.setStateViewArray(
-                                            updaterOrigina.getStateViewArray().unsafeDuplication(true));
+                                    updaterOrigina.getStateViewArray().unsafeDuplication(true));
 
                         Nd4j.getExecutioner().commit();
+                    } finally {
+                        modelLock.writeLock().unlock();
                     }
                 } else {
                     this.replicatedModel = originalModel;
@@ -414,6 +466,35 @@ public class DefaultTrainer extends Thread implements Trainer {
         }
     }
 
+
+    @Override
+    public void updateModelParams(INDArray params) {
+        try {
+            modelLock.writeLock().lock();
+
+            // just set it right away
+            replicatedModel.setParams(params.unsafeDuplication(true));
+            Nd4j.getExecutioner().commit();
+        } finally {
+            modelLock.writeLock().unlock();
+        }
+    }
+
+    @Override
+    public void updateUpdaterParams(INDArray params) {
+        try {
+            modelLock.writeLock().lock();
+
+            if (replicatedModel instanceof ComputationGraph)
+                ((ComputationGraph) replicatedModel).getUpdater().getStateViewArray().assign(params.unsafeDuplication(true));
+            else if (replicatedModel instanceof MultiLayerNetwork)
+                ((MultiLayerNetwork) replicatedModel).getUpdater().getStateViewArray().assign(params.unsafeDuplication(true));
+
+            Nd4j.getExecutioner().commit();
+        } finally {
+            modelLock.writeLock().unlock();
+        }
+    }
 
     @Override
     public boolean averagingRequired() {

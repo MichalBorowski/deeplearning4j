@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.gradientcheck;
 
 import lombok.extern.slf4j.Slf4j;
@@ -12,12 +28,13 @@ import org.deeplearning4j.nn.conf.layers.DenseLayer;
 import org.deeplearning4j.nn.conf.layers.LossLayer;
 import org.deeplearning4j.nn.conf.layers.OutputLayer;
 import org.deeplearning4j.nn.multilayer.MultiLayerNetwork;
-import org.deeplearning4j.nn.weights.WeightInit;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.nd4j.linalg.activations.Activation;
-import org.nd4j.linalg.api.buffer.DataBuffer;
+import org.nd4j.linalg.activations.impl.ActivationIdentity;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.ndarray.INDArray;
-import org.nd4j.linalg.api.ops.impl.transforms.OldSoftMax;
+import org.nd4j.linalg.api.ops.impl.transforms.strict.OldSoftMax;
 import org.nd4j.linalg.api.ops.random.impl.BernoulliDistribution;
 import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.indexing.BooleanIndexing;
@@ -25,6 +42,7 @@ import org.nd4j.linalg.indexing.conditions.Conditions;
 import org.nd4j.linalg.learning.config.NoOp;
 import org.nd4j.linalg.lossfunctions.ILossFunction;
 import org.nd4j.linalg.lossfunctions.impl.*;
+import org.nd4j.linalg.primitives.Pair;
 import org.nd4j.linalg.util.ArrayUtil;
 import org.nd4j.shade.jackson.databind.ObjectMapper;
 
@@ -35,6 +53,8 @@ import java.util.Random;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.nd4j.linalg.indexing.NDArrayIndex.all;
+import static org.nd4j.linalg.indexing.NDArrayIndex.point;
 
 /**
  * Created by Alex on 12/09/2016.
@@ -43,7 +63,7 @@ import static org.junit.Assert.assertTrue;
 public class LossFunctionGradientCheck extends BaseDL4JTest {
 
     static {
-        Nd4j.setDataType(DataBuffer.Type.DOUBLE);
+        Nd4j.setDataType(DataType.DOUBLE);
     }
 
     private static final boolean PRINT_RESULTS = true;
@@ -54,7 +74,6 @@ public class LossFunctionGradientCheck extends BaseDL4JTest {
 
     @Test
     public void lossFunctionGradientCheck() {
-
         ILossFunction[] lossFunctions = new ILossFunction[] {new LossBinaryXENT(), new LossBinaryXENT(),
                         new LossCosineProximity(), new LossHinge(), new LossKLD(), new LossKLD(), new LossL1(),
                         new LossL1(), new LossL1(), new LossL2(), new LossL2(), new LossMAE(), new LossMAE(),
@@ -147,12 +166,13 @@ public class LossFunctionGradientCheck extends BaseDL4JTest {
                 Nd4j.getRandom().setSeed(12345);
                 MultiLayerConfiguration conf = new NeuralNetConfiguration.Builder()
                                 .optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT).seed(12345)
-                                .updater(new NoOp()).weightInit(WeightInit.DISTRIBUTION)
+                                .updater(new NoOp())
                                 .dist(new UniformDistribution(-2, 2)).list()
                                 .layer(0, new DenseLayer.Builder().nIn(4).nOut(4).activation(Activation.TANH).build())
                                 .layer(1, new OutputLayer.Builder().lossFunction(lossFunctions[i])
                                                 .activation(outputActivationFn[i]).nIn(4).nOut(nOut[i]).build())
-                                .pretrain(false).backprop(true).build();
+                                .validateOutputLayerConfig(false)
+                                .build();
 
                 MultiLayerNetwork net = new MultiLayerNetwork(conf);
                 net.init();
@@ -203,7 +223,6 @@ public class LossFunctionGradientCheck extends BaseDL4JTest {
 
     @Test
     public void lossFunctionGradientCheckLossLayer() {
-
         ILossFunction[] lossFunctions = new ILossFunction[] {new LossBinaryXENT(), new LossBinaryXENT(),
                         new LossCosineProximity(), new LossHinge(), new LossKLD(), new LossKLD(), new LossL1(),
                         new LossL1(), new LossL2(), new LossL2(), new LossMAE(), new LossMAE(), new LossMAPE(),
@@ -306,13 +325,14 @@ public class LossFunctionGradientCheck extends BaseDL4JTest {
                 Nd4j.getRandom().setSeed(12345);
                 MultiLayerConfiguration conf = new NeuralNetConfiguration.Builder()
                                 .optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT).seed(12345)
-                                .updater(new NoOp()).weightInit(WeightInit.DISTRIBUTION)
+                                .updater(new NoOp())
                                 .dist(new UniformDistribution(-2, 2)).list()
                                 .layer(0, new DenseLayer.Builder().nIn(4).nOut(nOut[i]).activation(Activation.TANH)
                                                 .build())
                                 .layer(1, new LossLayer.Builder().lossFunction(lossFunctions[i])
                                                 .activation(outputActivationFn[i]).build())
-                                .pretrain(false).backprop(true).build();
+                                .validateOutputLayerConfig(false)
+                                .build();
 
                 MultiLayerNetwork net = new MultiLayerNetwork(conf);
                 net.init();
@@ -364,6 +384,37 @@ public class LossFunctionGradientCheck extends BaseDL4JTest {
         assertEquals("Tests failed", 0, failed.size());
     }
 
+    @Test
+    public void lossMultiLabelEdgeCases(){
+        INDArray labels;
+        Pair<Double, INDArray> gradientAndScore;
+
+        final ActivationIdentity activationFn = new ActivationIdentity();
+        final LossMultiLabel lossMultiLabel = new LossMultiLabel();
+        final INDArray preOutput = Nd4j.rand(3, 3);
+
+        // Base Case: Labels are NOT all 1 or 0
+        labels = Nd4j.diag(Nd4j.ones(3));
+        gradientAndScore = lossMultiLabel.computeGradientAndScore(labels, preOutput, activationFn, null, true);
+
+        assertTrue(!gradientAndScore.getFirst().isNaN());
+        assertTrue(!gradientAndScore.getFirst().isInfinite());
+
+        // Edge Case: Labels are all 1
+        labels = Nd4j.ones(3, 3);
+        gradientAndScore = lossMultiLabel.computeGradientAndScore(labels, preOutput, activationFn, null, true);
+
+        assertTrue(!gradientAndScore.getFirst().isNaN());
+        assertTrue(!gradientAndScore.getFirst().isInfinite());
+
+        // Edge Case: Labels are all 0
+        labels = Nd4j.zeros(3, 3);
+        gradientAndScore = lossMultiLabel.computeGradientAndScore(labels, preOutput, activationFn, null, true);
+
+        assertTrue(!gradientAndScore.getFirst().isNaN());
+        assertTrue(!gradientAndScore.getFirst().isInfinite());
+    }
+
     public static INDArray[] getFeaturesAndLabels(ILossFunction l, long minibatch, long nIn, long nOut, long seed) {
         return getFeaturesAndLabels(l, new long[] {minibatch, nIn}, new long[] {minibatch, nOut}, seed);
     }
@@ -393,7 +444,15 @@ public class LossFunctionGradientCheck extends BaseDL4JTest {
             case "LossKLD":
                 //KL divergence: should be a probability distribution for labels??
                 ret[1] = Nd4j.rand(labelsShape);
-                Nd4j.getExecutioner().exec(new OldSoftMax(ret[1]), 1);
+                if(labelsShape.length == 2){
+                    Nd4j.getExecutioner().exec(new OldSoftMax(ret[1]));
+                } else if(labelsShape.length == 3) {
+                    for (int i = 0; i < labelsShape[2]; i++) {
+                        Nd4j.getExecutioner().exec(new OldSoftMax(ret[1].get(all(), all(), point(i))));
+                    }
+                } else {
+                    throw new RuntimeException();
+                }
                 break;
             case "LossMCXENT":
             case "LossNegativeLogLikelihood":
@@ -482,7 +541,7 @@ public class LossFunctionGradientCheck extends BaseDL4JTest {
                 ret[1] = Nd4j.rand(new long[] {labelsShape[0], labelWidth});
                 break;
             case "LossMultiLabel":
-                ret[1] = Nd4j.rand(labelsShape).lti(0.3);
+                ret[1] = Nd4j.rand(labelsShape).lt(0.3).castTo(Nd4j.defaultFloatingPointType());
                 // ensure that there is no example that is all ones or all zeros
                 final INDArray sum = ret[1].sum(0);
                 for (int i = 0; i < labelsShape[0]; i++) {
@@ -549,7 +608,7 @@ public class LossFunctionGradientCheck extends BaseDL4JTest {
                     Nd4j.getRandom().setSeed(12345);
                     MultiLayerConfiguration conf = new NeuralNetConfiguration.Builder()
                                     .optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT).seed(12345)
-                                    .updater(new NoOp()).weightInit(WeightInit.DISTRIBUTION)
+                                    .updater(new NoOp())
 //                                    .dist(new UniformDistribution(-3, 3))
                                     .dist(new NormalDistribution(0, 1))
                                     .list()
@@ -557,7 +616,8 @@ public class LossFunctionGradientCheck extends BaseDL4JTest {
                                                     .build())
                                     .layer(1, new OutputLayer.Builder().lossFunction(lossFunctions[i])
                                                     .activation(outputActivationFn[i]).nIn(4).nOut(3).build())
-                                    .pretrain(false).backprop(true).build();
+                                    .validateOutputLayerConfig(false)
+                                    .build();
 
                     MultiLayerNetwork net = new MultiLayerNetwork(conf);
                     net.init();

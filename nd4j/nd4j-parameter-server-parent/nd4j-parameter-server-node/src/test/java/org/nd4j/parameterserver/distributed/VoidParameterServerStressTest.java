@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.parameterserver.distributed;
 
 import lombok.extern.slf4j.Slf4j;
@@ -42,6 +58,8 @@ import static org.junit.Assert.*;
  * @author raver119@gmail.com
  */
 @Slf4j
+@Ignore
+@Deprecated
 public class VoidParameterServerStressTest {
     private static final int NUM_WORDS = 100000;
 
@@ -197,8 +215,9 @@ public class VoidParameterServerStressTest {
         VoidConfiguration[] voidConfigurations = new VoidConfiguration[5];
         VoidParameterServer[] shards = new VoidParameterServer[5];
         for (int s = 0; s < shards.length; s++) {
-            voidConfigurations[s] = VoidConfiguration.builder().unicastPort(Integer.valueOf("3789" + s))
+            voidConfigurations[s] = VoidConfiguration.builder()
                             .networkMask("192.168.0.0/16").build();
+            voidConfigurations[s].setUnicastControllerPort(Integer.valueOf("3789" + s));
 
             voidConfigurations[s].setShardAddresses(addresses);
 
@@ -282,8 +301,9 @@ public class VoidParameterServerStressTest {
             list.add("127.0.0.1:3838" + t);
         }
 
-        VoidConfiguration voidConfiguration = VoidConfiguration.builder().unicastPort(49823).numberOfShards(list.size())
+        VoidConfiguration voidConfiguration = VoidConfiguration.builder().numberOfShards(list.size())
                         .shardAddresses(list).build();
+        voidConfiguration.setUnicastControllerPort(49823);
 
         VoidParameterServer[] shards = new VoidParameterServer[list.size()];
         for (int t = 0; t < shards.length; t++) {
@@ -304,7 +324,7 @@ public class VoidParameterServerStressTest {
         ClientRouter router = new InterleavedRouter(0);
 
         transport.setRouter(router);
-        transport.setIpAndPort("127.0.0.1", voidConfiguration.getUnicastPort());
+        transport.setIpAndPort("127.0.0.1", voidConfiguration.getUnicastControllerPort());
 
         router.init(voidConfiguration, transport);
 
@@ -379,8 +399,9 @@ public class VoidParameterServerStressTest {
             list.add("127.0.0.1:3838" + t);
         }
 
-        VoidConfiguration voidConfiguration = VoidConfiguration.builder().unicastPort(49823).numberOfShards(list.size())
+        VoidConfiguration voidConfiguration = VoidConfiguration.builder().numberOfShards(list.size())
                         .shardAddresses(list).build();
+        voidConfiguration.setUnicastControllerPort(49823);
 
         VoidParameterServer[] shards = new VoidParameterServer[list.size()];
         for (int t = 0; t < shards.length; t++) {
@@ -401,7 +422,7 @@ public class VoidParameterServerStressTest {
         ClientRouter router = new InterleavedRouter(0);
 
         transport.setRouter(router);
-        transport.setIpAndPort("127.0.0.1", voidConfiguration.getUnicastPort());
+        transport.setIpAndPort("127.0.0.1", voidConfiguration.getUnicastControllerPort());
 
         router.init(voidConfiguration, transport);
 
@@ -475,8 +496,9 @@ public class VoidParameterServerStressTest {
      */
     @Test(timeout = 60000L)
     public void testPerformanceUnicast3() throws Exception {
-        VoidConfiguration voidConfiguration = VoidConfiguration.builder().unicastPort(49823).numberOfShards(1)
+        VoidConfiguration voidConfiguration = VoidConfiguration.builder().numberOfShards(1)
                         .shardAddresses(Arrays.asList("127.0.0.1:49823")).build();
+        voidConfiguration.setUnicastControllerPort(49823);
 
         Transport transport = new RoutedTransport();
         transport.setIpAndPort("127.0.0.1", Integer.valueOf("49823"));
@@ -520,8 +542,9 @@ public class VoidParameterServerStressTest {
      */
     @Test(timeout = 60000L)
     public void testPerformanceUnicast4() throws Exception {
-        VoidConfiguration voidConfiguration = VoidConfiguration.builder().unicastPort(49823).numberOfShards(1)
+        VoidConfiguration voidConfiguration = VoidConfiguration.builder().numberOfShards(1)
                         .shardAddresses(Arrays.asList("127.0.0.1:49823")).build();
+        voidConfiguration.setUnicastControllerPort(49823);
 
         Transport transport = new RoutedTransport();
         transport.setIpAndPort("127.0.0.1", Integer.valueOf("49823"));

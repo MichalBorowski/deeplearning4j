@@ -1,30 +1,26 @@
-/*-
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
  *
- *  * Copyright 2015 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
  *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
  *
- */
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.nd4j.linalg.api.buffer;
 
+import lombok.NonNull;
 import org.bytedeco.javacpp.Pointer;
 import org.bytedeco.javacpp.indexer.Indexer;
-import org.nd4j.linalg.api.complex.IComplexDouble;
-import org.nd4j.linalg.api.complex.IComplexFloat;
-import org.nd4j.linalg.api.complex.IComplexNumber;
 import org.nd4j.linalg.api.memory.MemoryWorkspace;
+import org.nd4j.linalg.primitives.Triple;
 
 import java.io.*;
 import java.nio.ByteBuffer;
@@ -36,32 +32,30 @@ import java.util.Collection;
  *
  * @author Adam Gibson
  */
-public interface DataBuffer extends Serializable {
-
-    enum Type {
-        DOUBLE, FLOAT, INT, HALF, COMPRESSED, LONG,UNKNOWN
-    }
-
+public interface DataBuffer extends Serializable, AutoCloseable {
     enum TypeEx {
-        FLOAT8, INT8, UINT8, FLOAT16, INT16, UINT16, FLOAT, DOUBLE, THRESHOLD, FTHRESHOLD
+
     }
 
     long getGenerationId();
 
 
     /**
-     * Direct (off heap) and heap allocation
-     *
-     * Each has their trade offs.
-     *
-     * One allows for storing unlimited array sizes, faster i/o with native
-     * applications
-     *
-     * heap is backed by an array and can be useful depending on the api
+     * Mainly used for backward compatability.
+     * Note that DIRECT and HEAP modes have been deprecated asd should not be used.
      */
     enum AllocationMode {
-        DIRECT, HEAP, JAVACPP,
+
+        @Deprecated
+        DIRECT,
+        @Deprecated
+        HEAP,
+        @Deprecated
+        JAVACPP,
+        @Deprecated
         LONG_SHAPE, // long shapes will be used instead of int
+
+        MIXED_DATA_TYPES, // latest generation of INDArrays support multiple data types, with information stored within shapeInfo "offset" field.
     }
 
     /**
@@ -99,7 +93,7 @@ public interface DataBuffer extends Serializable {
      */
     boolean sameUnderlyingData(DataBuffer buffer);
 
-    void read(DataInputStream s);
+    void read(DataInputStream s, AllocationMode allocationMode, long length, DataType dataType);
 
     void write(DataOutputStream out) throws IOException;
 
@@ -393,6 +387,9 @@ public interface DataBuffer extends Serializable {
      * @param data the data for this buffer
      */
     void setData(double[] data);
+    void setData(short[] data);
+    void setData(byte[] data);
+    void setData(boolean[] data);
 
     /**
      * Raw byte array storage
@@ -406,7 +403,7 @@ public interface DataBuffer extends Serializable {
      *
      * @return the data opType of the buffer
      */
-    Type dataType();
+    DataType dataType();
 
     /**
      * Return the buffer as a float array
@@ -507,30 +504,7 @@ public interface DataBuffer extends Serializable {
 
     void put(long i, long element);
 
-
-    /**
-     * Get the complex float
-     *
-     * @param i the i togete
-     * @return the complex float at the specified index
-     */
-    IComplexFloat getComplexFloat(long i);
-
-    /**
-     * Get the complex double at the specified index
-     *
-     * @param i the index
-     * @return the complex double
-     */
-    IComplexDouble getComplexDouble(long i);
-
-    /**
-     * Returns a complex number
-     *
-     * @param i the complex number cto get
-     * @return the complex number to get
-     */
-    IComplexNumber getComplex(long i);
+    void put(long i, boolean element);
 
 
     /**
@@ -580,13 +554,6 @@ public interface DataBuffer extends Serializable {
      * Flush the data buffer
      */
     void flush();
-
-    /**
-     * Insert a complex number at the given index
-     * @param i the index to insert
-     * @param result the element to insert
-     */
-    void put(long i, IComplexNumber result);
 
 
     /**
@@ -645,7 +612,7 @@ public interface DataBuffer extends Serializable {
      * Write this buffer to the input stream.
      * @param is the inpus tream to write to
      */
-    void read(InputStream is);
+    void read(InputStream is, AllocationMode allocationMode, long length, DataType dataType);
 
     /**
      * Returns tracking point for Allocator
@@ -714,4 +681,18 @@ public interface DataBuffer extends Serializable {
      * @return the capacity of the databuffer
      * */
     long capacity();
+
+    /**
+     * This method checks, if this DataBuffer instalce can use close() method
+     * @return true if DataBuffer can be released, false otherwise
+     */
+    boolean closeable();
+
+    /**
+     * This method releases exclusive off-heap resources uses by this DataBuffer instance.
+     * If DataBuffer relies on shared resources, exception will be thrown instead
+     *
+     * PLEASE NOTE: This method is NOT safe by any means
+     */
+    void close();
 }

@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.linalg.dataset.api.preprocessor.stats;
 
 import lombok.EqualsAndHashCode;
@@ -35,9 +51,10 @@ public class DistributionStats implements NormalizerStats {
      */
     public DistributionStats(@NonNull INDArray mean, @NonNull INDArray std) {
         Transforms.max(std, Nd4j.EPS_THRESHOLD, false);
-        if (std.min(1) == Nd4j.scalar(Nd4j.EPS_THRESHOLD)) {
-            logger.info("API_INFO: Std deviation found to be zero. Transform will round up to epsilon to avoid nans.");
-        }
+        // FIXME: obvious bug here
+//        if (std.min(1) == Nd4j.scalar(Nd4j.EPS_THRESHOLD)) {
+//            logger.info("API_INFO: Std deviation found to be zero. Transform will round up to epsilon to avoid nans.");
+//        }
 
         this.mean = mean;
         this.std = std;

@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.linalg.api.ops.impl.shape;
 
 import lombok.NoArgsConstructor;
@@ -8,6 +24,7 @@ import org.nd4j.autodiff.samediff.SameDiff;
 import org.nd4j.imports.descriptors.properties.PropertyMapping;
 import org.nd4j.imports.graphmapper.onnx.OnnxGraphMapper;
 import org.nd4j.imports.graphmapper.tf.TFGraphMapper;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.api.ops.DynamicCustomOp;
 import org.nd4j.linalg.factory.Nd4j;
@@ -16,10 +33,7 @@ import org.tensorflow.framework.AttrValue;
 import org.tensorflow.framework.GraphDef;
 import org.tensorflow.framework.NodeDef;
 
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * Gather op
@@ -28,7 +42,7 @@ import java.util.Map;
 public class Gather extends DynamicCustomOp {
 
     protected int[] indices;
-    protected int axis = 0;
+    protected int jaxis = 0;
 
 
     public Gather(SameDiff sameDiff, SDVariable input, int[] indices, int axis, boolean inPlace) {
@@ -36,14 +50,14 @@ public class Gather extends DynamicCustomOp {
 
         addIArgument(axis);
         addIArgument(indices);
-        this.axis = axis;
+        this.jaxis = axis;
         this.indices = indices;
     }
 
     public Gather(SameDiff sameDiff, SDVariable input, SDVariable indices, int axis, boolean inPlace) {
         super(null, sameDiff, new SDVariable[] {input, indices}, inPlace);
         addIArgument(axis);
-        this.axis = axis;
+        this.jaxis = axis;
     }
 
     @Override
@@ -71,10 +85,10 @@ public class Gather extends DynamicCustomOp {
 
     @Override
     public void resolvePropertiesFromSameDiffBeforeExecution() {
-        super.resolvePropertiesFromSameDiffBeforeExecution();
+//        super.resolvePropertiesFromSameDiffBeforeExecution();
         if (indices != null && numInputArguments() < 2) {
             if (numInputArguments() == 0) {
-                INDArray a = Nd4j.create(ArrayUtil.toFloats(indices));
+                INDArray a = Nd4j.create(indices, new long[]{indices.length}, new long[]{1}, 'c', DataType.INT);
                 if (indices.length > 1)
                     a = a.reshape(indices.length);
                 else
@@ -82,28 +96,13 @@ public class Gather extends DynamicCustomOp {
 
                 addInputArgument(args()[0].getArr(), a);
             } else if (numInputArguments() == 1) {
-                addInputArgument(Nd4j.create(ArrayUtil.toFloats(indices)));
+                addInputArgument(Nd4j.create(indices, new long[]{indices.length}, new long[]{1}, 'c', DataType.INT));
             }
 
         }
 
         if (numIArguments() < 1) {
-            addIArgument(axis);
-        }
-
-        if (numOutputArguments() < getDescriptor().getNumOutputs()) {
-            val outputs = outputVariables();
-            //Check that ALL variables have an array before setting
-            for(SDVariable v : outputs){
-                if(v.getArr() == null){
-                    return;
-                }
-            }
-
-            for (int i = 0; i < outputs.length; i++) {
-                val output = outputs[i].getArr();
-                addOutputArgument(output);
-            }
+            addIArgument(jaxis);
         }
     }
 
@@ -152,7 +151,7 @@ public class Gather extends DynamicCustomOp {
         SDVariable inputGrad = sameDiff.zerosLike(arg(0));
 
         int ndim = arg(0).getShape().length;
-        int a = axis;
+        int a = jaxis;
         if(a < 0){
             a += ndim;
         }
@@ -179,5 +178,11 @@ public class Gather extends DynamicCustomOp {
         }
 
         return Arrays.asList(inputGrad, indicesGrad);
+    }
+
+    @Override
+    public List<DataType> calculateOutputDataTypes(List<DataType> dataTypes){
+        //Output type is same as (first) input type
+        return Collections.singletonList(dataTypes.get(0));
     }
 }

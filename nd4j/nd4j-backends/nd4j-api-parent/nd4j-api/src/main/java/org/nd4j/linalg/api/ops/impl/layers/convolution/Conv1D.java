@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.linalg.api.ops.impl.layers.convolution;
 
 import lombok.Builder;
@@ -9,6 +25,7 @@ import onnx.OnnxProto3;
 import org.nd4j.autodiff.functions.DifferentialFunction;
 import org.nd4j.autodiff.samediff.SDVariable;
 import org.nd4j.autodiff.samediff.SameDiff;
+import org.nd4j.base.Preconditions;
 import org.nd4j.imports.NoOpNameFoundException;
 import org.nd4j.imports.converters.DifferentialFunctionClassHolder;
 import org.nd4j.imports.descriptors.properties.AttributeAdapter;
@@ -19,6 +36,7 @@ import org.nd4j.imports.descriptors.properties.adapters.SizeThresholdIntArrayInt
 import org.nd4j.imports.descriptors.properties.adapters.StringEqualsAdapter;
 import org.nd4j.imports.graphmapper.onnx.OnnxGraphMapper;
 import org.nd4j.imports.graphmapper.tf.TFGraphMapper;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.api.ops.DynamicCustomOp;
 import org.nd4j.linalg.api.ops.impl.layers.convolution.config.Conv1DConfig;
@@ -41,6 +59,7 @@ import java.util.*;
 public class Conv1D extends DynamicCustomOp {
 
     protected Conv1DConfig config;
+    private static final String INVALID_CONFIGURATION = "Invalid Conv1D configuration : s = %s p = %s ";
 
     @Builder(builderMethodName = "builder")
     public Conv1D(SameDiff sameDiff,
@@ -50,18 +69,21 @@ public class Conv1D extends DynamicCustomOp {
         super(null, inputArrays, outputs);
         this.sameDiff = sameDiff;
         this.config = config;
-
+        Preconditions.checkState(config.getS() >= 1 && config.getP() >= 0, INVALID_CONFIGURATION, config.getS(), config.getP());
         addArgs();
         sameDiff.putFunctionForId(this.getOwnName(), this);
         sameDiff.addArgsFor(inputFunctions, this);
     }
 
     protected void addArgs() {
+        if (config == null)
+            config = Conv1DConfig.builder().build();
+
         addIArgument(config.getK(),
                 config.getS(),
                 config.getP(),
                 ArrayUtil.fromBoolean(config.isSameMode()),
-                ArrayUtil.fromBoolean(config.isNHWC()));
+                ArrayUtil.fromBoolean(config.isNWC()));
     }
 
     @Override
@@ -74,16 +96,16 @@ public class Conv1D extends DynamicCustomOp {
 
     @Override
     public Object getValue(Field property) {
-        if (config == null) {
-            config = Conv1DConfig.builder().build();
+        if (config == null && !iArguments.isEmpty()) {
+            config = Conv1DConfig.builder()
+                    .s(iArguments.get(0))
+                    .p(iArguments.get(1))
+                    .isSameMode(iArguments.get(2) == 1)
+                    .dataFormat(iArguments.get(3) == 1 ? Conv1DConfig.NCW : Conv1DConfig.NWC)
+                    .build();
         }
 
         return config.getValue(property);
-    }
-
-    @Override
-    public void setValueFor(Field target, Object value) {
-        config.setValueFor(target, value);
     }
 
     @Override
@@ -121,10 +143,10 @@ public class Conv1D extends DynamicCustomOp {
         val fields = DifferentialFunctionClassHolder.getInstance().getFieldsForFunction(this);
 
 
-        tfMappings.put("kH", new ConditionalFieldValueNDArrayShapeAdapter("NCHW", 2, 0, fields.get("dataFormat")));
-        tfMappings.put("kW", new ConditionalFieldValueNDArrayShapeAdapter("NCHW", 3, 1, fields.get("dataFormat")));
-        tfMappings.put("sH", new ConditionalFieldValueIntIndexArrayAdapter("NCHW", 2, 1, fields.get("dataFormat")));
-        tfMappings.put("sW", new ConditionalFieldValueIntIndexArrayAdapter("NCHW", 3, 2, fields.get("dataFormat")));
+        tfMappings.put("kH", new ConditionalFieldValueNDArrayShapeAdapter("NHW", 2, 0, fields.get("dataFormat")));
+        tfMappings.put("kW", new ConditionalFieldValueNDArrayShapeAdapter("NHW", 3, 1, fields.get("dataFormat")));
+        tfMappings.put("sH", new ConditionalFieldValueIntIndexArrayAdapter("NHW", 2, 1, fields.get("dataFormat")));
+        tfMappings.put("sW", new ConditionalFieldValueIntIndexArrayAdapter("NHW", 3, 2, fields.get("dataFormat")));
         tfMappings.put("isSameMode", new StringEqualsAdapter("SAME"));
         tfMappings.put("isNHWC", new StringEqualsAdapter("NHWC"));
 
@@ -137,7 +159,7 @@ public class Conv1D extends DynamicCustomOp {
         onnxMappings.put("sH", new SizeThresholdIntArrayIntIndexAdpater(0, 2, 0));
         onnxMappings.put("sW", new SizeThresholdIntArrayIntIndexAdpater(1, 2, 0));
         onnxMappings.put("isSameMode", new StringEqualsAdapter("SAME"));
-        onnxMappings.put("isNHWC", new StringEqualsAdapter("NHWC"));
+        onnxMappings.put("isNHWC", new StringEqualsAdapter("NHC"));
 
         ret.put(tensorflowName(), tfMappings);
         ret.put(onnxName(), onnxMappings);
@@ -227,5 +249,12 @@ public class Conv1D extends DynamicCustomOp {
     @Override
     public String[] tensorflowNames() {
         return new String[]{"Conv1D"};
+    }
+
+    @Override
+    public List<DataType> calculateOutputDataTypes(List<DataType> inputDataTypes){
+        int n = args().length;
+        Preconditions.checkState(inputDataTypes != null && inputDataTypes.size() == n, "Expected %s input data types for %s, got %s", n, getClass(), inputDataTypes);
+        return Collections.singletonList(inputDataTypes.get(0));
     }
 }

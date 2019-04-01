@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.nn.graph;
 
 import org.deeplearning4j.BaseDL4JTest;
@@ -12,6 +28,7 @@ import org.deeplearning4j.nn.conf.preprocessor.FeedForwardToRnnPreProcessor;
 import org.deeplearning4j.nn.conf.preprocessor.RnnToFeedForwardPreProcessor;
 import org.deeplearning4j.nn.gradient.Gradient;
 import org.deeplearning4j.nn.weights.WeightInit;
+import org.deeplearning4j.nn.workspace.LayerWorkspaceMgr;
 import org.junit.Test;
 import org.nd4j.linalg.activations.Activation;
 import org.nd4j.linalg.api.ndarray.INDArray;
@@ -21,7 +38,6 @@ import org.nd4j.linalg.indexing.NDArrayIndex;
 import org.nd4j.linalg.learning.config.NoOp;
 import org.nd4j.linalg.learning.config.Sgd;
 import org.nd4j.linalg.lossfunctions.LossFunctions;
-import org.deeplearning4j.nn.workspace.LayerWorkspaceMgr;
 
 import java.util.Map;
 import java.util.Random;
@@ -52,7 +68,7 @@ public class TestVariableLengthTSCG extends BaseDL4JTest {
                             .addLayer("0", new GravesLSTM.Builder().activation(Activation.TANH).nIn(2).nOut(2).build(),
                                             "in")
                             .addLayer("1", new RnnOutputLayer.Builder().lossFunction(LossFunctions.LossFunction.MSE)
-                                            .nIn(2).nOut(1).build(), "0")
+                                            .nIn(2).nOut(1).activation(Activation.TANH).build(), "0")
                             .setOutputs("1").build();
 
             ComputationGraph net = new ComputationGraph(conf);
@@ -130,13 +146,14 @@ public class TestVariableLengthTSCG extends BaseDL4JTest {
 
         int[] miniBatchSizes = {1, 2, 5};
         int nIn = 2;
-        Random r = new Random(12345);
+        Random r = new Random(1234);
 
         for (int nExamples : miniBatchSizes) {
             Nd4j.getRandom().setSeed(12345);
 
             ComputationGraphConfiguration conf = new NeuralNetConfiguration.Builder()
                             .optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT)
+                            .weightInit(new NormalDistribution(0,2))
                             .updater(new Sgd(0.1)).seed(12345).graphBuilder().addInputs("in")
                             .addLayer("0", new DenseLayer.Builder().activation(Activation.TANH).nIn(2).nOut(2).build(),
                                             "in")
@@ -145,7 +162,7 @@ public class TestVariableLengthTSCG extends BaseDL4JTest {
                             .addLayer("2", new GravesLSTM.Builder().activation(Activation.TANH).nIn(2).nOut(2).build(),
                                             "1")
                             .addLayer("3", new RnnOutputLayer.Builder().lossFunction(LossFunctions.LossFunction.MSE)
-                                            .nIn(2).nOut(1).build(), "2")
+                                            .nIn(2).nOut(1).activation(Activation.TANH).build(), "2")
                             .setOutputs("3").inputPreProcessor("0", new RnnToFeedForwardPreProcessor())
                             .inputPreProcessor("2", new FeedForwardToRnnPreProcessor()).build();
 
@@ -190,7 +207,7 @@ public class TestVariableLengthTSCG extends BaseDL4JTest {
             Map<String, INDArray> activations2 = net.feedForward();
 
             //Scores should differ here: masking the input, not the output. Therefore 4 vs. 5 time step outputs
-            assertNotEquals(score1, score2, 0.01);
+            assertNotEquals(score1, score2, 0.001);
 
             Map<String, INDArray> g1map = g1.gradientForVariable();
             Map<String, INDArray> g2map = g2.gradientForVariable();
@@ -278,7 +295,7 @@ public class TestVariableLengthTSCG extends BaseDL4JTest {
                                                         .graphBuilder()
                                                         .addInputs("in").addLayer("0",
                                                                         new GravesLSTM.Builder().nIn(nIn).nOut(5)
-                                                                                        .weightInit(WeightInit.DISTRIBUTION)
+
                                                                                         .dist(new NormalDistribution(0,
                                                                                                         1))
                                                                                         .updater(new NoOp()).build(),
@@ -290,7 +307,7 @@ public class TestVariableLengthTSCG extends BaseDL4JTest {
                                                                                         .weightInit(WeightInit.ZERO)
                                                                                         .updater(new NoOp()).build(),
                                                                         "0")
-                                                        .setOutputs("1").pretrain(false).backprop(true).build();
+                                                        .setOutputs("1").build();
                         ComputationGraph net = new ComputationGraph(conf);
                         net.init();
 
@@ -346,7 +363,7 @@ public class TestVariableLengthTSCG extends BaseDL4JTest {
                                                         .graphBuilder()
                                                         .addInputs("in").addLayer("0",
                                                                         new GravesLSTM.Builder().nIn(nIn).nOut(5)
-                                                                                        .weightInit(WeightInit.DISTRIBUTION)
+
                                                                                         .dist(new NormalDistribution(0,
                                                                                                         1))
                                                                                         .updater(new NoOp()).build(),
@@ -358,7 +375,7 @@ public class TestVariableLengthTSCG extends BaseDL4JTest {
                                                                                         .weightInit(WeightInit.XAVIER)
                                                                                         .updater(new NoOp()).build(),
                                                                         "0")
-                                                        .setOutputs("1").pretrain(false).backprop(true).build();
+                                                        .setOutputs("1").build();
                         ComputationGraph net = new ComputationGraph(conf);
                         net.init();
 
@@ -367,19 +384,19 @@ public class TestVariableLengthTSCG extends BaseDL4JTest {
                                                         .graphBuilder()
                                                         .addInputs("in").addLayer("0",
                                                                         new GravesLSTM.Builder().nIn(nIn).nOut(5)
-                                                                                        .weightInit(WeightInit.DISTRIBUTION)
+
                                                                                         .dist(new NormalDistribution(0,
                                                                                                         1))
                                                                                         .updater(new NoOp()).build(),
                                                                         "in")
                                                         .addLayer("1", new RnnOutputLayer.Builder(
-                                                                        LossFunctions.LossFunction.MCXENT)
-                                                                                        .activation(Activation.SOFTMAX)
+                                                                        LossFunctions.LossFunction.XENT)
+                                                                                        .activation(Activation.SIGMOID)
                                                                                         .nIn(5).nOut(nOut)
                                                                                         .weightInit(WeightInit.XAVIER)
                                                                                         .updater(new NoOp()).build(),
                                                                         "0")
-                                                        .setOutputs("1").pretrain(false).backprop(true).build();
+                                                        .setOutputs("1").build();
                         ComputationGraph net2 = new ComputationGraph(conf2);
                         net2.init();
 

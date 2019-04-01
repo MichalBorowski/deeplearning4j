@@ -1,8 +1,25 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.nn.modelimport.keras.utils;
 
 import lombok.Data;
 import org.apache.commons.io.IOUtils;
 import org.deeplearning4j.nn.modelimport.keras.Hdf5Archive;
+import org.deeplearning4j.nn.modelimport.keras.KerasLayer;
 import org.deeplearning4j.nn.modelimport.keras.KerasModel;
 import org.deeplearning4j.nn.modelimport.keras.KerasSequentialModel;
 import org.deeplearning4j.nn.modelimport.keras.config.KerasModelConfiguration;
@@ -27,6 +44,7 @@ public class KerasModelBuilder implements Cloneable, Closeable {
     protected boolean enforceTrainingConfig = false;
     protected KerasModelConfiguration config;
     protected int[] inputShape = null;
+    protected KerasLayer.DimOrder dimOrder = null;
 
 
     /**
@@ -150,6 +168,23 @@ public class KerasModelBuilder implements Cloneable, Closeable {
     }
 
     /**
+     * Manually set dim order for Keras model, i.e. either TENSORFLOW (channels last)
+     * or THEANO (channels first).
+     *
+     * Dim ordering will be automatically inferred from your model file, so don't
+     * tamper with this option unless you're sure what you're doing. Explicitly
+     * setting dim ordering can be useful for very old Keras models (before version 1.2),
+     * for which inference can be difficult.
+     *
+     * @param dimOrder Ordering of dimensions (channels first vs. last)
+     * @return Model builder
+     */
+    public KerasModelBuilder dimOrder(KerasLayer.DimOrder dimOrder){
+        this.dimOrder = dimOrder;
+        return this;
+    }
+
+    /**
      * Provide training configuration as file input stream from JSON
      *
      * @param trainingJsonInputStream Input stream of training JSON string
@@ -187,33 +222,35 @@ public class KerasModelBuilder implements Cloneable, Closeable {
     public KerasModelBuilder modelHdf5Filename(String modelHdf5Filename)
             throws UnsupportedKerasConfigurationException, InvalidKerasConfigurationException, IOException {
         checkForExistence(modelHdf5Filename);
-        try {
-            this.weightsArchive = this.trainingArchive = new Hdf5Archive(modelHdf5Filename);
-            this.weightsRoot = config.getTrainingWeightsRoot();
-            if (!this.weightsArchive.hasAttribute(config.getTrainingModelConfigAttribute()))
-                throw new InvalidKerasConfigurationException(
-                        "Model configuration attribute missing from " + modelHdf5Filename + " archive.");
-            String initialModelJson = this.weightsArchive.readAttributeAsJson(
-                    config.getTrainingModelConfigAttribute());
+        synchronized (Hdf5Archive.LOCK_OBJECT) {
+            try {
+                this.weightsArchive = this.trainingArchive = new Hdf5Archive(modelHdf5Filename);
+                this.weightsRoot = config.getTrainingWeightsRoot();
+                if (!this.weightsArchive.hasAttribute(config.getTrainingModelConfigAttribute()))
+                    throw new InvalidKerasConfigurationException(
+                            "Model configuration attribute missing from " + modelHdf5Filename + " archive.");
+                String initialModelJson = this.weightsArchive.readAttributeAsJson(
+                        config.getTrainingModelConfigAttribute());
 
-            String kerasVersion = this.weightsArchive.readAttributeAsFixedLengthString(
-                    config.getFieldKerasVersion(), 5);
-            Map<String, Object> modelMapper = KerasModelUtils.parseJsonString(initialModelJson);
-            modelMapper.put(config.getFieldKerasVersion(), kerasVersion);
+                String kerasVersion = this.weightsArchive.readAttributeAsFixedLengthString(
+                        config.getFieldKerasVersion(), 5);
+                Map<String, Object> modelMapper = KerasModelUtils.parseJsonString(initialModelJson);
+                modelMapper.put(config.getFieldKerasVersion(), kerasVersion);
 
-            int majorKerasVersion = Character.getNumericValue(kerasVersion.charAt(0));
-            if (majorKerasVersion == 2) {
-                String backend = this.weightsArchive.readAttributeAsString(config.getFieldBackend());
-                modelMapper.put(config.getFieldBackend(), backend);
+                int majorKerasVersion = Character.getNumericValue(kerasVersion.charAt(0));
+                if (majorKerasVersion == 2) {
+                    String backend = this.weightsArchive.readAttributeAsString(config.getFieldBackend());
+                    modelMapper.put(config.getFieldBackend(), backend);
+                }
+
+                this.modelJson = new ObjectMapper().writeValueAsString(modelMapper);
+                if (this.trainingArchive.hasAttribute(config.getTrainingTrainingConfigAttribute()))
+                    this.trainingJson = this.trainingArchive
+                            .readAttributeAsJson(config.getTrainingTrainingConfigAttribute());
+            } catch (Throwable t) {
+                close();
+                throw t;
             }
-
-            this.modelJson = new ObjectMapper().writeValueAsString(modelMapper);
-            if (this.trainingArchive.hasAttribute(config.getTrainingTrainingConfigAttribute()))
-                this.trainingJson = this.trainingArchive
-                        .readAttributeAsJson(config.getTrainingTrainingConfigAttribute());
-        } catch (Throwable t) {
-            close();
-            throw t;
         }
         return this;
     }

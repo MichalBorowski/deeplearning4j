@@ -1,20 +1,18 @@
-/*-
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
  *
- *  * Copyright 2015 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
  *
- */
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.deeplearning4j.nn.layers;
 
@@ -24,6 +22,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.deeplearning4j.nn.api.Layer;
 import org.deeplearning4j.nn.api.MaskState;
+import org.deeplearning4j.nn.api.TrainingConfig;
 import org.deeplearning4j.nn.api.layers.LayerConstraint;
 import org.deeplearning4j.nn.conf.CacheMode;
 import org.deeplearning4j.nn.conf.NeuralNetConfiguration;
@@ -77,8 +76,13 @@ public abstract class AbstractLayer<LayerConfT extends org.deeplearning4j.nn.con
         this.cacheMode = mode;
     }
 
-    protected LayerConfT layerConf() {
+    public LayerConfT layerConf() {
         return (LayerConfT) this.conf.getLayer();
+    }
+
+    @Override
+    public TrainingConfig getConfig(){
+        return conf.getLayer();
     }
 
     protected String layerId() {
@@ -106,9 +110,6 @@ public abstract class AbstractLayer<LayerConfT extends org.deeplearning4j.nn.con
     public void init() {
 
     }
-
-    @Override
-    public abstract Layer clone();
 
     @Override
     public void setInput(INDArray input, LayerWorkspaceMgr workspaceMgr) {
@@ -239,11 +240,6 @@ public abstract class AbstractLayer<LayerConfT extends org.deeplearning4j.nn.con
     }
 
     @Override
-    public void initParams() {
-        throw new UnsupportedOperationException("Deprecated - no longer used - " + layerId());
-    }
-
-    @Override
     public Map<String, INDArray> paramTable() {
         return paramTable(false);
     }
@@ -264,12 +260,7 @@ public abstract class AbstractLayer<LayerConfT extends org.deeplearning4j.nn.con
     }
 
     @Override
-    public double calcL2(boolean backpropParamsOnly) {
-        return 0.0;
-    }
-
-    @Override
-    public double calcL1(boolean backpropParamsOnly) {
+    public double calcRegularizationScore(boolean backpropParamsOnly){
         return 0.0;
     }
 
@@ -327,12 +318,12 @@ public abstract class AbstractLayer<LayerConfT extends org.deeplearning4j.nn.con
      * @return the number of parameters for the model
      */
     @Override
-    public int numParams() {
+    public long numParams() {
         return 0;
     }
 
     @Override
-    public int numParams(boolean backwards) {
+    public long numParams(boolean backwards) {
         return numParams();
     }
 
@@ -350,16 +341,6 @@ public abstract class AbstractLayer<LayerConfT extends org.deeplearning4j.nn.con
     @Override
     public INDArray input() {
         return input;
-    }
-
-    @Override
-    public void validateInput() {
-
-    }
-
-    @Override
-    public Layer transpose() {
-        throw new UnsupportedOperationException("Not supported");
     }
 
     @Override
@@ -383,8 +364,7 @@ public abstract class AbstractLayer<LayerConfT extends org.deeplearning4j.nn.con
 
 
     @Override
-    public Pair<INDArray, MaskState> feedForwardMaskArray(INDArray maskArray, MaskState currentMaskState,
-                    int minibatchSize) {
+    public Pair<INDArray, MaskState> feedForwardMaskArray(INDArray maskArray, MaskState currentMaskState, int minibatchSize) {
         //Most layers: CNN, dense, activation, etc - set mask array, mask state and then leave the mask unmodified
 
         this.maskArray = maskArray;
@@ -408,12 +388,6 @@ public abstract class AbstractLayer<LayerConfT extends org.deeplearning4j.nn.con
 
     @Override
     public double score() {
-        throw new UnsupportedOperationException(
-                        "Not supported for this layer, or should be overridden for layers requiring it");
-    }
-
-    @Override
-    public void accumulateScore(double accum) {
         throw new UnsupportedOperationException(
                         "Not supported for this layer, or should be overridden for layers requiring it");
     }
@@ -449,5 +423,11 @@ public abstract class AbstractLayer<LayerConfT extends org.deeplearning4j.nn.con
     public LayerHelper getHelper() {
         //Layers with helpers should override this method!
         return null;
+    }
+
+    @Override
+    public boolean updaterDivideByMinibatch(String paramName) {
+        //Majority of params's gradients should be... Exception: batch norm mean/variance estimate
+        return true;
     }
 }

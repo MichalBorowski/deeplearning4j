@@ -1,14 +1,30 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 //
 //  @author raver119@gmail.com
 //
 
 #include <graph/execution/LogicEnter.h>
+#include <Status.h>
 
 
 namespace nd4j {
     namespace graph {
-        template <typename T>
-        Nd4jStatus LogicEnter<T>::processNode(Graph<T> *graph, Node<T> *node) {
+        Nd4jStatus LogicEnter::processNode(Graph *graph, Node *node) {
             // this op replicates input variable into the frame. basically happens once for single loop.
             // sure, if there's inner loop within outer loop, it'll be called once for outer loop and multiple times for inner loop
 
@@ -22,11 +38,11 @@ namespace nd4j {
                 if (__variableSpace->hasVariable(inputAddr)) {
                     auto var = __variableSpace->getVariable(inputAddr);
                     if (var->hasNDArray()) {
-                        Variable<T> *lvar = nullptr;
+                        Variable *lvar = nullptr;
                         if (__variableSpace->hasVariable(node->id(), 0))
                             lvar = __variableSpace->getVariable(node->id(), 0);
                         else
-                            lvar = new Variable<T>(nullptr, node->getName()->c_str(), node->id(), 0);
+                            lvar = new Variable(nullptr, node->getName()->c_str(), node->id(), 0);
 
                         auto array = var->getNDArray();
                         lvar->setNDArray(array);
@@ -34,11 +50,11 @@ namespace nd4j {
 
                         break;
                     } else if (var->hasNDArrayList()) {
-                        Variable<T> *lvar = nullptr;
+                        Variable *lvar = nullptr;
                         if (__variableSpace->hasVariable(node->id(), 0))
                             lvar = __variableSpace->getVariable(node->id(), 0);
                         else
-                            lvar = new Variable<T>(nullptr, node->getName()->c_str(), node->id(), 0);
+                            lvar = new Variable(nullptr, node->getName()->c_str(), node->id(), 0);
 
                         auto list = var->getNDArrayList();
                         lvar->setNDArrayList(list);
@@ -52,11 +68,7 @@ namespace nd4j {
                 }
             }
 
-            return ND4J_STATUS_OK;
+            return nd4j::Status::OK();
         }
-
-        template class ND4J_EXPORT LogicEnter<float>;
-        template class ND4J_EXPORT LogicEnter<float16>;
-        template class ND4J_EXPORT LogicEnter<double>;
     }
 }

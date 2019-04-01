@@ -1,13 +1,32 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.spark.parameterserver.accumulation;
 
 import org.apache.spark.api.java.function.Function2;
 import org.deeplearning4j.api.storage.Persistable;
 import org.deeplearning4j.api.storage.StorageMetaData;
+import org.deeplearning4j.optimize.solvers.accumulation.encoding.ThresholdAlgorithmReducer;
 import org.deeplearning4j.spark.api.stats.SparkTrainingStats;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.factory.Nd4j;
 
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * @author raver119@gmail.com
@@ -78,11 +97,41 @@ public class SharedTrainingAccumulationFunction implements
                 listenerUpdates.addAll(listenerUpdates2);
         }
 
+        Map<String,Integer> minibatchesPerExecutor = new HashMap<>();
+        if(tuple1.getMinibatchesPerExecutor() != null) {
+            for (Map.Entry<String, Integer> e : tuple1.getMinibatchesPerExecutor().entrySet()){
+                minibatchesPerExecutor.put(e.getKey(), e.getValue());
+            }
+        }
+        if(tuple2.getMinibatchesPerExecutor() != null){
+            for (Map.Entry<String, Integer> e : tuple2.getMinibatchesPerExecutor().entrySet()){
+                if(minibatchesPerExecutor.containsKey(e.getKey())){
+                    minibatchesPerExecutor.put(e.getKey(), minibatchesPerExecutor.get(e.getKey()) + e.getValue());
+                } else {
+                    minibatchesPerExecutor.put(e.getKey(), e.getValue());
+                }
+            }
+        }
 
+        ThresholdAlgorithmReducer thresholdAlgorithmReducer = null;
+        if(tuple1.getThresholdAlgorithmReducer() != null){
+            thresholdAlgorithmReducer = tuple1.getThresholdAlgorithmReducer();
+        }
+        if(tuple2.getThresholdAlgorithmReducer() != null){
+            if(thresholdAlgorithmReducer == null){
+                thresholdAlgorithmReducer = tuple2.getThresholdAlgorithmReducer();
+            } else {
+                //Merge threshold algorithm reducers
+                thresholdAlgorithmReducer = thresholdAlgorithmReducer.merge(tuple2.getThresholdAlgorithmReducer());
+            }
+        }
 
         return SharedTrainingAccumulationTuple.builder().scoreSum(score).updaterStateArray(stateView)
-                        .aggregationsCount(aggregationsCount).sparkTrainingStats(stats)
-                        .listenerMetaData(listenerMetaData).listenerUpdates(listenerUpdates)
-                        .listenerStaticInfo(listenerStaticInfo).build();
+                .aggregationsCount(aggregationsCount).sparkTrainingStats(stats)
+                .listenerMetaData(listenerMetaData).listenerUpdates(listenerUpdates)
+                .listenerStaticInfo(listenerStaticInfo)
+                .minibatchesPerExecutor(minibatchesPerExecutor)
+                .thresholdAlgorithmReducer(thresholdAlgorithmReducer)
+                .build();
     }
 }

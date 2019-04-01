@@ -1,32 +1,36 @@
-/*-
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
  *
- *  * Copyright 2015 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
  *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
  *
- */
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.nd4j.linalg.api.ops.executioner;
 
+import lombok.NonNull;
 import org.bytedeco.javacpp.Pointer;
+import org.nd4j.linalg.api.buffer.Utf8Buffer;
 import org.nd4j.linalg.api.ndarray.INDArray;
+import org.nd4j.linalg.api.ndarray.INDArrayStatistics;
 import org.nd4j.linalg.api.ops.*;
 import org.nd4j.linalg.api.ops.aggregates.Aggregate;
 import org.nd4j.linalg.api.ops.aggregates.Batch;
-import org.nd4j.linalg.api.ops.impl.accum.Variance;
+import org.nd4j.linalg.api.ops.impl.scatter.ScatterUpdate;
+import org.nd4j.linalg.api.ops.impl.summarystats.Variance;
 import org.nd4j.linalg.api.rng.Random;
+import org.nd4j.linalg.api.shape.LongShapeDescriptor;
 import org.nd4j.linalg.cache.TADManager;
+import org.nd4j.linalg.profiler.OpProfiler;
+import org.nd4j.linalg.profiler.ProfilerConfig;
 
 import java.util.List;
 import java.util.Map;
@@ -40,8 +44,10 @@ import java.util.Properties;
  */
 public interface OpExecutioner {
 
-    enum ExecutionMode {
-        JAVA, NATIVE
+    // in case of adding new executioner - list it here
+    enum ExecutionerType {
+        NATIVE_CPU,
+        CUDA
     }
 
     enum ProfilingMode {
@@ -57,6 +63,26 @@ public interface OpExecutioner {
     }
 
     /**
+     * This method returns true if verbose mode is enabled, false otherwise
+     * @return
+     */
+    boolean isVerbose();
+
+    /**
+     * This method returns true if debug mode is enabled, false otherwise
+     * @return
+     */
+    boolean isDebug();
+
+
+    /**
+     * This method returns type for this executioner instance
+     * @return
+     */
+    ExecutionerType type();
+
+
+    /**
      * This method returns opName of the last invoked op
      *
      * @return
@@ -69,28 +95,12 @@ public interface OpExecutioner {
      *
      * @param op the operation to execute
      */
-    Op exec(Op op);
-
-    /**
-     * Iterate over every row of every slice
-     *
-     * @param op the operation to apply
-     */
-    void iterateOverAllRows(Op op);
-
-    /**
-     * Iterate over every column of every slice
-     *
-     * @param op the operation to apply
-     */
-    void iterateOverAllColumns(Op op);
+    INDArray exec(Op op);
 
     /**Execute a TransformOp and return the result
      * @param op the operation to execute
      */
-    INDArray execAndReturn(TransformOp op);
-
-
+    TransformOp execAndReturn(TransformOp op);
 
     /**
      * Execute and return the result from an accumulation
@@ -98,7 +108,7 @@ public interface OpExecutioner {
      * @param op the operation to execute
      * @return the accumulated result
      */
-    Accumulation execAndReturn(Accumulation op);
+    ReduceOp execAndReturn(ReduceOp op);
 
     /**
      * Execute and return the result from an accumulation
@@ -106,7 +116,7 @@ public interface OpExecutioner {
      * @param op the operation to execute
      * @return the accumulated result
      */
-    Accumulation execAndReturn(Variance op, boolean biasCorrected);
+    Variance execAndReturn(Variance op);
 
     /**Execute and return the result from an index accumulation
      * @param op the index accumulation operation to execute
@@ -119,55 +129,46 @@ public interface OpExecutioner {
      * @param op the operation to execute
      * @return the accumulated result
      */
-    INDArray execAndReturn(ScalarOp op);
+    ScalarOp execAndReturn(ScalarOp op);
 
     /** Execute and return the result from a vector op
      * @param op*/
-    INDArray execAndReturn(BroadcastOp op);
-
-    /** Execute and return the result from a vector op
-     * @param op*/
-    INDArray execAndReturn(ShapeOp op);
-
-
-    /**Execute the operation along 1 or more dimensions
-     *
-     * @param op the operation to execute
-     */
-    Op exec(Op op, int... dimension);
-
+    BroadcastOp execAndReturn(BroadcastOp op);
 
     /**
-     * Execute an accumulation along one or more dimensions
-     * @param accumulation the accumulation
-     * @param dimension the dimension
-     * @return the accumulation op
+     * Execute a reduceOp, possibly along one or more dimensions
+     * @param reduceOp the reduceOp
+     * @return the reduceOp op
      */
-    INDArray exec(Accumulation accumulation, int... dimension);
+    INDArray exec(ReduceOp reduceOp);
 
     /**
-     * Execute an broadcast along one or more dimensions
+     * Execute a broadcast op, possibly along one or more dimensions
      * @param broadcast the accumulation
-     * @param dimension the dimension
      * @return the broadcast op
      */
-    INDArray exec(BroadcastOp broadcast, int... dimension);
+    INDArray exec(BroadcastOp broadcast);
 
     /**
-     * Execute an accumulation along one or more dimensions
+     * Execute ScalarOp
+     * @param broadcast
+     * @return
+     */
+    INDArray exec(ScalarOp broadcast);
+
+    /**
+     * Execute an variance accumulation op, possibly along one or more dimensions
      * @param accumulation the accumulation
-     * @param dimension the dimension
      * @return the accmulation op
      */
-    INDArray exec(Variance accumulation, boolean biasCorrected, int... dimension);
+    INDArray exec(Variance accumulation);
 
 
     /** Execute an index accumulation along one or more dimensions
      * @param indexAccum the index accumulation operation
-     * @param dimension the dimension/s to execute along
      * @return result
      */
-    INDArray exec(IndexAccumulation indexAccum, int... dimension);
+    INDArray exec(IndexAccumulation indexAccum);
 
 
 
@@ -178,19 +179,7 @@ public interface OpExecutioner {
      * @param op the operation to execute
      * @return the result from the operation
      */
-    INDArray execAndReturn(Op op);
-
-
-    /**Get the execution mode for this
-     * executioner
-     * @return the execution mode for this executioner
-     */
-    ExecutionMode executionMode();
-
-    /**Set the execution mode
-     * @param executionMode the execution mode
-     */
-    void setExecutionMode(ExecutionMode executionMode);
+    Op execAndReturn(Op op);
 
     /**
      * Execute MetaOp
@@ -210,12 +199,6 @@ public interface OpExecutioner {
      * @param op
      */
     void exec(Aggregate op);
-
-    /**
-     *
-     * @param op
-     */
-    void exec(ShapeOp op);
 
     /**
      * This method executes previously built batch
@@ -261,13 +244,22 @@ public interface OpExecutioner {
      *
      * @param mode
      */
+    @Deprecated
     void setProfilingMode(ProfilingMode mode);
+
+    /**
+     * This method stores specified configuration.
+     *
+     * @param config
+     */
+    void setProfilingConfig(ProfilerConfig config);
 
     /**
      * Ths method returns current profiling
      *
      * @return
      */
+    @Deprecated
     ProfilingMode getProfilingMode();
 
 
@@ -357,15 +349,31 @@ public interface OpExecutioner {
      * PLEASE NOTE: You're responsible for input/output validation
      * @param op
      */
-    void exec(CustomOp op);
+    CustomOp execAndReturn(CustomOp op);
 
-    List<long[]> calculateOutputShape(CustomOp op);
+    INDArray[] exec(CustomOp op);
+
+    /**
+     * This method executes op with given context
+     * @param op
+     * @param context
+     * @return method returns output arrays defined within context
+     */
+    INDArray[] exec(CustomOp op, OpContext context);
+
+    List<LongShapeDescriptor> calculateOutputShape(CustomOp op);
+
+    /**
+     * Equivalent to calli
+     */
+    INDArray[] allocateOutputArrays(CustomOp op);
 
 
     void enableDebugMode(boolean reallyEnable);
 
     void enableVerboseMode(boolean reallyEnable);
 
+    boolean isExperimentalMode();
 
     void registerGraph(long id, Pointer graph);
 
@@ -393,4 +401,34 @@ public interface OpExecutioner {
      */
     void setTadThreshold(int threshold);
 
+    /**
+     * This method extracts String from Utf8Buffer
+     * @param buffer
+     * @param index
+     * @return
+     */
+    String getString(Utf8Buffer buffer, long index);
+
+    /**
+     * Temporary hook
+     * @param op
+     * @param array
+     * @param indices
+     * @param updates
+     * @param axis
+     */
+    @Deprecated
+    void scatterUpdate(ScatterUpdate.UpdateOp op, @NonNull INDArray array, @NonNull INDArray indices, @NonNull INDArray updates, int[] axis);
+
+    /**
+     * This method returns OpContext which can be used (and reused) to execute custom ops
+     * @return
+     */
+    OpContext buildContext();
+
+    /**
+     *
+     * @param array
+     */
+    INDArrayStatistics inspectArray(INDArray array);
 }

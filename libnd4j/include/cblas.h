@@ -1,9 +1,51 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 //
 // Created by agibsonccc on 1/26/16.
 //
 
 #ifndef NATIVEOPERATIONS_CBLAS_H
 #define NATIVEOPERATIONS_CBLAS_H
+
+#ifndef __STANDALONE_BUILD__
+#include "config.h"
+#endif
+
+#ifdef __MKL_CBLAS_H__
+// CBLAS from MKL is already included
+#define CBLAS_H
+#endif
+
+#ifdef HAVE_MKLDNN
+// include CBLAS from MKL-DNN
+#include <mkl_cblas.h>
+#define CBLAS_H
+#endif
+
+#ifdef HAVE_OPENBLAS
+// include CBLAS from OpenBLAS
+#ifdef __GNUC__
+#include_next <cblas.h>
+#else
+#include <cblas.h>
+#endif
+#define CBLAS_H
+#endif
+
 #ifndef CBLAS_H
 #include <dll.h>
 

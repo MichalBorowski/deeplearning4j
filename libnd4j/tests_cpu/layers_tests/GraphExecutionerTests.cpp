@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 //
 // Created by raver119 on 29.11.17.
 //
@@ -20,9 +36,9 @@ public:
 
 };
 
-
+#ifdef GRAPH_TESTS_OK
 TEST_F(GraphExecutionerTests, Test_Implicit_Output_1) {
-    auto graph = GraphExecutioner<float>::importFromFlatBuffers("./resources/tensor_slice.fb");
+    auto graph = GraphExecutioner::importFromFlatBuffers("./resources/tensor_slice.fb");
     graph->buildGraph();
 
     auto outputs = graph->fetchOutputs();
@@ -40,7 +56,7 @@ TEST_F(GraphExecutionerTests, Test_Implicit_Output_1) {
 
 
 TEST_F(GraphExecutionerTests, Test_Implicit_Output_2) {
-    auto graph = GraphExecutioner<float>::importFromFlatBuffers("./resources/reduce_dim_false.fb");
+    auto graph = GraphExecutioner::importFromFlatBuffers("./resources/reduce_dim_false.fb");
     graph->buildGraph();
 
     auto outputs = graph->fetchOutputs();
@@ -58,10 +74,10 @@ TEST_F(GraphExecutionerTests, Test_Implicit_Output_2) {
 
 
 TEST_F(GraphExecutionerTests, Test_Implicit_Output_3) {
-    NDArray<float> exp('c', {3}, {3, 3, 3});
+    auto exp = NDArrayFactory::create<float>('c', {3}, {3, 3, 3});
 
-    auto graph = GraphExecutioner<float>::importFromFlatBuffers("./resources/reduce_dim_false.fb");
-    auto status = GraphExecutioner<float>::execute(graph);
+    auto graph = GraphExecutioner::importFromFlatBuffers("./resources/reduce_dim_false.fb");
+    auto status = GraphExecutioner::execute(graph);
 
     ASSERT_EQ(ND4J_STATUS_OK, status);
 
@@ -84,3 +100,4 @@ TEST_F(GraphExecutionerTests, Test_Implicit_Output_3) {
     delete outputs;
     delete graph;
 }
+#endif

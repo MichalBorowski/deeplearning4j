@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 //
 //  @author raver119@gmail.com
 //
@@ -98,6 +114,13 @@ namespace nd4j {
                            double *beta_Array, double **C_Array, int *ldc_Array,
                            int group_count, int *group_size);
 
+#ifdef LAPACK_ROW_MAJOR
+#undef LAPACK_ROW_MAJOR
+#endif
+
+#ifdef LAPACK_COL_MAJOR
+#undef LAPACK_COL_MAJOR
+#endif
     enum LAPACK_LAYOUT { LAPACK_ROW_MAJOR=101, LAPACK_COL_MAJOR=102 };
 
     typedef int (*LapackeSgesvd)(LAPACK_LAYOUT matrix_layout, char jobu, char jobvt,
@@ -391,6 +414,9 @@ namespace nd4j {
 
         template <typename T>
         bool hasGEMM();
+
+        bool hasGEMM(const nd4j::DataType dtype) const;
+        bool hasGEMV(const nd4j::DataType dtype) const;
 
         template <typename T>
         bool hasBatchedGEMM();

@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.nn.conf.layers.misc;
 
 import lombok.*;
@@ -17,8 +33,8 @@ import java.util.Map;
 /**
  * RepeatVector layer configuration.
  *
- * RepeatVector takes a mini-batch of vectors of shape (mb, length) and a repeat factor n and outputs
- * a 3D tensor of shape (mb, n, length) in which x is repeated n times.
+ * RepeatVector takes a mini-batch of vectors of shape (mb, length) and a repeat factor n and outputs a 3D tensor of
+ * shape (mb, n, length) in which x is repeated n times.
  *
  * @author Max Pumperla
  */
@@ -37,7 +53,7 @@ public class RepeatVector extends FeedForwardLayer {
 
     @Override
     public RepeatVector clone() {
-        return  (RepeatVector) super.clone();
+        return (RepeatVector) super.clone();
     }
 
     @Override
@@ -47,11 +63,9 @@ public class RepeatVector extends FeedForwardLayer {
 
     @Override
     public org.deeplearning4j.nn.api.Layer instantiate(NeuralNetConfiguration conf,
-                                                       Collection<TrainingListener> trainingListeners,
-                                                       int layerIndex, INDArray layerParamsView,
-                                                       boolean initializeParams) {
-        org.deeplearning4j.nn.layers.RepeatVector ret =
-                new org.deeplearning4j.nn.layers.RepeatVector(conf);
+                    Collection<TrainingListener> trainingListeners, int layerIndex, INDArray layerParamsView,
+                    boolean initializeParams) {
+        org.deeplearning4j.nn.layers.RepeatVector ret = new org.deeplearning4j.nn.layers.RepeatVector(conf);
         ret.setListeners(trainingListeners);
         ret.setIndex(layerIndex);
         ret.setParamsViewArray(layerParamsView);
@@ -65,7 +79,7 @@ public class RepeatVector extends FeedForwardLayer {
     public InputType getOutputType(int layerIndex, InputType inputType) {
         if (inputType == null || inputType.getType() != InputType.Type.FF) {
             throw new IllegalStateException("Invalid input for RepeatVector layer (layer name=\"" + getLayerName()
-                    + "\"): Expected FF input, got " + inputType);
+                            + "\"): Expected FF input, got " + inputType);
         }
         InputType.InputTypeFeedForward ffInput = (InputType.InputTypeFeedForward) inputType;
         return InputType.recurrent(ffInput.getSize(), n);
@@ -75,24 +89,9 @@ public class RepeatVector extends FeedForwardLayer {
     public LayerMemoryReport getMemoryReport(InputType inputType) {
         InputType outputType = getOutputType(-1, inputType);
 
-        return new LayerMemoryReport.Builder(layerName, RepeatVector.class, inputType, outputType)
-                .standardMemory(0, 0)
-                .workingMemory(0, 0, 0, 0)
-                .cacheMemory(MemoryReport.CACHE_MODE_ALL_ZEROS, MemoryReport.CACHE_MODE_ALL_ZEROS)
-                .build();
-    }
-
-
-    @Override
-    public double getL1ByParam(String paramName) {
-        //Not applicable
-        return 0;
-    }
-
-    @Override
-    public double getL2ByParam(String paramName) {
-        //Not applicable
-        return 0;
+        return new LayerMemoryReport.Builder(layerName, RepeatVector.class, inputType, outputType).standardMemory(0, 0)
+                        .workingMemory(0, 0, 0, 0)
+                        .cacheMemory(MemoryReport.CACHE_MODE_ALL_ZEROS, MemoryReport.CACHE_MODE_ALL_ZEROS).build();
     }
 
     @Override
@@ -102,12 +101,30 @@ public class RepeatVector extends FeedForwardLayer {
 
 
     @NoArgsConstructor
+    @Getter
+    @Setter
     public static class Builder<T extends Builder<T>> extends FeedForwardLayer.Builder<T> {
 
         private int n = 1; // no repetition by default
 
+        /**
+         * Set repetition factor for RepeatVector layer
+         */
+        public int getRepetitionFactor() {
+            return n;
+        }
+
+        /**
+         * Set repetition factor for RepeatVector layer
+         *
+         * @param n upsampling size in height and width dimensions
+         */
+        public void setRepetitionFactor(int n) {
+            this.setN(n);
+        }
+
         public Builder(int n) {
-            this.n = n;
+            this.setN(n);
         }
 
         /**
@@ -116,7 +133,7 @@ public class RepeatVector extends FeedForwardLayer {
          * @param n upsampling size in height and width dimensions
          */
         public Builder repetitionFactor(int n) {
-            this.n = n;
+            this.setN(n);
             return this;
         }
 

@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.nn.layers.recurrent;
 
 import org.deeplearning4j.BaseDL4JTest;
@@ -72,4 +88,26 @@ public class TestSimpleRnn extends BaseDL4JTest {
         TestUtils.testModelSerialization(net);
     }
 
+    @Test
+    public void testBiasInit(){
+        Nd4j.getRandom().setSeed(12345);
+        int nIn = 5;
+        int layerSize = 6;
+
+        MultiLayerConfiguration conf = new NeuralNetConfiguration.Builder()
+                .updater(new NoOp())
+                .weightInit(WeightInit.XAVIER)
+                .activation(Activation.TANH)
+                .list()
+                .layer(new SimpleRnn.Builder().nIn(nIn).nOut(layerSize)
+                        .biasInit(100)
+                        .build())
+                .build();
+
+        MultiLayerNetwork net = new MultiLayerNetwork(conf);
+        net.init();
+
+        INDArray bArr = net.getParam("0_b");
+        assertEquals(Nd4j.valueArrayOf(new long[]{1,layerSize}, 100.0), bArr);
+    }
 }

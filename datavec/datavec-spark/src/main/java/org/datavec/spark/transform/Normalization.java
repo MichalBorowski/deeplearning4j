@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.datavec.spark.transform;
 
 import org.apache.commons.collections.map.ListOrderedMap;
@@ -217,7 +233,7 @@ public class Normalization {
      * and mean of the given columns
      * The list returned is a list of size 2 where each row
      * represents the standard deviation of each column and the mean of each column
-     * @param data the data to get the standard deviation and mean for for
+     * @param data the data to get the standard deviation and mean for
      * @param columns the columns to get the
      * @return
      */
@@ -237,8 +253,7 @@ public class Normalization {
      */
     public static List<Row> aggregate(DataRowsFacade data, String[] columns, String[] functions) {
         String[] rest = new String[columns.length - 1];
-        for (int i = 0; i < rest.length; i++)
-            rest[i] = columns[i + 1];
+        System.arraycopy(columns, 1, rest, 0, rest.length);
         List<Row> rows = new ArrayList<>();
         for (String op : functions) {
             Map<String, String> expressions = new ListOrderedMap();

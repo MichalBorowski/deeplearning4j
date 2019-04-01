@@ -1,24 +1,23 @@
-/*-
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
  *
- *  * Copyright 2015 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WÏITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
  *
- */
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
 
 package org.deeplearning4j.spark.impl.multilayer;
 
 import lombok.extern.slf4j.Slf4j;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.SparkContext;
 import org.apache.spark.api.java.JavaDoubleRDD;
 import org.apache.spark.api.java.JavaPairRDD;
@@ -28,14 +27,20 @@ import org.apache.spark.mllib.linalg.Matrix;
 import org.apache.spark.mllib.linalg.Vector;
 import org.apache.spark.mllib.regression.LabeledPoint;
 import org.apache.spark.rdd.RDD;
-import org.deeplearning4j.eval.*;
+import org.datavec.spark.util.BroadcastHadoopConfigHolder;
+import org.deeplearning4j.api.loader.DataSetLoader;
+import org.deeplearning4j.api.loader.MultiDataSetLoader;
+import org.deeplearning4j.api.loader.impl.SerializedDataSetLoader;
 import org.deeplearning4j.nn.conf.MultiLayerConfiguration;
 import org.deeplearning4j.nn.conf.layers.FeedForwardLayer;
 import org.deeplearning4j.nn.multilayer.MultiLayerNetwork;
 import org.deeplearning4j.spark.api.TrainingMaster;
 import org.deeplearning4j.spark.api.stats.SparkTrainingStats;
+import org.deeplearning4j.spark.data.loader.RemoteFileSourceFactory;
 import org.deeplearning4j.spark.impl.SparkListenable;
+import org.deeplearning4j.spark.impl.common.LoadDataSetFunction;
 import org.deeplearning4j.spark.impl.common.reduce.IntDoubleReduceFunction;
+import org.deeplearning4j.spark.impl.graph.evaluation.IEvaluateMDSPathsFlatMapFunction;
 import org.deeplearning4j.spark.impl.multilayer.evaluation.IEvaluateAggregateFunction;
 import org.deeplearning4j.spark.impl.multilayer.evaluation.IEvaluateFlatMapFunction;
 import org.deeplearning4j.spark.impl.multilayer.evaluation.IEvaluationReduceFunction;
@@ -43,6 +48,12 @@ import org.deeplearning4j.spark.impl.multilayer.scoring.*;
 import org.deeplearning4j.spark.util.MLLibUtil;
 import org.deeplearning4j.spark.util.SparkUtils;
 import org.deeplearning4j.util.ModelSerializer;
+import org.nd4j.base.Preconditions;
+import org.nd4j.evaluation.IEvaluation;
+import org.nd4j.evaluation.classification.Evaluation;
+import org.nd4j.evaluation.classification.ROC;
+import org.nd4j.evaluation.classification.ROCMultiClass;
+import org.nd4j.evaluation.regression.RegressionEvaluation;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.api.ops.executioner.GridExecutioner;
 import org.nd4j.linalg.dataset.DataSet;
@@ -60,7 +71,8 @@ import java.io.OutputStream;
 import java.util.List;
 
 /**
- * Master class for spark
+ * Main class for training MultiLayerNetwork networks using Spark.
+ * Also used for performing distributed evaluation and inference on these networks
  *
  * @author Adam Gibson, Alex Black
  */
@@ -68,10 +80,12 @@ import java.util.List;
 public class SparkDl4jMultiLayer extends SparkListenable {
     public static final int DEFAULT_EVAL_SCORE_BATCH_SIZE = 64;
     public static final int DEFAULT_ROC_THRESHOLD_STEPS = 32;
+    public static final int DEFAULT_EVAL_WORKERS = 4;
     private transient JavaSparkContext sc;
     private MultiLayerConfiguration conf;
     private MultiLayerNetwork network;
     private double lastScore;
+    private int defaultEvaluationWorkers = DEFAULT_EVAL_WORKERS;
 
     /**
      * Instantiate a multi layer spark instance
@@ -151,6 +165,38 @@ public class SparkDl4jMultiLayer extends SparkListenable {
      */
     public void setNetwork(MultiLayerNetwork network) {
         this.network = network;
+    }
+
+
+    /**
+     * Returns the currently set default number of evaluation workers/threads.
+     * Note that when the number of workers is provided explicitly in an evaluation method, the default value
+     * is not used.<br>
+     * In many cases, we may want this to be smaller than the number of Spark threads, to reduce memory requirements.
+     * For example, with 32 Spark threads and a large network, we don't want to spin up 32 instances of the network
+     * to perform evaluation. Better (for memory requirements, and reduced cache thrashing) to use say 4 workers.<br>
+     * If it is not set explicitly, {@link #DEFAULT_EVAL_WORKERS} will be used
+     *
+     * @return Default number of evaluation workers (threads).
+     */
+    public int getDefaultEvaluationWorkers(){
+        return defaultEvaluationWorkers;
+    }
+
+    /**
+     * Set the default number of evaluation workers/threads.
+     * Note that when the number of workers is provided explicitly in an evaluation method, the default value
+     * is not used.<br>
+     * In many cases, we may want this to be smaller than the number of Spark threads, to reduce memory requirements.
+     * For example, with 32 Spark threads and a large network, we don't want to spin up 32 instances of the network
+     * to perform evaluation. Better (for memory requirements, and reduced cache thrashing) to use say 4 workers.<br>
+     * If it is not set explicitly, {@link #DEFAULT_EVAL_WORKERS} will be used
+     *
+     * @return Default number of evaluation workers (threads).
+     */
+    public void setDefaultEvaluationWorkers(int workers){
+        Preconditions.checkArgument(workers > 0, "Number of workers must be > 0: got %s", workers);
+        this.defaultEvaluationWorkers = workers;
     }
 
     /**
@@ -254,7 +300,11 @@ public class SparkDl4jMultiLayer extends SparkListenable {
      * @return trained network
      */
     public MultiLayerNetwork fitPaths(JavaRDD<String> paths) {
-        trainingMaster.executeTrainingPaths(this, paths);
+        return fitPaths(paths, new SerializedDataSetLoader());
+    }
+
+    public MultiLayerNetwork fitPaths(JavaRDD<String> paths, DataSetLoader loader) {
+        trainingMaster.executeTrainingPaths(this, null, paths, loader, null);
         network.incrementEpochCount();
         return network;
     }
@@ -453,8 +503,45 @@ public class SparkDl4jMultiLayer extends SparkListenable {
     /**
      * {@code RDD<DataSet>} overload of {@link #evaluate(JavaRDD)}
      */
-    public Evaluation evaluate(RDD<DataSet> data) {
+    public <T extends Evaluation> T evaluate(RDD<DataSet> data) {
         return evaluate(data.toJavaRDD());
+    }
+
+    /**
+     * Evaluate on a directory containing a set of DataSet objects serialized with {@link DataSet#save(OutputStream)}
+     * @param path Path/URI to the directory containing the dataset objects
+     * @return Evaluation
+     */
+    public <T extends Evaluation> T evaluate(String path){
+        return evaluate(path, new SerializedDataSetLoader());
+    }
+
+    /**
+     * Evaluate on a directory containing a set of DataSet objects to be loaded with a {@link DataSetLoader}.
+     * Uses default batch size of {@link #DEFAULT_EVAL_SCORE_BATCH_SIZE}
+     * @param path Path/URI to the directory containing the datasets to load
+     * @return Evaluation
+     */
+    public <T extends Evaluation> T evaluate(String path, DataSetLoader loader) {
+        return evaluate(path, DEFAULT_EVAL_SCORE_BATCH_SIZE, loader);
+    }
+
+    /**
+     * Evaluate on a directory containing a set of DataSet objects to be loaded with a {@link DataSetLoader}.
+     * Uses default batch size of {@link #DEFAULT_EVAL_SCORE_BATCH_SIZE}
+     * @param path Path/URI to the directory containing the datasets to load
+     * @return Evaluation
+     */
+    public <T extends Evaluation> T evaluate(String path, int batchSize, DataSetLoader loader){
+        JavaRDD<String> paths;
+        try {
+            paths = SparkUtils.listPaths(sc, path);
+        } catch (IOException e) {
+            throw new RuntimeException("Error listing paths in directory", e);
+        }
+
+        JavaRDD<DataSet> rdd = paths.map(new LoadDataSetFunction(loader, new RemoteFileSourceFactory(BroadcastHadoopConfigHolder.get(sc))));
+        return (T)doEvaluation(rdd, batchSize, new org.deeplearning4j.eval.Evaluation())[0];
     }
 
     /**
@@ -463,14 +550,14 @@ public class SparkDl4jMultiLayer extends SparkListenable {
      * @param data Data to evaluate on
      * @return Evaluation object; results of evaluation on all examples in the data set
      */
-    public Evaluation evaluate(JavaRDD<DataSet> data) {
+    public <T extends Evaluation> T evaluate(JavaRDD<DataSet> data) {
         return evaluate(data, null);
     }
 
     /**
      * {@code RDD<DataSet>} overload of {@link #evaluate(JavaRDD, List)}
      */
-    public Evaluation evaluate(RDD<DataSet> data, List<String> labelsList) {
+    public <T extends Evaluation> T evaluate(RDD<DataSet> data, List<String> labelsList) {
         return evaluate(data.toJavaRDD(), labelsList);
     }
 
@@ -480,7 +567,7 @@ public class SparkDl4jMultiLayer extends SparkListenable {
      * @param data Data to evaluate
      * @return     {@link RegressionEvaluation} instance with regression performance
      */
-    public RegressionEvaluation evaluateRegression(JavaRDD<DataSet> data) {
+    public <T extends RegressionEvaluation> T evaluateRegression(JavaRDD<DataSet> data) {
         return evaluateRegression(data, DEFAULT_EVAL_SCORE_BATCH_SIZE);
     }
 
@@ -491,9 +578,9 @@ public class SparkDl4jMultiLayer extends SparkListenable {
      * @param minibatchSize Minibatch size to use when doing performing evaluation
      * @return     {@link RegressionEvaluation} instance with regression performance
      */
-    public RegressionEvaluation evaluateRegression(JavaRDD<DataSet> data, int minibatchSize) {
+    public <T extends RegressionEvaluation> T evaluateRegression(JavaRDD<DataSet> data, int minibatchSize) {
         long nOut = ((FeedForwardLayer) network.getOutputLayer().conf().getLayer()).getNOut();
-        return doEvaluation(data, new RegressionEvaluation(nOut), minibatchSize);
+        return (T)doEvaluation(data, new org.deeplearning4j.eval.RegressionEvaluation(nOut), minibatchSize);
     }
 
     /**
@@ -504,7 +591,7 @@ public class SparkDl4jMultiLayer extends SparkListenable {
      * @param labelsList List of labels used for evaluation
      * @return Evaluation object; results of evaluation on all examples in the data set
      */
-    public Evaluation evaluate(JavaRDD<DataSet> data, List<String> labelsList) {
+    public <T extends Evaluation> T evaluate(JavaRDD<DataSet> data, List<String> labelsList) {
         return evaluate(data, labelsList, DEFAULT_EVAL_SCORE_BATCH_SIZE);
     }
 
@@ -515,7 +602,7 @@ public class SparkDl4jMultiLayer extends SparkListenable {
      * @param data                    Test set data (to evaluate on)
      * @return ROC for the entire data set
      */
-    public ROC evaluateROC(JavaRDD<DataSet> data) {
+    public<T extends ROC> T evaluateROC(JavaRDD<DataSet> data) {
         return evaluateROC(data, DEFAULT_ROC_THRESHOLD_STEPS, DEFAULT_EVAL_SCORE_BATCH_SIZE);
     }
 
@@ -527,8 +614,8 @@ public class SparkDl4jMultiLayer extends SparkListenable {
      * @param evaluationMinibatchSize Minibatch size to use when performing ROC evaluation
      * @return ROC for the entire data set
      */
-    public ROC evaluateROC(JavaRDD<DataSet> data, int thresholdSteps, int evaluationMinibatchSize) {
-        return doEvaluation(data, new ROC(thresholdSteps), evaluationMinibatchSize);
+    public<T extends ROC> T evaluateROC(JavaRDD<DataSet> data, int thresholdSteps, int evaluationMinibatchSize) {
+        return (T)doEvaluation(data, new org.deeplearning4j.eval.ROC(thresholdSteps), evaluationMinibatchSize);
     }
 
     /**
@@ -537,7 +624,7 @@ public class SparkDl4jMultiLayer extends SparkListenable {
      * @param data                    Test set data (to evaluate on)
      * @return ROC for the entire data set
      */
-    public ROCMultiClass evaluateROCMultiClass(JavaRDD<DataSet> data) {
+    public<T extends ROCMultiClass> T evaluateROCMultiClass(JavaRDD<DataSet> data) {
         return evaluateROCMultiClass(data, DEFAULT_ROC_THRESHOLD_STEPS, DEFAULT_EVAL_SCORE_BATCH_SIZE);
     }
 
@@ -549,8 +636,8 @@ public class SparkDl4jMultiLayer extends SparkListenable {
      * @param evaluationMinibatchSize Minibatch size to use when performing ROC evaluation
      * @return ROCMultiClass for the entire data set
      */
-    public ROCMultiClass evaluateROCMultiClass(JavaRDD<DataSet> data, int thresholdSteps, int evaluationMinibatchSize) {
-        return doEvaluation(data, new ROCMultiClass(thresholdSteps), evaluationMinibatchSize);
+    public<T extends ROCMultiClass> T evaluateROCMultiClass(JavaRDD<DataSet> data, int thresholdSteps, int evaluationMinibatchSize) {
+        return (T)doEvaluation(data, new org.deeplearning4j.eval.ROCMultiClass(thresholdSteps), evaluationMinibatchSize);
     }
 
     private void update(int mr, long mg) {
@@ -570,13 +657,13 @@ public class SparkDl4jMultiLayer extends SparkListenable {
      * @param evalBatchSize Batch size to use when conducting evaluations
      * @return Evaluation object; results of evaluation on all examples in the data set
      */
-    public Evaluation evaluate(JavaRDD<DataSet> data, List<String> labelsList, int evalBatchSize) {
-        Evaluation e = new Evaluation();
+    public <T extends Evaluation> T evaluate(JavaRDD<DataSet> data, List<String> labelsList, int evalBatchSize) {
+        Evaluation e = new org.deeplearning4j.eval.Evaluation();
         e = doEvaluation(data, e, evalBatchSize);
         if (labelsList != null) {
             e.setLabelsList(labelsList);
         }
-        return e;
+        return (T)e;
     }
 
     /**
@@ -606,9 +693,90 @@ public class SparkDl4jMultiLayer extends SparkListenable {
      */
     @SuppressWarnings("unchecked")
     public <T extends IEvaluation> T[] doEvaluation(JavaRDD<DataSet> data, int evalBatchSize, T... emptyEvaluations) {
+        return doEvaluation(data, getDefaultEvaluationWorkers(), evalBatchSize, emptyEvaluations );
+    }
+    /**
+     * Perform distributed evaluation of any type of {@link IEvaluation} - or multiple IEvaluation instances.
+     * Distributed equivalent of {@link MultiLayerNetwork#doEvaluation(DataSetIterator, IEvaluation[])}
+     *
+     * @param data             Data to evaluate on
+     * @param emptyEvaluations Empty evaluation instances. Starting point (serialized/duplicated, then merged)
+     * @param evalNumWorkers   Number of workers (copies of the MultiLayerNetwork) model to use. Generally this should
+     *                         be smaller than the number of threads - 2 to 4 is often good enough. If using CUDA GPUs,
+     *                         this should ideally be set to the number of GPUs on each node (i.e., 1 for a single GPU node)
+     * @param evalBatchSize    Evaluation batch size
+     * @param <T>              Type of evaluation instance to return
+     * @return IEvaluation instances
+     */
+    public <T extends IEvaluation> T[] doEvaluation(JavaRDD<DataSet> data, int evalNumWorkers, int evalBatchSize, T... emptyEvaluations) {
         IEvaluateFlatMapFunction<T> evalFn = new IEvaluateFlatMapFunction<>(false, sc.broadcast(conf.toJson()),
-                        sc.broadcast(network.params()), evalBatchSize, emptyEvaluations);
+                        SparkUtils.asByteArrayBroadcast(sc, network.params()), evalNumWorkers, evalBatchSize, emptyEvaluations);
         JavaRDD<T[]> evaluations = data.mapPartitions(evalFn);
         return evaluations.treeAggregate(null, new IEvaluateAggregateFunction<T>(), new IEvaluationReduceFunction<T>());
+    }
+
+
+    /**
+     * Perform evaluation on serialized DataSet objects on disk, (potentially in any format), that are loaded using an {@link DataSetLoader}.<br>
+     * Uses the default number of workers (model replicas per JVM) of {@link #DEFAULT_EVAL_WORKERS} with the default
+     * minibatch size of {@link #DEFAULT_EVAL_SCORE_BATCH_SIZE}
+     * @param data             List of paths to the data (that can be loaded as / converted to DataSets)
+     * @param loader           Used to load DataSets from their paths
+     * @param emptyEvaluations Evaluations to perform
+     * @return Evaluation
+     */
+    public IEvaluation[] doEvaluation(JavaRDD<String> data, DataSetLoader loader, IEvaluation... emptyEvaluations) {
+        return doEvaluation(data, DEFAULT_EVAL_WORKERS, DEFAULT_EVAL_SCORE_BATCH_SIZE, loader, emptyEvaluations);
+    }
+
+    /**
+     * Perform evaluation on serialized DataSet objects on disk, (potentially in any format), that are loaded using an {@link DataSetLoader}.
+     * @param data             List of paths to the data (that can be loaded as / converted to DataSets)
+     * @param evalNumWorkers   Number of workers to perform evaluation with. To reduce memory requirements and cache thrashing,
+     *                         it is common to set this to a lower value than the number of spark threads per JVM/executor
+     * @param evalBatchSize    Batch size to use when performing evaluation
+     * @param loader           Used to load DataSets from their paths
+     * @param emptyEvaluations Evaluations to perform
+     * @return Evaluation
+     */
+    public IEvaluation[] doEvaluation(JavaRDD<String> data, int evalNumWorkers, int evalBatchSize, DataSetLoader loader, IEvaluation... emptyEvaluations) {
+        return doEvaluation(data, evalNumWorkers, evalBatchSize, loader, null, emptyEvaluations);
+    }
+
+    /**
+     * Perform evaluation on serialized MultiDataSet objects on disk, (potentially in any format), that are loaded using an {@link MultiDataSetLoader}.<br>
+     * Uses the default number of workers (model replicas per JVM) of {@link #DEFAULT_EVAL_WORKERS} with the default
+     * minibatch size of {@link #DEFAULT_EVAL_SCORE_BATCH_SIZE}
+     * @param data             List of paths to the data (that can be loaded as / converted to DataSets)
+     * @param loader           Used to load MultiDataSets from their paths
+     * @param emptyEvaluations Evaluations to perform
+     * @return Evaluation
+     */
+    public IEvaluation[] doEvaluation(JavaRDD<String> data, MultiDataSetLoader loader, IEvaluation... emptyEvaluations) {
+        return doEvaluation(data, DEFAULT_EVAL_WORKERS, DEFAULT_EVAL_SCORE_BATCH_SIZE, null, loader, emptyEvaluations);
+    }
+
+    /**
+     * Perform evaluation on serialized MultiDataSet objects on disk, (potentially in any format), that are loaded using an {@link MultiDataSetLoader}
+     * @param data             List of paths to the data (that can be loaded as / converted to DataSets)
+     * @param evalNumWorkers   Number of workers to perform evaluation with. To reduce memory requirements and cache thrashing,
+     *                         it is common to set this to a lower value than the number of spark threads per JVM/executor
+     * @param evalBatchSize    Batch size to use when performing evaluation
+     * @param loader           Used to load MultiDataSets from their paths
+     * @param emptyEvaluations Evaluations to perform
+     * @return Evaluation
+     */
+    public IEvaluation[] doEvaluation(JavaRDD<String> data, int evalNumWorkers, int evalBatchSize, MultiDataSetLoader loader, IEvaluation... emptyEvaluations) {
+        return doEvaluation(data, evalNumWorkers, evalBatchSize, null, loader, emptyEvaluations);
+    }
+
+    protected IEvaluation[] doEvaluation(JavaRDD<String> data, int evalNumWorkers, int evalBatchSize, DataSetLoader loader, MultiDataSetLoader mdsLoader, IEvaluation... emptyEvaluations){
+        Configuration config = sc.hadoopConfiguration();
+        IEvaluateMDSPathsFlatMapFunction evalFn = new IEvaluateMDSPathsFlatMapFunction(sc.broadcast(conf.toJson()),
+                SparkUtils.asByteArrayBroadcast(sc, network.params()), evalNumWorkers, evalBatchSize, loader, mdsLoader,
+                BroadcastHadoopConfigHolder.get(sc), emptyEvaluations);
+        Preconditions.checkArgument(evalNumWorkers > 0, "Invalid number of evaulation workers: require at least 1 - got %s", evalNumWorkers);
+        JavaRDD<IEvaluation[]> evaluations = data.mapPartitions(evalFn);
+        return evaluations.treeAggregate(null, new IEvaluateAggregateFunction<>(), new IEvaluateAggregateFunction<>());
     }
 }

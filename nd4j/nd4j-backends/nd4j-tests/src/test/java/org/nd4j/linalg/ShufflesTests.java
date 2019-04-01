@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.linalg;
 
 import org.junit.Test;
@@ -140,7 +156,7 @@ public class ShufflesTests extends BaseNd4jTest {
     }
 
     @Test
-    public void testSymmetricShuffle2() throws Exception {
+    public void testSymmetricShuffle2() {
         INDArray features = Nd4j.zeros(10, 10, 20);
         INDArray labels = Nd4j.zeros(10, 10, 3);
 
@@ -182,7 +198,7 @@ public class ShufflesTests extends BaseNd4jTest {
     }
 
     @Test
-    public void testSymmetricShuffle3() throws Exception {
+    public void testSymmetricShuffle3() {
         INDArray features = Nd4j.zeros(10, 10, 20);
         INDArray featuresMask = Nd4j.zeros(10, 20);
         INDArray labels = Nd4j.zeros(10, 10, 3);
@@ -247,7 +263,7 @@ public class ShufflesTests extends BaseNd4jTest {
      * @throws Exception
      */
     @Test
-    public void testHalfVectors1() throws Exception {
+    public void testHalfVectors1() {
         int[] array1 = ArrayUtil.buildHalfVector(new Random(12), 20);
         int[] array2 = ArrayUtil.buildHalfVector(new Random(75), 20);
 
@@ -268,7 +284,7 @@ public class ShufflesTests extends BaseNd4jTest {
     }
 
     @Test
-    public void testInterleavedVector1() throws Exception {
+    public void testInterleavedVector1() {
         int[] array1 = ArrayUtil.buildInterleavedVector(new Random(12), 20);
         int[] array2 = ArrayUtil.buildInterleavedVector(new Random(75), 20);
 
@@ -347,7 +363,7 @@ public class ShufflesTests extends BaseNd4jTest {
 
         public float[] measureState(INDArray data) {
             // FIXME: int cast
-            float[] result = new float[(int) data.rows()];
+            float[] result = new float[data.rows()];
 
             for (int x = 0; x < data.rows(); x++) {
                 result[x] = data.getRow(x).getFloat(0);

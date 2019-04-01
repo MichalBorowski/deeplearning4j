@@ -1,24 +1,32 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.nn.params;
 
 import lombok.val;
-import org.apache.commons.math3.util.FastMath;
 import org.deeplearning4j.nn.conf.NeuralNetConfiguration;
 import org.deeplearning4j.nn.conf.layers.FeedForwardLayer;
 import org.deeplearning4j.nn.conf.layers.Layer;
-import org.deeplearning4j.nn.params.DefaultParamInitializer;
-import org.deeplearning4j.nn.weights.WeightInit;
+import org.deeplearning4j.nn.weights.IWeightInit;
 import org.nd4j.linalg.api.ndarray.INDArray;
-import org.nd4j.linalg.api.rng.distribution.Distribution;
-import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.indexing.NDArrayIndex;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
-
-import static org.deeplearning4j.nn.weights.WeightInitUtil.DEFAULT_WEIGHT_INIT_ORDER;
-import static org.deeplearning4j.nn.weights.WeightInitUtil.initWeights;
 
 /**
  * created by jingshu
@@ -79,7 +87,7 @@ public class ElementWiseParamInitializer extends DefaultParamInitializer{
 
     /**
      * Return a map of gradients (in their standard non-flattened representation), taken from the flattened (row vector) gradientView array.
-     * The idea is that operates in exactly the same way as the the paramsView does in
+     * The idea is that operates in exactly the same way as the paramsView does in
      * thus the position in the view (and, the array orders) must match those of the parameters
      *
      * @param conf         Configuration
@@ -105,14 +113,15 @@ public class ElementWiseParamInitializer extends DefaultParamInitializer{
         return out;
     }
 
-    protected INDArray createWeightMatrix(long nIn, long nOut, WeightInit weightInit, Distribution dist,
+    @Override
+    protected INDArray createWeightMatrix(long nIn, long nOut, IWeightInit weightInit,
                                           INDArray weightParamView, boolean initializeParameters) {
         val shape = new long[] {1,nIn};
 
         if (initializeParameters) {
-            INDArray ret = initWeights(nIn, //Fan in
+            INDArray ret = weightInit.init(nIn, //Fan in
                     nOut, //Fan out
-                    shape, weightInit, dist, DEFAULT_WEIGHT_INIT_ORDER, weightParamView);
+                    shape, IWeightInit.DEFAULT_WEIGHT_INIT_ORDER, weightParamView);
             return ret;
         } else {
             return weightParamView;

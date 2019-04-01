@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.gradientcheck;
 
 import org.deeplearning4j.BaseDL4JTest;
@@ -11,17 +27,14 @@ import org.deeplearning4j.nn.multilayer.MultiLayerNetwork;
 import org.deeplearning4j.nn.weights.WeightInit;
 import org.junit.Test;
 import org.nd4j.linalg.activations.Activation;
-import org.nd4j.linalg.activations.impl.ActivationIdentity;
 import org.nd4j.linalg.activations.impl.ActivationTanH;
-import org.nd4j.linalg.api.buffer.DataBuffer;
-import org.nd4j.linalg.api.buffer.util.DataTypeUtil;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.api.ops.random.impl.BernoulliDistribution;
 import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.indexing.NDArrayIndex;
 import org.nd4j.linalg.learning.config.NoOp;
 import org.nd4j.linalg.lossfunctions.LossFunctions.LossFunction;
-import org.nd4j.linalg.lossfunctions.impl.LossMAE;
 import org.nd4j.linalg.lossfunctions.impl.LossMSE;
 
 import java.util.Arrays;
@@ -40,7 +53,7 @@ public class VaeGradientCheckTests extends BaseDL4JTest {
     private static final double DEFAULT_MIN_ABS_ERROR = 1e-8;
 
     static {
-        Nd4j.setDataType(DataBuffer.Type.DOUBLE);
+        Nd4j.setDataType(DataType.DOUBLE);
     }
 
     @Test
@@ -88,16 +101,16 @@ public class VaeGradientCheckTests extends BaseDL4JTest {
                             .layer(0, new VariationalAutoencoder.Builder().nIn(4)
                                     .nOut(3).encoderLayerSizes(encoderSizes)
                                     .decoderLayerSizes(decoderSizes)
-                                    .weightInit(WeightInit.DISTRIBUTION)
+
                                     .dist(new NormalDistribution(0, 1))
                                     .activation(afn)
                                     .build())
                             .layer(1, new OutputLayer.Builder(lf)
                                     .activation(outputActivation).nIn(3).nOut(3)
-                                    .weightInit(WeightInit.DISTRIBUTION)
+
                                     .dist(new NormalDistribution(0, 1))
                                     .build())
-                            .pretrain(false).backprop(true).build();
+                            .build();
 
             MultiLayerNetwork mln = new MultiLayerNetwork(conf);
             mln.init();
@@ -169,7 +182,7 @@ public class VaeGradientCheckTests extends BaseDL4JTest {
                             .reconstructionDistribution(
                                     new GaussianReconstructionDistribution(pxzAfn))
                             .activation(afn).build())
-                    .pretrain(true).backprop(false).build();
+                    .build();
 
             MultiLayerNetwork mln = new MultiLayerNetwork(conf);
             mln.init();
@@ -250,7 +263,7 @@ public class VaeGradientCheckTests extends BaseDL4JTest {
 
             MultiLayerConfiguration conf = new NeuralNetConfiguration.Builder().l2(0.2).l1(0.3)
                     .updater(new NoOp())
-                    .seed(12345L).weightInit(WeightInit.DISTRIBUTION).dist(new NormalDistribution(0, 1))
+                    .seed(12345L).dist(new NormalDistribution(0, 1))
                     .list().layer(0,
                             new VariationalAutoencoder.Builder().nIn(inOutSize).nOut(3)
                                     .encoderLayerSizes(5).decoderLayerSizes(6)
@@ -259,7 +272,7 @@ public class VaeGradientCheckTests extends BaseDL4JTest {
                                             reconstructionDistributions[i])
                                     .activation(Activation.TANH)
                                     .build())
-                    .pretrain(true).backprop(false).build();
+                    .build();
 
             MultiLayerNetwork mln = new MultiLayerNetwork(conf);
             mln.init();
@@ -302,7 +315,7 @@ public class VaeGradientCheckTests extends BaseDL4JTest {
                                     new GaussianReconstructionDistribution(Activation.TANH))
                             .numSamples(numSamples).activation(Activation.TANH)
                             .build())
-                    .pretrain(true).backprop(false).build();
+                    .build();
 
             MultiLayerNetwork mln = new MultiLayerNetwork(conf);
             mln.init();

@@ -1,30 +1,32 @@
-/*-
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
  *
- *  * Copyright 2017 Skymind,Inc.
- *  *
- *  *    Licensed under the Apache License, Version 2.0 (the "License");
- *  *    you may not use this file except in compliance with the License.
- *  *    You may obtain a copy of the License at
- *  *
- *  *        http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  *    Unless required by applicable law or agreed to in writing, software
- *  *    distributed under the License is distributed on an "AS IS" BASIS,
- *  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  *    See the License for the specific language governing permissions and
- *  *    limitations under the License.
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
  *
- */
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.nn.layers;
 
 import lombok.extern.slf4j.Slf4j;
 import org.bytedeco.javacpp.*;
 import org.nd4j.jita.allocator.impl.AtomicAllocator;
 import org.nd4j.linalg.api.buffer.DataBuffer;
+import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.factory.Nd4j;
 
-import static org.bytedeco.javacpp.cuda.*;
-import static org.bytedeco.javacpp.cudnn.*;
+import org.bytedeco.cuda.cudart.*;
+import org.bytedeco.cuda.cudnn.*;
+import static org.bytedeco.cuda.global.cudart.*;
+import static org.bytedeco.cuda.global.cudnn.*;
 
 /**
  * Functionality shared by all cuDNN-based helpers.
@@ -177,16 +179,16 @@ public abstract class BaseCudnnHelper {
 
     protected static final int TENSOR_FORMAT = CUDNN_TENSOR_NCHW;
 
-    protected int dataType = Nd4j.dataType() == DataBuffer.Type.DOUBLE ? CUDNN_DATA_DOUBLE
-                    : Nd4j.dataType() == DataBuffer.Type.FLOAT ? CUDNN_DATA_FLOAT : CUDNN_DATA_HALF;
+    protected int dataType = Nd4j.dataType() == DataType.DOUBLE ? CUDNN_DATA_DOUBLE
+                    : Nd4j.dataType() == DataType.FLOAT ? CUDNN_DATA_FLOAT : CUDNN_DATA_HALF;
     protected int dataTypeSize =
-                    Nd4j.dataType() == DataBuffer.Type.DOUBLE ? 8 : Nd4j.dataType() == DataBuffer.Type.FLOAT ? 4 : 2;
+                    Nd4j.dataType() == DataType.DOUBLE ? 8 : Nd4j.dataType() == DataType.FLOAT ? 4 : 2;
     // both CUDNN_DATA_HALF and CUDNN_DATA_FLOAT need a float value for alpha and beta
     protected Pointer alpha = dataType == CUDNN_DATA_DOUBLE ? new DoublePointer(1.0) : new FloatPointer(1.0f);
     protected Pointer beta = dataType == CUDNN_DATA_DOUBLE ? new DoublePointer(0.0) : new FloatPointer(0.0f);
     protected SizeTPointer sizeInBytes = new SizeTPointer(1);
 
-    public static int toCudnnDataType(DataBuffer.Type type){
+    public static int toCudnnDataType(DataType type){
         switch (type){
             case DOUBLE:
                 return CUDNN_DATA_DOUBLE;

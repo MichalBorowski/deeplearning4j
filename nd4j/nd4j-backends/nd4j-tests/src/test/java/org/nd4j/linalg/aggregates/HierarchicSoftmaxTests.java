@@ -1,6 +1,23 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.nd4j.linalg.aggregates;
 
 import lombok.extern.slf4j.Slf4j;
+import lombok.val;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -10,12 +27,15 @@ import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.api.ops.aggregates.impl.AggregateCBOW;
 import org.nd4j.linalg.api.ops.aggregates.impl.AggregateSkipGram;
 import org.nd4j.linalg.api.ops.aggregates.impl.HierarchicSoftmax;
+import org.nd4j.linalg.api.ops.impl.nlp.CbowRound;
+import org.nd4j.linalg.api.ops.impl.nlp.SkipGramRound;
 import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.factory.Nd4jBackend;
 
 import java.util.Arrays;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 
 /**
  * This tests pack covers simple gradient checks for AggregateSkipGram, CBOW and HierarchicSoftmax
@@ -33,11 +53,11 @@ public class HierarchicSoftmaxTests extends BaseNd4jTest {
 
     @Before
     public void setUp() {
-        // DataTypeUtil.setDTypeForContext(DataBuffer.Type.DOUBLE);
+        // DataTypeUtil.setDTypeForContext(DataType.DOUBLE);
     }
 
     @Test
-    public void testHSGradient1() throws Exception {
+    public void testHSGradient1() {
         INDArray syn0 = Nd4j.ones(10, 10).assign(0.01f);
         INDArray syn1 = Nd4j.ones(10, 10).assign(0.02f);
         INDArray expTable = Nd4j.create(10000).assign(0.5f);
@@ -74,7 +94,7 @@ public class HierarchicSoftmaxTests extends BaseNd4jTest {
     }
 
     @Test
-    public void testSGGradient1() throws Exception {
+    public void testSGGradient1() {
         INDArray syn0 = Nd4j.create(10, 10).assign(0.01f);
         INDArray syn1 = Nd4j.create(10, 10).assign(0.02f);
         INDArray syn1Neg = Nd4j.ones(10, 10).assign(0.03f);
@@ -93,8 +113,9 @@ public class HierarchicSoftmaxTests extends BaseNd4jTest {
 
         AggregateSkipGram op = new AggregateSkipGram(syn0, syn1, syn1Neg, expTable, null, idxSyn0, new int[] {1},
                         new int[] {0}, 0, 0, 10, lr, 1L, 10);
-
-        Nd4j.getExecutioner().exec(op);
+        //Nd4j.getExecutioner().exec(op);
+        val sg = new SkipGramRound(idxSyn0, syn0, syn1, expTable, new int[] {1}, new byte[]{0}, lr, 1L, Nd4j.empty(syn0.dataType()));
+        Nd4j.getExecutioner().exec(sg);
 
         log.info("syn0row after: {}", Arrays.toString(syn0row.dup().data().asFloat()));
 
@@ -103,7 +124,7 @@ public class HierarchicSoftmaxTests extends BaseNd4jTest {
     }
 
     @Test
-    public void testSGGradient2() throws Exception {
+    public void testSGGradient2() {
         INDArray syn0 = Nd4j.create(10, 10).assign(0.01f);
         INDArray syn1 = Nd4j.create(10, 10).assign(0.02f);
         INDArray syn1Neg = Nd4j.ones(10, 10).assign(0.03f);
@@ -125,8 +146,9 @@ public class HierarchicSoftmaxTests extends BaseNd4jTest {
 
         AggregateSkipGram op = new AggregateSkipGram(syn0, syn1, null, expTable, null, idxSyn0, new int[] {1, 2},
                         new int[] {0, 1}, 0, 0, 10, lr, 1L, 10);
-
-        Nd4j.getExecutioner().exec(op);
+        //Nd4j.getExecutioner().exec(op);
+        val sg = new SkipGramRound(idxSyn0, syn0, syn1, expTable, new int[] {1, 2}, new byte[]{0, 1}, lr, 1L, Nd4j.empty(syn0.dataType()));
+        Nd4j.getExecutioner().exec(sg);
 
         /*
             Since expTable contains all-equal values, and only difference for ANY index is code being 0 or 1, syn0 row will stay intact,
@@ -149,7 +171,7 @@ public class HierarchicSoftmaxTests extends BaseNd4jTest {
      * @throws Exception
      */
     @Test
-    public void testSGGradientNoOp() throws Exception {
+    public void testSGGradientNoOp() {
         INDArray syn0 = Nd4j.create(10, 10).assign(0.01f);
         INDArray syn1 = Nd4j.create(10, 10).assign(0.02f);
         INDArray syn1Neg = Nd4j.ones(10, 10).assign(0.03f);
@@ -172,7 +194,7 @@ public class HierarchicSoftmaxTests extends BaseNd4jTest {
     }
 
     @Test
-    public void testSGGradientNegative1() throws Exception {
+    public void testSGGradientNegative1() {
         INDArray syn0 = Nd4j.create(10, 10).assign(0.01f);
         INDArray syn1 = Nd4j.create(10, 10).assign(0.02f);
         INDArray syn1Neg = Nd4j.ones(10, 10).assign(0.03f);
@@ -190,8 +212,10 @@ public class HierarchicSoftmaxTests extends BaseNd4jTest {
 
         AggregateSkipGram op = new AggregateSkipGram(syn0, syn1, syn1Neg, expTable, table, idxSyn0, new int[] {},
                         new int[] {}, 1, 3, 10, lr, 2L, 10);
+        //Nd4j.getExecutioner().exec(op);
 
-        Nd4j.getExecutioner().exec(op);
+        val sg = new SkipGramRound(idxSyn0, 3, syn0, syn1Neg, expTable, table, 1, lr, 2L, Nd4j.empty(syn0.dataType()));
+        Nd4j.getExecutioner().exec(sg);
 
         log.info("syn0row1 after: {}", Arrays.toString(syn0.getRow(idxSyn0).dup().data().asFloat()));
 
@@ -201,7 +225,7 @@ public class HierarchicSoftmaxTests extends BaseNd4jTest {
 
 
     @Test
-    public void testCBOWGradient1() throws Exception {
+    public void testCBOWGradient1() {
         INDArray syn0 = Nd4j.create(10, 10).assign(0.01f);
         INDArray syn1 = Nd4j.create(10, 10).assign(0.02f);
         INDArray expTable = Nd4j.create(10000).assign(0.5f);
@@ -214,8 +238,10 @@ public class HierarchicSoftmaxTests extends BaseNd4jTest {
 
         AggregateCBOW op = new AggregateCBOW(syn0, syn1, null, expTable, null, 0, new int[] {0, 1, 2}, new int[] {4, 5},
                         new int[] {1, 1}, 0, 0, 10, lr, 2L, 10);
+        //Nd4j.getExecutioner().exec(op);
 
-        Nd4j.getExecutioner().exec(op);
+        val sg = new CbowRound(0, new int[] {0, 1, 2}, new int[] {0,0,0}, syn0, syn1, expTable, new int[] {4, 5}, new byte[]{1, 1}, lr, 2L, Nd4j.empty(syn0.dataType()), 1);
+        Nd4j.getExecutioner().exec(sg);
 
         INDArray syn0row_0 = syn0.getRow(0);
         INDArray syn0row_1 = syn0.getRow(1);
@@ -256,7 +282,7 @@ public class HierarchicSoftmaxTests extends BaseNd4jTest {
     }
 
     @Test
-    public void testCBOWGradientNoOp1() throws Exception {
+    public void testCBOWGradientNoOp1() {
         INDArray syn0 = Nd4j.create(10, 10).assign(0.01f);
         INDArray syn1 = Nd4j.create(10, 10).assign(0.02f);
         INDArray syn1Neg = Nd4j.ones(10, 10).assign(0.03f);
@@ -280,7 +306,7 @@ public class HierarchicSoftmaxTests extends BaseNd4jTest {
     }
 
     @Test
-    public void testCBOWGradientNegative1() throws Exception {
+    public void testCBOWGradientNegative1() {
         INDArray syn0 = Nd4j.create(10, 10).assign(0.01f);
         INDArray syn1 = Nd4j.create(10, 10).assign(0.02f);
         INDArray syn1Neg = Nd4j.create(10, 10).assign(0.03f);
@@ -297,10 +323,12 @@ public class HierarchicSoftmaxTests extends BaseNd4jTest {
         INDArray expSyn0_row3 = Nd4j.create(10).assign(0.01f);
         INDArray expSyn1Neg_row6 = Nd4j.create(10).assign(0.030125f);
 
-        AggregateCBOW op = new AggregateCBOW(syn0, syn1, syn1Neg, expTable, table, 0, new int[] {0, 1, 2}, new int[] {},
-                        new int[] {}, 2, 6, 10, lr, 2L, 10);
+        AggregateCBOW op = new AggregateCBOW(syn0, syn1, syn1Neg, expTable, table, 0, new int[] {0, 1, 2}, new int[] {}, new int[] {}, 2, 6, 10, lr, 2L, 10);
+        //Nd4j.getExecutioner().exec(op);
 
-        Nd4j.getExecutioner().exec(op);
+        val sg = new CbowRound(0, new int[]{0, 1, 2}, new int[] {0, 0, 0}, 6, syn0, syn1Neg, expTable, table,  2, lr, 2L, Nd4j.empty(syn0.dataType()), 1);
+        Nd4j.getExecutioner().exec(sg);
+
 
         assertNotEquals(syn0dup, syn0);
         assertNotEquals(syn1NegDup, syn1Neg);
@@ -341,7 +369,7 @@ public class HierarchicSoftmaxTests extends BaseNd4jTest {
 
 
     @Test
-    public void testCBOWInference1() throws Exception {
+    public void testCBOWInference1() {
         INDArray syn0 = Nd4j.create(10, 10).assign(0.01f);
         INDArray syn1 = Nd4j.create(10, 10).assign(0.02f);
         INDArray syn1Neg = Nd4j.create(10, 10).assign(0.03f);
@@ -394,7 +422,7 @@ public class HierarchicSoftmaxTests extends BaseNd4jTest {
     }
 
     @Test
-    public void testSGInference1() throws Exception {
+    public void testSGInference1() {
         INDArray syn0 = Nd4j.create(10, 10).assign(0.01f);
         INDArray syn1 = Nd4j.create(10, 10).assign(0.02f);
         INDArray syn1Neg = Nd4j.create(10, 10).assign(0.03f);

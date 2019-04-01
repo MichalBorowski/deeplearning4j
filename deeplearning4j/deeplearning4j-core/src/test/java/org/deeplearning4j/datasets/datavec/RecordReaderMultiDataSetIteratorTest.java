@@ -1,3 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2018 Skymind, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License, Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ******************************************************************************/
+
 package org.deeplearning4j.datasets.datavec;
 
 
@@ -5,8 +21,11 @@ import com.google.common.io.Files;
 import org.apache.commons.compress.utils.IOUtils;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.FilenameUtils;
+import org.datavec.api.conf.Configuration;
 import org.datavec.api.io.labels.ParentPathLabelGenerator;
+import org.datavec.api.records.Record;
 import org.datavec.api.records.metadata.RecordMetaData;
+import org.datavec.api.records.reader.BaseRecordReader;
 import org.datavec.api.records.reader.RecordReader;
 import org.datavec.api.records.reader.SequenceRecordReader;
 import org.datavec.api.records.reader.impl.collection.CollectionSequenceRecordReader;
@@ -14,7 +33,9 @@ import org.datavec.api.records.reader.impl.csv.CSVRecordReader;
 import org.datavec.api.records.reader.impl.csv.CSVSequenceRecordReader;
 import org.datavec.api.split.CollectionInputSplit;
 import org.datavec.api.split.FileSplit;
+import org.datavec.api.split.InputSplit;
 import org.datavec.api.split.NumberedFileInputSplit;
+import org.datavec.api.util.ndarray.RecordConverter;
 import org.datavec.api.writable.DoubleWritable;
 import org.datavec.api.writable.IntWritable;
 import org.datavec.api.writable.Writable;
@@ -39,6 +60,7 @@ import java.util.*;
 
 import static org.junit.Assert.*;
 import static org.nd4j.linalg.indexing.NDArrayIndex.all;
+import static org.nd4j.linalg.indexing.NDArrayIndex.interval;
 import static org.nd4j.linalg.indexing.NDArrayIndex.point;
 
 public class RecordReaderMultiDataSetIteratorTest extends BaseDL4JTest {
@@ -61,7 +83,7 @@ public class RecordReaderMultiDataSetIteratorTest extends BaseDL4JTest {
 
         while (rrdsi.hasNext()) {
             DataSet ds = rrdsi.next();
-            INDArray fds = ds.getFeatureMatrix();
+            INDArray fds = ds.getFeatures();
             INDArray lds = ds.getLabels();
 
             MultiDataSet mds = rrmdsi.next();
@@ -111,7 +133,7 @@ public class RecordReaderMultiDataSetIteratorTest extends BaseDL4JTest {
 
         while (iter.hasNext()) {
             DataSet ds = iter.next();
-            INDArray fds = ds.getFeatureMatrix();
+            INDArray fds = ds.getFeatures();
             INDArray lds = ds.getLabels();
 
             MultiDataSet mds = srrmdsi.next();
@@ -171,7 +193,7 @@ public class RecordReaderMultiDataSetIteratorTest extends BaseDL4JTest {
 
         while (rrdsi.hasNext()) {
             DataSet ds = rrdsi.next();
-            INDArray fds = ds.getFeatureMatrix();
+            INDArray fds = ds.getFeatures();
             INDArray lds = ds.getLabels();
 
             MultiDataSet mds = rrmdsi.next();
@@ -260,7 +282,7 @@ public class RecordReaderMultiDataSetIteratorTest extends BaseDL4JTest {
 
         while (iter.hasNext()) {
             DataSet ds = iter.next();
-            INDArray fds = ds.getFeatureMatrix();
+            INDArray fds = ds.getFeatures();
             INDArray lds = ds.getLabels();
 
             MultiDataSet mds = srrmdsi.next();
@@ -435,11 +457,11 @@ public class RecordReaderMultiDataSetIteratorTest extends BaseDL4JTest {
             assertEquals(1, mdsEnd.getLabelsMaskArrays().length);
 
 
-            assertEquals(dsStart.getFeatureMatrix(), mdsStart.getFeatures(0));
+            assertEquals(dsStart.getFeatures(), mdsStart.getFeatures(0));
             assertEquals(dsStart.getLabels(), mdsStart.getLabels(0));
             assertEquals(dsStart.getLabelsMaskArray(), mdsStart.getLabelsMaskArray(0));
 
-            assertEquals(dsEnd.getFeatureMatrix(), mdsEnd.getFeatures(0));
+            assertEquals(dsEnd.getFeatures(), mdsEnd.getFeatures(0));
             assertEquals(dsEnd.getLabels(), mdsEnd.getLabels(0));
             assertEquals(dsEnd.getLabelsMaskArray(), mdsEnd.getLabelsMaskArray(0));
         }
@@ -553,8 +575,8 @@ public class RecordReaderMultiDataSetIteratorTest extends BaseDL4JTest {
             DataSet d1 = dsi1.next();
             DataSet d2 = dsi2.next();
 
-            assertEquals(d1.getFeatureMatrix(), mds.getFeatures(0));
-            assertEquals(d2.getFeatureMatrix(), mds.getFeatures(1));
+            assertEquals(d1.getFeatures(), mds.getFeatures(0));
+            assertEquals(d2.getFeatures(), mds.getFeatures(1));
             assertEquals(d1.getLabels(), mds.getLabels(0));
         }
     }
@@ -605,8 +627,8 @@ public class RecordReaderMultiDataSetIteratorTest extends BaseDL4JTest {
         DataSet d1 = dsi1.next();
         DataSet d2 = dsi2.next();
 
-        assertEquals(d1.getFeatureMatrix(), mds.getFeatures(0));
-        assertEquals(d2.getFeatureMatrix(), mds.getFeatures(1));
+        assertEquals(d1.getFeatures(), mds.getFeatures(0));
+        assertEquals(d2.getFeatures(), mds.getFeatures(1));
         assertEquals(d1.getLabels(), mds.getLabels(0));
 
         //Check label assignment:
@@ -768,16 +790,139 @@ public class RecordReaderMultiDataSetIteratorTest extends BaseDL4JTest {
                 .addOutput("rr", 2, 2)
                 .build();
 
-        INDArray expFeatures = Nd4j.linspace(1,10,10).transpose();
-        INDArray expLabels = Nd4j.linspace(1,10,10).addi(0.5).transpose();
+        INDArray expFeatures = Nd4j.linspace(1,10,10).reshape(1,10).transpose();
+        INDArray expLabels = Nd4j.linspace(1,10,10).addi(0.5).reshape(1,10).transpose();
 
         MultiDataSet mds = rrmdsi.next();
         assertFalse(rrmdsi.hasNext());
 
-        assertEquals(expFeatures, mds.getFeatures(0));
-        assertEquals(expLabels, mds.getLabels(0));
+        assertEquals(expFeatures, mds.getFeatures(0).castTo(expFeatures.dataType()));
+        assertEquals(expLabels, mds.getLabels(0).castTo(expLabels.dataType()));
+    }
 
 
+    private static final int nX = 32;
+    private static final int nY = 32;
+    private static final int nZ = 28;
 
+
+    @Test
+    public void testRRMDSI5D() {
+        int batchSize = 5;
+
+        CustomRecordReader recordReader = new CustomRecordReader();
+        DataSetIterator dataIter = new RecordReaderDataSetIterator(recordReader, batchSize,
+                1, /* Index of label in records */
+                2 /* number of different labels */);
+
+        int count = 0;
+        while(dataIter.hasNext()){
+            DataSet ds = dataIter.next();
+
+            int offset = 5*count;
+            for( int i=0; i<5; i++ ){
+                INDArray act = ds.getFeatures().get(interval(i,i,true), all(), all(), all(), all());
+                INDArray exp = Nd4j.valueArrayOf(new int[]{1, 1, nZ, nX, nY}, i + offset );
+                assertEquals(exp, act);
+            }
+            count++;
+        }
+
+        assertEquals(2, count);
+    }
+
+
+    static class CustomRecordReader extends BaseRecordReader {
+
+        int n = 0;
+
+        CustomRecordReader() { }
+
+        @Override
+        public boolean batchesSupported() {
+            return false;
+        }
+
+        @Override
+        public List<List<Writable>> next(int num) {
+            throw new RuntimeException("Not implemented");
+        }
+
+        @Override
+        public List<Writable> next() {
+            INDArray nd = Nd4j.create(new float[nZ*nY*nX], new int[] {1, 1, nZ, nY, nX }, 'c').assign(n);
+            final List<Writable>res = RecordConverter.toRecord(nd);
+            res.add(new IntWritable(0));
+            n++;
+            return res;
+        }
+
+        @Override
+        public boolean hasNext() {
+            return n<10;
+        }
+
+        final static ArrayList<String> labels = new ArrayList<>(2);
+        static {
+            labels.add("lbl0");
+            labels.add("lbl1");
+        }
+        @Override
+        public List<String> getLabels() {
+            return labels;
+        }
+
+        @Override
+        public void reset() {
+            n = 0;
+        }
+
+        @Override
+        public boolean resetSupported() {
+            return true;
+        }
+
+        @Override
+        public List<Writable> record(URI uri, DataInputStream dataInputStream) {
+            return next();
+        }
+
+        @Override
+        public Record nextRecord() {
+            List<Writable> r = next();
+            return new org.datavec.api.records.impl.Record(r, null);
+        }
+
+        @Override
+        public Record loadFromMetaData(RecordMetaData recordMetaData) throws IOException {
+            throw new RuntimeException("Not implemented");
+        }
+
+        @Override
+        public List<Record> loadFromMetaData(List<RecordMetaData> recordMetaDatas) {
+            throw new RuntimeException("Not implemented");
+        }
+
+        @Override
+        public void close() {
+        }
+
+        @Override
+        public void setConf(Configuration conf) {
+        }
+
+        @Override
+        public Configuration getConf() {
+            return null;
+        }
+
+        @Override
+        public void initialize(InputSplit split) {
+            n = 0;
+        }
+        @Override
+        public void initialize(Configuration conf, InputSplit split) {
+            n = 0;
+        }
     }
 }
